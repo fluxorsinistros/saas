@@ -7,7 +7,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
-import { chooseDecision, completeActivity, pauseSla, resumeSla } from "../actions";
+import { chooseDecision, completeActivity, discardCycle, pauseSla, reopenCycle, resumeSla } from "../actions";
 import { requestDocument, reviewDocument, uploadDocumentVersion } from "../documents-actions";
 
 export const metadata: Metadata = { title: "Sinistro" };
@@ -28,6 +28,8 @@ const AUDIT_LABEL: Record<string, string> = {
   "claim.created": "Sinistro criado",
   "cycle.created": "Ciclo aberto",
   "cycle.blocked": "Ciclo bloqueado",
+  "cycle.reopened": "Ciclo reaberto",
+  "cycle.discarded": "Ciclo descartado",
   "stage.entered": "Etapa iniciada",
   "activity.completed": "Atividade concluída",
   "decision.made": "Decisão registrada",
@@ -67,8 +69,15 @@ const DOC_STATUS_LABEL: Record<string, string> = {
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] text-slate-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
 
-export default async function ClaimPage({ params }: { params: Promise<{ claimId: string }> }) {
+export default async function ClaimPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ claimId: string }>;
+  searchParams: Promise<{ ciclo?: string }>;
+}) {
   const { claimId } = await params;
+  const { ciclo } = await searchParams;
   const ctx = await getTenantContext();
   const supabase = await createClient();
 
@@ -80,14 +89,13 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
     .maybeSingle();
   if (!claim) notFound();
 
-  const { data: cycle } = await supabase
+  const { data: allCycles } = await supabase
     .from("claim_cycles")
-    .select("id, status, workflow_version_id, formalized_at, completed_at")
+    .select("id, status, cycle_number, workflow_version_id, formalized_at, completed_at")
     .eq("claim_id", claim.id)
-    .order("cycle_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!cycle) notFound();
+    .order("cycle_number", { ascending: false });
+  if (!allCycles?.length) notFound();
+  const cycle = (ciclo ? allCycles.find((c) => c.id === ciclo) : null) ?? allCycles[0];
 
   const { data: version } = await supabase
     .from("workflow_versions")
@@ -235,7 +243,60 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
           >
             {CYCLE_STATUS_LABEL[cycle.status] ?? cycle.status}
           </span>
+          {allCycles.length > 1 && (
+            <div className="flex items-center gap-1">
+              {allCycles.map((c) => (
+                <Link
+                  key={c.id}
+                  href={c.id === allCycles[0].id ? `/sinistros/${claim.id}` : `/sinistros/${claim.id}?ciclo=${c.id}`}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                    c.id === cycle.id ? "bg-brand text-white ring-brand" : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  Ciclo {c.cycle_number}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
+
+        {cycle.status === "completed" && cycle.id === allCycles[0].id && (
+          <details className="mt-3 group">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-700">
+              Reabrir este ciclo
+            </summary>
+            <form
+              action={reopenCycle.bind(null, cycle.id)}
+              className="mt-2 flex max-w-md items-start gap-2 rounded-lg border border-slate-200 bg-white p-3"
+            >
+              <input name="reason" required placeholder="Motivo da reabertura" className={`${input} text-[12px]`} />
+              <button className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">
+                Reabrir
+              </button>
+            </form>
+          </details>
+        )}
+
+        {cycle.status !== "completed" && cycle.status !== "discarded" && cycle.id === allCycles[0].id && (
+          <details className="mt-3 group">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-rose-600 hover:text-rose-700">
+              Descartar e reiniciar este ciclo
+            </summary>
+            <form
+              action={discardCycle.bind(null, cycle.id)}
+              className="mt-2 flex max-w-md items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3"
+            >
+              <input name="reason" required placeholder="Motivo do descarte" className={`${input} text-[12px]`} />
+              <button className="shrink-0 rounded-md bg-rose-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-rose-700">
+                Descartar e abrir novo ciclo
+              </button>
+            </form>
+          </details>
+        )}
+
+        {cycle.status === "discarded" && (
+          <p className="mt-3 text-[12px] text-slate-500">Ciclo descartado — motivo registrado no histórico abaixo.</p>
+        )}
 
         {cycle.status === "blocked" && (
           <div className="mt-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
@@ -292,7 +353,7 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
                       <span className="text-[12px] text-slate-500">
                         {isPaused ? "Prazo pausado" : formatMinutesRemaining(tracking.target_at)}
                       </span>
-                      {isPaused ? (
+                      {cycle.status === "discarded" ? null : isPaused ? (
                         <form action={resumeSla.bind(null, tracking.id, claim.id)}>
                           <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
                             <PlayCircle className="size-3.5" /> Retomar prazo
@@ -329,12 +390,14 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
                       <span className="text-[12px] text-slate-500">
                         Grupo: <span className="font-medium text-slate-700">{groupName.get(activity.group_id ?? "") ?? "—"}</span>
                       </span>
-                      {activity.status === "in_progress" ? (
+                      {activity.status === "in_progress" && cycle.status !== "discarded" ? (
                         <form action={completeActivity.bind(null, activity.id)}>
                           <button className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600">
                             Concluir
                           </button>
                         </form>
+                      ) : activity.status === "in_progress" ? (
+                        <span className="text-[12px] text-slate-400">Ciclo descartado</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
                           <CheckCircle2 className="size-3.5" /> Concluída
@@ -370,6 +433,8 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
                         <p className="mt-1 inline-flex items-center gap-1 text-[12px] text-emerald-700">
                           <CheckCircle2 className="size-3.5" /> Escolhido: {decision.selected_option}
                         </p>
+                      ) : cycle.status === "discarded" ? (
+                        <p className="mt-2 text-[12px] text-slate-400">Ciclo descartado</p>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {((decision.options as string[]) ?? []).map((opt) => (

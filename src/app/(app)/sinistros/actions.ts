@@ -522,7 +522,7 @@ export async function completeActivity(activityInstanceId: string): Promise<void
     .eq("id", stage.claim_cycle_id)
     .single();
   if (cErr || !cycle) throw new Error("Ciclo não encontrado.");
-  if (cycle.status === "completed" || cycle.status === "blocked") {
+  if (cycle.status === "completed" || cycle.status === "blocked" || cycle.status === "discarded") {
     throw new Error(`Este ciclo não pode mais avançar (status atual: ${cycle.status}).`);
   }
 
@@ -570,7 +570,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
     .eq("id", decision.claim_cycle_id)
     .single();
   if (cErr || !cycle) throw new Error("Ciclo não encontrado.");
-  if (cycle.status === "completed" || cycle.status === "blocked") {
+  if (cycle.status === "completed" || cycle.status === "blocked" || cycle.status === "discarded") {
     throw new Error(`Este ciclo não pode mais avançar (status atual: ${cycle.status}).`);
   }
 
@@ -648,4 +648,110 @@ export async function resumeSla(trackingId: string, claimId: string): Promise<vo
   await writeAudit(supabase, ctx.tenantId, "sla.resumed", "sla_tracking", trackingId, { next: { paused_minutes: newPausedTotal } });
 
   revalidatePath(`/sinistros/${claimId}`);
+}
+
+// Reabrir ciclo (Documento 3 §11, caso J): só um ciclo já `completed` pode ser reaberto — grava uma
+// nova passagem (`entry_reason='reopen'`) sobre o mesmo claim_cycle_id, no último nó não-Fim por onde
+// o ciclo passou, em vez de recomeçar do zero. Autorização granular por papel fica para quando
+// `role_permissions` existir (gap conhecido) — por ora exige motivo obrigatório e fica auditado.
+export async function reopenCycle(cycleId: string, formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!reason) throw new Error("Informe o motivo da reabertura.");
+
+  const { data: cycle, error: cErr } = await supabase
+    .from("claim_cycles")
+    .select("id, claim_id, status, workflow_version_id")
+    .eq("id", cycleId)
+    .single();
+  if (cErr || !cycle) throw new Error("Ciclo não encontrado.");
+  if (cycle.status !== "completed") throw new Error(`Só um ciclo concluído pode ser reaberto (status atual: ${cycle.status}).`);
+
+  const graph = await loadGraph(supabase, cycle.workflow_version_id);
+  const { data: lastStage, error: sErr } = await supabase
+    .from("stage_instances")
+    .select("node_id")
+    .eq("claim_cycle_id", cycleId)
+    .order("entered_at", { ascending: false });
+  if (sErr) throw new Error(sErr.message);
+  const reopenNode = (lastStage ?? []).map((s) => graph.nodes.find((n) => n.id === s.node_id)).find((n) => n && n.type !== "end");
+  if (!reopenNode) throw new Error("Não há etapa anterior ao Fim para reabrir.");
+
+  await supabase.from("claim_cycles").update({ status: "in_progress", completed_at: null }).eq("id", cycleId);
+  await writeAudit(supabase, ctx.tenantId, "cycle.reopened", "claim_cycle", cycleId, { reason });
+  await enterNode(supabase, ctx.tenantId, cycleId, cycle.workflow_version_id, graph, reopenNode.id, "reopen");
+
+  revalidatePath(`/sinistros/${cycle.claim_id}`);
+}
+
+// Descartar ciclo e abrir um novo relacionado (Documento 3 §11, caso K): o ciclo velho fica com
+// status='discarded' pra sempre (nunca é apagado — é histórico), e um novo claim_cycles nasce
+// apontando pra ele via previous_cycle_id, sob a versão publicada ATUAL do fluxo (que pode ter
+// mudado desde que o ciclo velho abriu — o velho já estava preso à versão dele, imutável).
+export async function discardCycle(cycleId: string, formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!reason) throw new Error("Informe o motivo do descarte.");
+
+  const { data: cycle, error: cErr } = await supabase
+    .from("claim_cycles")
+    .select("id, claim_id, status, cycle_number, claim_type_id, workflow_version_id")
+    .eq("id", cycleId)
+    .single();
+  if (cErr || !cycle) throw new Error("Ciclo não encontrado.");
+  if (cycle.status === "completed" || cycle.status === "discarded") {
+    throw new Error(`Este ciclo não pode ser descartado (status atual: ${cycle.status}).`);
+  }
+
+  const { data: oldVersion, error: vErr } = await supabase
+    .from("workflow_versions")
+    .select("workflow_id")
+    .eq("id", cycle.workflow_version_id)
+    .single();
+  if (vErr || !oldVersion) throw new Error(vErr?.message ?? "Versão do fluxo não encontrada.");
+  const { data: currentVersion } = await supabase
+    .from("workflow_versions")
+    .select("id")
+    .eq("workflow_id", oldVersion.workflow_id)
+    .eq("status", "published")
+    .maybeSingle();
+  const newVersionId = currentVersion?.id ?? cycle.workflow_version_id;
+
+  await supabase
+    .from("claim_cycles")
+    .update({ status: "discarded", discard_reason: reason, discarded_at: new Date().toISOString(), discarded_by: ctx.userId })
+    .eq("id", cycleId);
+  await writeAudit(supabase, ctx.tenantId, "cycle.discarded", "claim_cycle", cycleId, { reason });
+
+  const graph = await loadGraph(supabase, newVersionId);
+  const start = startNode(graph);
+  const { data: newCycle, error: ncErr } = await supabase
+    .from("claim_cycles")
+    .insert({
+      tenant_id: ctx.tenantId,
+      claim_id: cycle.claim_id,
+      cycle_number: cycle.cycle_number + 1,
+      claim_type_id: cycle.claim_type_id,
+      workflow_version_id: newVersionId,
+      previous_cycle_id: cycleId,
+      status: "open",
+      formalized_at: new Date().toISOString(),
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (ncErr || !newCycle) throw new Error(ncErr?.message ?? "Falha ao abrir o novo ciclo.");
+
+  await supabase.from("cycle_configuration_snapshots").insert({
+    tenant_id: ctx.tenantId,
+    claim_cycle_id: newCycle.id,
+    workflow_version_id: newVersionId,
+    snapshot: graph as unknown as Json,
+  });
+  await writeAudit(supabase, ctx.tenantId, "cycle.created", "claim_cycle", newCycle.id, { reason: "Novo ciclo após descarte do anterior." });
+  await enterNode(supabase, ctx.tenantId, newCycle.id, newVersionId, graph, start.id, "initial");
+
+  revalidatePath(`/sinistros/${cycle.claim_id}`);
 }
