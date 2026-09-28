@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { resolveTransition, startNode } from "@/lib/workflow/engine";
-import type { Graph } from "@/lib/workflow/types";
+import type { Graph, GraphNode } from "@/lib/workflow/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
 export type Supa = SupabaseClient<Database>;
@@ -74,16 +74,28 @@ async function ensureClaimType(supabase: Supa, tenantId: string, workflowId: str
   return type.id;
 }
 
-// Cria a stage_instance (e a activity/decision correspondente) para um nó — usado na formalização
-// e em todo avanço. Cada passagem por um nó é uma linha nova (Documento 3 §17): nunca sobrescreve.
-async function enterNode(supabase: Supa, tenantId: string, cycleId: string, graph: Graph, nodeId: string, entryReason: string) {
+// Cria a stage_instance (e a activity/decision/paralelo/convergência correspondente) para um nó —
+// usado na formalização e em todo avanço. Cada passagem por um nó é uma linha nova (Documento 3
+// §17): nunca sobrescreve. `branchInstanceId` amarra a passagem ao ramo de um Paralelo em curso
+// (null fora de qualquer Paralelo), para uma Convergência saber qual ramo específico chegou.
+async function enterNode(
+  supabase: Supa,
+  tenantId: string,
+  cycleId: string,
+  graph: Graph,
+  nodeId: string,
+  entryReason: string,
+  branchInstanceId: string | null = null,
+) {
   const node = graph.nodes.find((n) => n.id === nodeId);
   if (!node) throw new Error("Elemento não encontrado no fluxo publicado.");
 
-  if (node.type === "parallel_split" || node.type === "join") {
+  if (node.type === "parallel_split" && branchInstanceId) {
+    // Paralelo dentro de outro Paralelo: o ramo externo nunca fecharia certo (só fecha ao chegar
+    // numa Convergência), então bloqueia com motivo em vez de deixar o ciclo com um ramo pendurado.
     await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
     await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, {
-      reason: `"${node.name}" (${node.type === "parallel_split" ? "Paralelo" : "Convergência"}) ainda não é suportado pela execução nesta fatia.`,
+      reason: `"${node.name}" é um Paralelo dentro de outro Paralelo — ainda não suportado pela execução.`,
     });
     return;
   }
@@ -95,7 +107,7 @@ async function enterNode(supabase: Supa, tenantId: string, cycleId: string, grap
     .eq("node_id", nodeId);
   const passNumber = (count ?? 0) + 1;
   const now = new Date().toISOString();
-  const isEnd = node.type === "end";
+  const isInstantaneous = node.type === "end" || node.type === "parallel_split" || node.type === "join";
 
   const { data: stage, error: stageErr } = await supabase
     .from("stage_instances")
@@ -104,13 +116,18 @@ async function enterNode(supabase: Supa, tenantId: string, cycleId: string, grap
       claim_cycle_id: cycleId,
       node_id: nodeId,
       pass_number: passNumber,
-      status: isEnd ? "completed" : "in_progress",
+      status: isInstantaneous ? "completed" : "in_progress",
       entry_reason: entryReason,
-      exited_at: isEnd ? now : null,
+      exited_at: isInstantaneous ? now : null,
+      branch_instance_id: branchInstanceId,
     })
     .select("id")
     .single();
   if (stageErr || !stage) throw new Error(stageErr?.message ?? "Falha ao registrar a etapa.");
+
+  await writeAudit(supabase, tenantId, "stage.entered", "stage_instance", stage.id, {
+    next: { node_name: node.name, node_type: node.type },
+  });
 
   if (node.type === "decision") {
     const options = graph.edges
@@ -125,27 +142,171 @@ async function enterNode(supabase: Supa, tenantId: string, cycleId: string, grap
       question: node.name,
       options: options as unknown as Json,
     });
-  } else if (isEnd) {
-    await supabase.from("claim_cycles").update({ status: "completed", completed_at: now }).eq("id", cycleId);
-  } else {
-    await supabase.from("activity_instances").insert({
-      tenant_id: tenantId,
-      stage_instance_id: stage.id,
-      group_id: node.groupId,
-      status: "in_progress",
-      assigned_at: now,
-      started_at: now,
-    });
+    return;
   }
 
-  await writeAudit(supabase, tenantId, "stage.entered", "stage_instance", stage.id, {
-    next: { node_name: node.name, node_type: node.type },
+  if (node.type === "end") {
+    await supabase.from("claim_cycles").update({ status: "completed", completed_at: now }).eq("id", cycleId);
+    return;
+  }
+
+  if (node.type === "parallel_split") {
+    await openParallelSplit(supabase, tenantId, cycleId, graph, nodeId);
+    return;
+  }
+
+  if (node.type === "join") {
+    await arriveAtJoin(supabase, tenantId, cycleId, graph, node, branchInstanceId);
+    return;
+  }
+
+  await supabase.from("activity_instances").insert({
+    tenant_id: tenantId,
+    stage_instance_id: stage.id,
+    group_id: node.groupId,
+    status: "in_progress",
+    assigned_at: now,
+    started_at: now,
   });
+}
+
+// Abre um Paralelo (Documento 3 §4): cria o evento de bifurcação (`branches`), um `branch_instances`
+// por ramo, e entra em cada ramo imediatamente e de forma independente.
+async function openParallelSplit(supabase: Supa, tenantId: string, cycleId: string, graph: Graph, nodeId: string) {
+  const outs = graph.edges.filter((e) => e.source === nodeId);
+  if (outs.length === 0) {
+    await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
+    await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, { reason: "Paralelo sem ramos de saída." });
+    return;
+  }
+
+  const { data: branch, error } = await supabase
+    .from("branches")
+    .insert({ tenant_id: tenantId, claim_cycle_id: cycleId, source_node_id: nodeId, branch_mode: "parallel" })
+    .select("id")
+    .single();
+  if (error || !branch) throw new Error(error?.message ?? "Falha ao abrir o paralelo.");
+  await writeAudit(supabase, tenantId, "branch.opened", "branch", branch.id, { next: { ramos: outs.length } });
+
+  for (const edge of outs) {
+    const { data: bi, error: biErr } = await supabase
+      .from("branch_instances")
+      .insert({
+        tenant_id: tenantId,
+        branch_id: branch.id,
+        target_node_id: edge.target,
+        edge_id: edge.id,
+        is_required: edge.isRequired,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (biErr || !bi) throw new Error(biErr?.message ?? "Falha ao abrir um ramo.");
+    await enterNode(supabase, tenantId, cycleId, graph, edge.target, "advance", bi.id);
+  }
+}
+
+// Um ramo chega numa Convergência (Documento 3 §5): marca o branch_instance como concluído, registra
+// a contribuição em join_instances e reavalia a regra (all/all_required/any/min_count). As atividades
+// já concluídas dos outros ramos permanecem concluídas — nunca desfaz progresso de um ramo.
+async function arriveAtJoin(
+  supabase: Supa,
+  tenantId: string,
+  cycleId: string,
+  graph: Graph,
+  node: GraphNode,
+  branchInstanceId: string | null,
+) {
+  if (!branchInstanceId) {
+    await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
+    await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, {
+      reason: `"${node.name}" (Convergência) foi alcançada fora de um Paralelo — o fluxo publicado é inválido.`,
+    });
+    return;
+  }
+
+  const { data: bi, error: biErr } = await supabase
+    .from("branch_instances")
+    .select("id, branch_id")
+    .eq("id", branchInstanceId)
+    .single();
+  if (biErr || !bi) throw new Error(biErr?.message ?? "Ramo não encontrado.");
+
+  const now = new Date().toISOString();
+  await supabase.from("branch_instances").update({ status: "completed" }).eq("id", bi.id);
+
+  const ruleType = node.config.join_rule ?? "all_required";
+  const minCount = node.config.min_count ?? null;
+
+  const { data: existingJoin } = await supabase
+    .from("joins")
+    .select("id")
+    .eq("claim_cycle_id", cycleId)
+    .eq("node_id", node.id)
+    .eq("branch_id", bi.branch_id)
+    .maybeSingle();
+
+  let joinId = existingJoin?.id as string | undefined;
+  if (!joinId) {
+    const { data: created, error: joinErr } = await supabase
+      .from("joins")
+      .insert({
+        tenant_id: tenantId,
+        claim_cycle_id: cycleId,
+        node_id: node.id,
+        branch_id: bi.branch_id,
+        rule_type: ruleType,
+        min_count: ruleType === "min_count" ? minCount : null,
+        status: "waiting",
+      })
+      .select("id")
+      .single();
+    if (joinErr || !created) throw new Error(joinErr?.message ?? "Falha ao abrir a convergência.");
+    joinId = created.id;
+    await writeAudit(supabase, tenantId, "join.waiting", "join", joinId, { next: { node_name: node.name, rule_type: ruleType } });
+  }
+
+  await supabase
+    .from("join_instances")
+    .insert({ tenant_id: tenantId, join_id: joinId, branch_instance_id: bi.id, satisfied: true, satisfied_at: now });
+
+  const { data: siblings } = await supabase.from("branch_instances").select("status, is_required").eq("branch_id", bi.branch_id);
+  const all = siblings ?? [];
+  const completedCount = all.filter((s) => s.status === "completed").length;
+  const requiredTotal = all.filter((s) => s.is_required).length;
+  const requiredCompleted = all.filter((s) => s.is_required && s.status === "completed").length;
+
+  let released = false;
+  if (ruleType === "any") released = completedCount >= 1;
+  else if (ruleType === "all") released = completedCount >= all.length;
+  else if (ruleType === "all_required") released = requiredCompleted >= requiredTotal;
+  else if (ruleType === "min_count") released = completedCount >= (minCount ?? all.length);
+
+  if (!released) return; // fica "waiting" — a chegada do próximo ramo reavalia de novo
+
+  await supabase.from("joins").update({ status: "completed", released_at: now }).eq("id", joinId);
+  await writeAudit(supabase, tenantId, "join.released", "join", joinId);
+
+  const target = graph.edges.find((e) => e.source === node.id);
+  if (!target) {
+    await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
+    await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, { reason: `"${node.name}" não tem saída configurada.` });
+    return;
+  }
+  await enterNode(supabase, tenantId, cycleId, graph, target.target, "advance", null);
 }
 
 // Resolve a transição a partir do nó concluído e entra no(s) próximo(s) nó(s), ou bloqueia o ciclo
 // com um motivo explícito (Documento 3 §3: "nenhuma edge sem correspondência" nunca falha em silêncio).
-async function advance(supabase: Supa, tenantId: string, versionId: string, cycleId: string, fromNodeId: string, selectedOption?: string) {
+async function advance(
+  supabase: Supa,
+  tenantId: string,
+  versionId: string,
+  cycleId: string,
+  fromNodeId: string,
+  selectedOption?: string,
+  branchInstanceId: string | null = null,
+) {
   const graph = await loadGraph(supabase, versionId);
 
   const { data: rules } = await supabase
@@ -171,7 +332,7 @@ async function advance(supabase: Supa, tenantId: string, versionId: string, cycl
   }
   if (result.kind === "end") return;
   for (const targetId of result.targets) {
-    await enterNode(supabase, tenantId, cycleId, graph, targetId, "advance");
+    await enterNode(supabase, tenantId, cycleId, graph, targetId, "advance", branchInstanceId);
   }
 }
 
@@ -279,7 +440,7 @@ export async function completeActivity(activityInstanceId: string): Promise<void
 
   const { data: stage, error: sErr } = await supabase
     .from("stage_instances")
-    .select("id, node_id, claim_cycle_id")
+    .select("id, node_id, claim_cycle_id, branch_instance_id")
     .eq("id", activity.stage_instance_id)
     .single();
   if (sErr || !stage) throw new Error("Etapa não encontrada.");
@@ -302,7 +463,7 @@ export async function completeActivity(activityInstanceId: string): Promise<void
   await supabase.from("stage_instances").update({ status: "completed", exited_at: now }).eq("id", stage.id);
   await writeAudit(supabase, ctx.tenantId, "activity.completed", "activity_instance", activityInstanceId);
 
-  await advance(supabase, ctx.tenantId, cycle.workflow_version_id, cycle.id, stage.node_id);
+  await advance(supabase, ctx.tenantId, cycle.workflow_version_id, cycle.id, stage.node_id, undefined, stage.branch_instance_id);
 
   revalidatePath("/sinistros");
   revalidatePath(`/sinistros/${cycle.claim_id}`);
@@ -320,6 +481,16 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
   if (dErr || !decision) throw new Error("Decisão não encontrada.");
   if (decision.selected_option) return;
   if (!decision.node_id) throw new Error("Decisão sem elemento de origem.");
+
+  let branchInstanceId: string | null = null;
+  if (decision.stage_instance_id) {
+    const { data: dstage } = await supabase
+      .from("stage_instances")
+      .select("branch_instance_id")
+      .eq("id", decision.stage_instance_id)
+      .single();
+    branchInstanceId = dstage?.branch_instance_id ?? null;
+  }
 
   const { data: cycle, error: cErr } = await supabase
     .from("claim_cycles")
@@ -341,7 +512,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
   }
   await writeAudit(supabase, ctx.tenantId, "decision.made", "decision", decisionId, { next: { selected_option: selectedOption } });
 
-  await advance(supabase, ctx.tenantId, cycle.workflow_version_id, cycle.id, decision.node_id, selectedOption);
+  await advance(supabase, ctx.tenantId, cycle.workflow_version_id, cycle.id, decision.node_id, selectedOption, branchInstanceId);
 
   revalidatePath("/sinistros");
   revalidatePath(`/sinistros/${cycle.claim_id}`);

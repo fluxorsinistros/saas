@@ -146,6 +146,36 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
 
   const blockedReason = auditLogs?.find((a) => a.action === "cycle.blocked")?.reason;
 
+  // Convergências (Documento 3 §5): mostra "aguardando N de M" enquanto o join não libera — sem
+  // isso o usuário vê uma etapa "Convergência" concluída na trilha sem entender por que o processo
+  // não seguiu ainda para o próximo passo.
+  const { data: joins } = await supabase
+    .from("joins")
+    .select("id, node_id, branch_id, rule_type, min_count, status")
+    .eq("claim_cycle_id", cycle.id)
+    .eq("status", "waiting");
+  const branchIds = (joins ?? []).map((j) => j.branch_id).filter((b): b is string => !!b);
+  const { data: branchInstances } = branchIds.length
+    ? await supabase.from("branch_instances").select("branch_id, status, is_required, target_node_id").in("branch_id", branchIds)
+    : { data: [] as { branch_id: string; status: string; is_required: boolean; target_node_id: string }[] };
+  const joinProgressByNode = new Map<
+    string,
+    { completed: number; total: number; ruleLabel: string; branches: { name: string; done: boolean }[] }
+  >();
+  for (const j of joins ?? []) {
+    const siblings = (branchInstances ?? []).filter((b) => b.branch_id === j.branch_id);
+    const relevant = j.rule_type === "all_required" ? siblings.filter((b) => b.is_required) : siblings;
+    const completed = relevant.filter((b) => b.status === "completed").length;
+    const ruleLabel =
+      j.rule_type === "any" ? "qualquer um" : j.rule_type === "all" ? "todos" : j.rule_type === "min_count" ? `mín. ${j.min_count}` : "obrigatórios";
+    joinProgressByNode.set(j.node_id, {
+      completed,
+      total: j.rule_type === "min_count" ? (j.min_count ?? relevant.length) : relevant.length,
+      ruleLabel,
+      branches: siblings.map((b) => ({ name: nodeById.get(b.target_node_id)?.name ?? "—", done: b.status === "completed" })),
+    });
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-8 py-8">
@@ -189,6 +219,7 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
               const type = (node?.type ?? "stage") as NodeType;
               const activity = activityByStage.get(stage.id);
               const decision = decisionByStage.get(stage.id);
+              const joinProgress = type === "join" ? joinProgressByNode.get(stage.node_id) : undefined;
               return (
                 <li key={stage.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -218,6 +249,26 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
                           <CheckCircle2 className="size-3.5" /> Concluída
                         </span>
                       )}
+                    </div>
+                  )}
+
+                  {joinProgress && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <p className="text-[12px] font-medium text-amber-700">
+                        Aguardando ramos ({joinProgress.ruleLabel}) — {joinProgress.completed} de {joinProgress.total}
+                      </p>
+                      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                        {joinProgress.branches.map((b, i) => (
+                          <li
+                            key={i}
+                            className={`rounded-md px-2 py-0.5 text-[11px] ring-1 ring-inset ${
+                              b.done ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"
+                            }`}
+                          >
+                            {b.name}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
 

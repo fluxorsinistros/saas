@@ -2043,6 +2043,7 @@ export type Database = {
       }
       stage_instances: {
         Row: {
+          branch_instance_id: string | null
           claim_cycle_id: string
           created_at: string
           entered_at: string
@@ -2056,6 +2057,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          branch_instance_id?: string | null
           claim_cycle_id: string
           created_at?: string
           entered_at?: string
@@ -2069,6 +2071,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          branch_instance_id?: string | null
           claim_cycle_id?: string
           created_at?: string
           entered_at?: string
@@ -2082,6 +2085,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "stage_instances_branch_instance_id_fkey"
+            columns: ["branch_instance_id"]
+            isOneToOne: false
+            referencedRelation: "branch_instances"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stage_instances_claim_cycle_id_fkey"
             columns: ["claim_cycle_id"]
