@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* Paleta de referência do Documento 1 §70 (nome comercial ainda em aberto). */
+@theme {
+  --color-navy: #0b1220;
+  --color-navy-800: #111a2e;
+  --color-navy-700: #1b2640;
+  --color-brand: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-cyan: #22d3ee;
+  --color-violet: #7c3aed;
+  --color-canvas: #f8fafc;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: #0f172a;
+}
+
+/* Pontos de conexão do builder: discretos em repouso, evidentes ao passar o mouse. */
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  background: #94a3b8;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.react-flow__node:hover .react-flow__handle,
+.react-flow__handle.connectingfrom,
+.react-flow__handle.connectingto {
+  background: var(--color-brand);
+  transform: scale(1.25);
+}
+.react-flow__node.selectable:focus-visible {
+  outline: none;
+}
+.react-flow__controls {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+.react-flow__controls-button {
+  border-bottom-color: #e2e8f0;
+}
