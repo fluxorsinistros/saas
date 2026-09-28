@@ -14,14 +14,16 @@ export type Supa = SupabaseClient<Database>;
 
 export async function writeAudit(
   supabase: Supa,
-  tenantId: string,
+  tenantId: string | null,
   action: string,
   entityType: string,
   entityId: string,
   extra?: { previous?: unknown; next?: unknown; reason?: string },
 ) {
   await supabase.rpc("write_audit", {
-    p_tenant_id: tenantId,
+    // O tipo gerado marca p_tenant_id como string não-nula, mas a função aceita NULL de propósito
+    // para eventos de plataforma (Documento 5 §11) — checado por app.is_platform_admin() no banco.
+    p_tenant_id: tenantId as unknown as string,
     p_action: action,
     p_entity_type: entityType,
     p_entity_id: entityId,

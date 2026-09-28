@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckSquare, FileWarning, Gauge, LayoutDashboard, UsersRound, Users, Workflow } from "lucide-react";
+import { CheckSquare, FileWarning, Gauge, LayoutDashboard, ShieldCheck, UsersRound, Users, Workflow } from "lucide-react";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -14,11 +14,14 @@ const LINKS = [
   { href: "/grupos", label: "Grupos", icon: Users },
 ];
 
-export function NavLinks({ collapsed = false }: { collapsed?: boolean }) {
+const ADMIN_LINK = { href: "/admin", label: "Administração", icon: ShieldCheck };
+
+export function NavLinks({ collapsed = false, isPlatformAdmin = false }: { collapsed?: boolean; isPlatformAdmin?: boolean }) {
   const pathname = usePathname();
+  const links = isPlatformAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
   return (
     <ul className="space-y-0.5">
-      {LINKS.map(({ href, label, icon: Icon }) => {
+      {links.map(({ href, label, icon: Icon }) => {
         const active = pathname.startsWith(href);
         return (
           <li key={href}>

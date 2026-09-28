@@ -12,6 +12,7 @@ type Props = {
   tenantName: string;
   tenants: { id: string; name: string }[];
   email: string;
+  isPlatformAdmin: boolean;
 };
 
 // Dentro do editor de fluxo (a tela principal, Documento 5 §2), o menu recolhe para dar
@@ -21,7 +22,7 @@ function useCollapsed() {
   return /^\/fluxos\/[^/]+/.test(pathname);
 }
 
-export function AppSidebar({ tenantId, tenantName, tenants, email }: Props) {
+export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin }: Props) {
   const collapsed = useCollapsed();
 
   return (
@@ -65,7 +66,7 @@ export function AppSidebar({ tenantId, tenantName, tenants, email }: Props) {
       )}
 
       <nav className={`mt-5 flex-1 ${collapsed ? "px-2" : "px-3"}`} aria-label="Principal">
-        <NavLinks collapsed={collapsed} />
+        <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} />
       </nav>
 
       <div className={`border-t border-navy-700 py-3 ${collapsed ? "px-2" : "px-3"}`}>
