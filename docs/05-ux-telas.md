@@ -31,10 +31,16 @@ Nenhuma migração adicional foi necessária: `tenant_organizations.role_kind` j
 
 ## 2. Inventário de telas
 
+> **Prioridade de construção**: o **Workflow Builder** (#2) é a tela principal do produto — é onde o
+> princípio "configurável, não customizado por código" (Documento 1, §2.1) vira interface. Sem ela
+> funcionando de forma totalmente visual, não existe produto: todo o resto (execução, dashboards,
+> tarefas) é consumo do que o Builder produz. Ordem de construção sugerida: Builder → Tela de
+> Sinistro (mesma peça de desenho de grafo, reaproveitada com overlay de estado) → o restante.
+
 | # | Tela | Alimentada por |
 |---|---|---|
 | 1 | Onboarding assistido | seção 3 |
-| 2 | Workflow Builder | seção 4 |
+| 2 | **Workflow Builder (tela principal)** | seção 4 |
 | 3 | Tela de Sinistro (execução) | seção 5 |
 | 4 | Tower of Control | seção 6 |
 | 5 | Dashboard | seção 7 |
