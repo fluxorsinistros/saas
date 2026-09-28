@@ -12,6 +12,7 @@ import {
   chooseDecision,
   completeActivity,
   createPendingItem,
+  decideDuplicate,
   discardCycle,
   pauseSla,
   reopenCycle,
@@ -43,6 +44,8 @@ const AUDIT_LABEL: Record<string, string> = {
   "pending_item.created": "Pendência aberta",
   "pending_item.resolved": "Pendência resolvida",
   "pending_item.cancelled": "Pendência cancelada",
+  "duplicate_check.flagged": "Possível duplicidade identificada",
+  "duplicate_check.decided": "Duplicidade avaliada",
   "stage.entered": "Etapa iniciada",
   "activity.completed": "Atividade concluída",
   "decision.made": "Decisão registrada",
@@ -101,6 +104,27 @@ export default async function ClaimPage({
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
   if (!claim) notFound();
+
+  // Duplicidade (Documento 2 §28): avisa, nunca bloqueia — mostra o `pending` mais recente (se houver)
+  // com os candidatos e a evidência, pro usuário decidir. Roda só uma vez, na formalização.
+  const { data: allDuplicateChecks } = await supabase
+    .from("duplicate_checks")
+    .select("id, evidence, decision")
+    .eq("claim_id", claim.id)
+    .order("created_at", { ascending: false });
+  const duplicateCheck = (allDuplicateChecks ?? []).find((d) => d.decision === "pending");
+  let duplicateCandidates: { confidence: number | null; matched_fields: unknown; claim_number: string }[] = [];
+  if (duplicateCheck) {
+    const { data: cands } = await supabase
+      .from("duplicate_candidates")
+      .select("confidence, matched_fields, claims:candidate_claim_id(claim_number)")
+      .eq("duplicate_check_id", duplicateCheck.id);
+    duplicateCandidates = (cands ?? []).map((c) => ({
+      confidence: c.confidence,
+      matched_fields: c.matched_fields,
+      claim_number: (c.claims as unknown as { claim_number: string } | null)?.claim_number ?? "—",
+    }));
+  }
 
   const { data: allCycles } = await supabase
     .from("claim_cycles")
@@ -210,6 +234,7 @@ export default async function ClaimPage({
     ...docIds,
     ...trackingIds,
     ...(pendingItems ?? []).map((p) => p.id),
+    ...(allDuplicateChecks ?? []).map((d) => d.id),
   ];
   const { data: auditLogs } = await supabase
     .from("audit_logs")
@@ -326,6 +351,34 @@ export default async function ClaimPage({
 
         {cycle.status === "discarded" && (
           <p className="mt-3 text-[12px] text-slate-500">Ciclo descartado — motivo registrado no histórico abaixo.</p>
+        )}
+
+        {duplicateCheck && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+            <p className="flex items-center gap-2 font-medium">
+              <AlertTriangle className="size-4 shrink-0" /> Possível duplicidade
+            </p>
+            <ul className="mt-1.5 space-y-0.5">
+              {duplicateCandidates.map((c, i) => (
+                <li key={i}>
+                  Sinistro <span className="font-medium">{c.claim_number}</span> —{" "}
+                  {((c.matched_fields as string[]) ?? []).join(", ")}
+                  {c.confidence !== null && ` (${Math.round(c.confidence * 100)}% de confiança)`}
+                </li>
+              ))}
+            </ul>
+            <form action={decideDuplicate.bind(null, duplicateCheck.id, "confirmed_duplicate")} className="mt-2 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="claim_id" value={claim.id} />
+              <input name="justification" placeholder="Justificativa (opcional)" className={`${input} w-64 bg-white text-[12px]`} />
+              <button className="rounded-md bg-rose-600 px-2.5 py-1 text-[12px] font-medium text-white hover:bg-rose-700">É duplicidade</button>
+            </form>
+            <form action={decideDuplicate.bind(null, duplicateCheck.id, "not_duplicate")} className="mt-1.5">
+              <input type="hidden" name="claim_id" value={claim.id} />
+              <button className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[12px] font-medium text-amber-800 hover:bg-amber-100">
+                Não é duplicidade
+              </button>
+            </form>
+          </div>
         )}
 
         {cycle.status === "blocked" && (

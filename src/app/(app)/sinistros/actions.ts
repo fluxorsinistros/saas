@@ -382,6 +382,88 @@ export type FormalizeClaimInput = {
   externalReference?: string;
 };
 
+// Detecção de duplicidade (Documento 2 §28): roda UMA VEZ, na primeira entrada do sinistro — nunca um
+// job contínuo. Avisa, nunca bloqueia: mesmo com candidatos fortes, a criação do sinistro já aconteceu
+// (chamado depois do insert em claims) e o usuário decide na Tela de Sinistro se é ou não duplicidade.
+async function runDuplicateCheck(
+  supabase: Supa,
+  tenantId: string,
+  claimId: string,
+  claimCategoryId: string,
+  input: FormalizeClaimInput,
+): Promise<void> {
+  const candidates: { claimId: string; confidence: number; matchedFields: string[] }[] = [];
+
+  if (input.externalReference) {
+    const { data: refMatches } = await supabase
+      .from("claims")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("external_reference", input.externalReference)
+      .neq("id", claimId);
+    for (const m of refMatches ?? []) candidates.push({ claimId: m.id, confidence: 0.95, matchedFields: ["external_reference"] });
+  }
+
+  if (input.occurredAt) {
+    const day = input.occurredAt.slice(0, 10);
+    const { data: dayMatches } = await supabase
+      .from("claims")
+      .select("id, location")
+      .eq("tenant_id", tenantId)
+      .eq("claim_category_id", claimCategoryId)
+      .gte("occurred_at", `${day}T00:00:00`)
+      .lt("occurred_at", `${day}T23:59:59.999`)
+      .neq("id", claimId);
+    for (const m of dayMatches ?? []) {
+      if (candidates.some((c) => c.claimId === m.id)) continue;
+      const sameLocation =
+        input.location && (m.location as { text?: string } | null)?.text?.toLowerCase().trim() === input.location.toLowerCase().trim();
+      const matchedFields = ["claim_category_id", "occurred_at", ...(sameLocation ? ["location"] : [])];
+      candidates.push({ claimId: m.id, confidence: sameLocation ? 0.8 : 0.5, matchedFields });
+    }
+  }
+
+  if (candidates.length === 0) return;
+
+  const { data: check, error } = await supabase
+    .from("duplicate_checks")
+    .insert({
+      tenant_id: tenantId,
+      claim_id: claimId,
+      evidence: { external_reference: input.externalReference ?? null, occurred_at: input.occurredAt ?? null, location: input.location ?? null } as unknown as Json,
+      decision: "pending",
+    })
+    .select("id")
+    .single();
+  if (error || !check) return; // nunca bloqueia a formalização por causa disso
+
+  await supabase.from("duplicate_candidates").insert(
+    candidates.map((c) => ({
+      tenant_id: tenantId,
+      duplicate_check_id: check.id,
+      candidate_claim_id: c.claimId,
+      confidence: c.confidence,
+      matched_fields: c.matchedFields as unknown as Json,
+    })),
+  );
+  await writeAudit(supabase, tenantId, "duplicate_check.flagged", "duplicate_check", check.id, { next: { candidates: candidates.length } });
+}
+
+export async function decideDuplicate(checkId: string, decision: "confirmed_duplicate" | "not_duplicate", formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+  const justification = String(formData.get("justification") ?? "").trim();
+  const claimId = String(formData.get("claim_id") ?? "");
+
+  await supabase
+    .from("duplicate_checks")
+    .update({ decision, decided_by: ctx.userId, decided_at: new Date().toISOString(), justification: justification || null })
+    .eq("id", checkId);
+  await writeAudit(supabase, ctx.tenantId, "duplicate_check.decided", "duplicate_check", checkId, { next: { decision }, reason: justification || undefined });
+
+  revalidatePath(`/sinistros/${claimId}`);
+}
+
 // Rotina única de criação de sinistro (Documento 5 §29: a importação em massa "usa as mesmas regras
 // de criação manual" — não existe caminho de escrita paralelo para `claims`). formalizeClaim (form da
 // UI) e a importação em massa (createImport/confirmImport) chamam exatamente esta função.
@@ -446,6 +528,8 @@ export async function createClaimAndCycle(
     else if (error.code !== "23505") throw new Error(error.message);
   }
   if (!claim) throw new Error("Não foi possível gerar um número de sinistro único. Tente de novo.");
+
+  await runDuplicateCheck(supabase, tenantId, claim.id, claimType.claim_category_id, input);
 
   const { data: cycle, error: cycleErr } = await supabase
     .from("claim_cycles")
