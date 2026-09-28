@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckSquare, FileWarning, UsersRound, Users, Workflow } from "lucide-react";
+import { CheckSquare, FileWarning, Gauge, LayoutDashboard, UsersRound, Users, Workflow } from "lucide-react";
 
 const LINKS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/torre-de-controle", label: "Torre de Controle", icon: Gauge },
   { href: "/fluxos", label: "Fluxos", icon: Workflow },
   { href: "/sinistros", label: "Sinistros", icon: FileWarning },
   { href: "/tarefas", label: "Tarefas", icon: CheckSquare },
