@@ -2968,8 +2968,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_tenant_member: {
+        Args: { p_email: string; p_tenant_id: string }
+        Returns: string
+      }
       create_draft_from_version: {
         Args: { p_version_id: string }
+        Returns: string
+      }
+      create_partner_organization: {
+        Args: { p_name: string; p_role_kind: string; p_tenant_id: string }
         Returns: string
       }
       create_tenant: { Args: { p_name: string }; Returns: string }
