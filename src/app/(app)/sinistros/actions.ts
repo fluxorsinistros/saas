@@ -755,3 +755,64 @@ export async function discardCycle(cycleId: string, formData: FormData): Promise
 
   revalidatePath(`/sinistros/${cycle.claim_id}`);
 }
+
+// Pendência (Documento 3 §2.2, caso H): uma solicitação dentro da atividade atual, que NÃO move o
+// processo pra outro nó — por isso não passa por enterNode/stage_instances, é só uma linha própria
+// associada à activity_instance (§21: "pendência não é necessariamente uma nova etapa").
+export async function createPendingItem(activityInstanceId: string, formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const groupId = String(formData.get("group_id") ?? "").trim();
+  const dueAt = String(formData.get("due_at") ?? "").trim();
+  const claimId = String(formData.get("claim_id") ?? "");
+  if (!title) throw new Error("Informe o título da pendência.");
+
+  const { data: activity, error } = await supabase
+    .from("activity_instances")
+    .select("id, stage_instance_id, stage_instances(claim_cycle_id)")
+    .eq("id", activityInstanceId)
+    .single();
+  if (error || !activity) throw new Error("Atividade não encontrada.");
+  const claimCycleId = (activity.stage_instances as unknown as { claim_cycle_id: string } | null)?.claim_cycle_id;
+  if (!claimCycleId) throw new Error("Ciclo não encontrado para esta atividade.");
+
+  const { data: item, error: insErr } = await supabase
+    .from("pending_items")
+    .insert({
+      tenant_id: ctx.tenantId,
+      claim_cycle_id: claimCycleId,
+      activity_instance_id: activityInstanceId,
+      title,
+      description: description || null,
+      requested_by: ctx.userId,
+      responsible_group_id: groupId || null,
+      due_at: dueAt ? new Date(dueAt).toISOString() : null,
+    })
+    .select("id")
+    .single();
+  if (insErr || !item) throw new Error(insErr?.message ?? "Falha ao criar a pendência.");
+
+  await writeAudit(supabase, ctx.tenantId, "pending_item.created", "pending_item", item.id, { next: { title } });
+  revalidatePath(`/sinistros/${claimId}`);
+}
+
+export async function resolvePendingItem(pendingItemId: string, claimId: string): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+  await supabase
+    .from("pending_items")
+    .update({ status: "resolved", resolved_at: new Date().toISOString(), resolved_by: ctx.userId })
+    .eq("id", pendingItemId);
+  await writeAudit(supabase, ctx.tenantId, "pending_item.resolved", "pending_item", pendingItemId);
+  revalidatePath(`/sinistros/${claimId}`);
+}
+
+export async function cancelPendingItem(pendingItemId: string, claimId: string): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+  await supabase.from("pending_items").update({ status: "cancelled" }).eq("id", pendingItemId);
+  await writeAudit(supabase, ctx.tenantId, "pending_item.cancelled", "pending_item", pendingItemId);
+  revalidatePath(`/sinistros/${claimId}`);
+}

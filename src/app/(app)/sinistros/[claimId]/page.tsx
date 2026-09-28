@@ -7,7 +7,17 @@ import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
-import { chooseDecision, completeActivity, discardCycle, pauseSla, reopenCycle, resumeSla } from "../actions";
+import {
+  cancelPendingItem,
+  chooseDecision,
+  completeActivity,
+  createPendingItem,
+  discardCycle,
+  pauseSla,
+  reopenCycle,
+  resolvePendingItem,
+  resumeSla,
+} from "../actions";
 import { requestDocument, reviewDocument, uploadDocumentVersion } from "../documents-actions";
 
 export const metadata: Metadata = { title: "Sinistro" };
@@ -30,6 +40,9 @@ const AUDIT_LABEL: Record<string, string> = {
   "cycle.blocked": "Ciclo bloqueado",
   "cycle.reopened": "Ciclo reaberto",
   "cycle.discarded": "Ciclo descartado",
+  "pending_item.created": "Pendência aberta",
+  "pending_item.resolved": "Pendência resolvida",
+  "pending_item.cancelled": "Pendência cancelada",
   "stage.entered": "Etapa iniciada",
   "activity.completed": "Atividade concluída",
   "decision.made": "Decisão registrada",
@@ -127,6 +140,22 @@ export default async function ClaimPage({
 
   const activityByStage = new Map((activities ?? []).map((a) => [a.stage_instance_id, a]));
   const decisionByStage = new Map((decisions ?? []).filter((d) => d.stage_instance_id).map((d) => [d.stage_instance_id as string, d]));
+
+  // Pendências (Documento 3 §2.2, caso H): não movem o processo — são solicitações dentro da
+  // atividade atual, por isso vivem agrupadas por activity_instance_id, não por stage.
+  const activityIds = (activities ?? []).map((a) => a.id);
+  const { data: pendingItems } = activityIds.length
+    ? await supabase
+        .from("pending_items")
+        .select("id, activity_instance_id, title, description, status, due_at, responsible_group_id, created_at")
+        .in("activity_instance_id", activityIds)
+        .order("created_at", { ascending: true })
+    : { data: [] as { id: string; activity_instance_id: string | null; title: string; description: string | null; status: string; due_at: string | null; responsible_group_id: string | null; created_at: string }[] };
+  const pendingByActivity = new Map<string, typeof pendingItems>();
+  for (const p of pendingItems ?? []) {
+    if (!p.activity_instance_id) continue;
+    pendingByActivity.set(p.activity_instance_id, [...(pendingByActivity.get(p.activity_instance_id) ?? []), p]);
+  }
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
 
   // SLA (Documento 4): relógio por etapa, status calculado ao vivo (sem esperar o scheduler
@@ -180,6 +209,7 @@ export default async function ClaimPage({
     ...(decisions ?? []).map((d) => d.id),
     ...docIds,
     ...trackingIds,
+    ...(pendingItems ?? []).map((p) => p.id),
   ];
   const { data: auditLogs } = await supabase
     .from("audit_logs")
@@ -404,6 +434,56 @@ export default async function ClaimPage({
                         </span>
                       )}
                     </div>
+                  )}
+
+                  {activity && (pendingByActivity.get(activity.id)?.length ?? 0) > 0 && (
+                    <ul className="mt-2.5 space-y-1.5 border-t border-slate-100 pt-2.5">
+                      {(pendingByActivity.get(activity.id) ?? []).map((p) => (
+                        <li key={p.id} className="flex items-center justify-between gap-2 text-[12px]">
+                          <span className={p.status === "open" ? "text-slate-700" : "text-slate-400 line-through"}>
+                            {p.title}
+                            {p.responsible_group_id && <span className="ml-1.5 text-slate-400">· {groupName.get(p.responsible_group_id)}</span>}
+                          </span>
+                          {p.status === "open" && cycle.status !== "discarded" && (
+                            <span className="flex shrink-0 items-center gap-2">
+                              <form action={resolvePendingItem.bind(null, p.id, claim.id)}>
+                                <button className="text-emerald-600 hover:underline">Resolver</button>
+                              </form>
+                              <form action={cancelPendingItem.bind(null, p.id, claim.id)}>
+                                <button className="text-slate-400 hover:underline">Cancelar</button>
+                              </form>
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {activity && cycle.status !== "discarded" && (
+                    <details className="mt-2 border-t border-slate-100 pt-2">
+                      <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-600">
+                        + Pendência
+                      </summary>
+                      <form
+                        action={createPendingItem.bind(null, activity.id)}
+                        className="mt-2 flex flex-wrap items-end gap-1.5"
+                      >
+                        <input type="hidden" name="claim_id" value={claim.id} />
+                        <input name="title" required placeholder="O que falta?" className={`${input} w-48 text-[12px]`} />
+                        <select name="group_id" className={`${input} w-40 text-[12px]`}>
+                          <option value="">Grupo responsável…</option>
+                          {[...groupName.entries()].map(([id, name]) => (
+                            <option key={id} value={id}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                        <input name="due_at" type="date" className={`${input} w-36 text-[12px]`} />
+                        <button className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                          Adicionar
+                        </button>
+                      </form>
+                    </details>
                   )}
 
                   {joinProgress && (
