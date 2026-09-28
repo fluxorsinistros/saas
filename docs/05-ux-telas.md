@@ -8,6 +8,16 @@
 
 ---
 
+## 1a. Decisão: "portal externo" é visão, não produto separado
+
+Referência visual trazida pelo usuário (mockup "Fluxor") sugeriu dois produtos distintos — um voltado a transportadoras/embarcadores (operação interna do tenant) e outro voltado a seguradoras/corretoras/gerenciadoras de risco (colaboração entre organizações). Decisão tomada: **não são dois produtos, é uma segunda visão sobre o mesmo tenant**, já prevista no Documento 1 §3.2 ("participantes externos não precisam necessariamente possuir uma licença própria do SaaS").
+
+Mecanismo: a mesma `claim_cycles` é visível para qualquer `tenant_organizations` cujo `role_kind` esteja associado ao ciclo (via `claims.primary_organization_id`, responsabilidade financeira do Documento 1 §20, ou participação explícita em atividades/decisões). A "visão de colaboração" filtra a Tela de Sinistro (seção 5) para mostrar somente os ciclos em que a organização do usuário logado participa, com ações limitadas ao seu papel — não é uma tabela nova, é uma query com filtro diferente sobre o que já existe (`claim_cycles`, `tenant_organizations`, `activity_instances.group_id` quando o grupo pertence à organização externa).
+
+Nenhuma migração adicional foi necessária: `tenant_organizations.role_kind` já é o catálogo aberto que distingue "interno operando o processo" de "participante externo acompanhando/decidindo sua parte".
+
+---
+
 ## 1. Princípios que toda tela deve respeitar (§71)
 
 - Produtividade operacional acima de estética decorativa.
