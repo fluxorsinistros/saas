@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Download, FileText, PauseCircle, PlayCircle, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, DollarSign, Download, FileText, PauseCircle, PlayCircle, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
@@ -20,6 +20,7 @@ import {
   resumeSla,
 } from "../actions";
 import { requestDocument, reviewDocument, uploadDocumentVersion } from "../documents-actions";
+import { createFinancialEntry, markFinancialEntry, setDeclaredValue } from "../financial-actions";
 
 export const metadata: Metadata = { title: "Sinistro" };
 
@@ -46,6 +47,10 @@ const AUDIT_LABEL: Record<string, string> = {
   "pending_item.cancelled": "Pendência cancelada",
   "duplicate_check.flagged": "Possível duplicidade identificada",
   "duplicate_check.decided": "Duplicidade avaliada",
+  "claim.declared_value_set": "Valor declarado atualizado",
+  "financial_entry.created": "Lançamento financeiro criado",
+  "financial_entry.paid": "Lançamento marcado como pago",
+  "financial_entry.cancelled": "Lançamento cancelado",
   "stage.entered": "Etapa iniciada",
   "activity.completed": "Atividade concluída",
   "decision.made": "Decisão registrada",
@@ -85,6 +90,14 @@ const DOC_STATUS_LABEL: Record<string, string> = {
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] text-slate-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
 
+const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+const FINANCIAL_TYPE_LABEL: Record<string, string> = {
+  expense: "Despesa",
+  receipt: "Recebimento",
+  reimbursement: "Ressarcimento",
+};
+
 export default async function ClaimPage({
   params,
   searchParams,
@@ -99,7 +112,7 @@ export default async function ClaimPage({
 
   const { data: claim } = await supabase
     .from("claims")
-    .select("id, claim_number, status, occurred_at, created_at")
+    .select("id, claim_number, status, occurred_at, created_at, declared_value")
     .eq("id", claimId)
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
@@ -205,6 +218,20 @@ export default async function ClaimPage({
     .order("requested_at", { ascending: true, nullsFirst: false });
   const docIds = (documents ?? []).map((d) => d.id);
 
+  // Financeiro do ciclo (Documento 5 §14): dado de domínio do sinistro (guincho, armazenagem,
+  // ressarcimento) — nunca confundir com billing_events, que é a cobrança do SaaS ao tenant.
+  const { data: financialEntries } = await supabase
+    .from("cycle_financial_entries")
+    .select("id, entry_type, description, amount, entry_date, status")
+    .eq("claim_cycle_id", cycle.id)
+    .order("entry_date", { ascending: false });
+  const totals = { expense: 0, receipt: 0, reimbursement: 0 };
+  for (const e of financialEntries ?? []) {
+    if (e.status === "cancelled") continue;
+    totals[e.entry_type as keyof typeof totals] += Number(e.amount);
+  }
+  const balance = totals.receipt + totals.reimbursement - totals.expense;
+
   const { data: docTypes } = await supabase.from("document_types").select("id, name").eq("tenant_id", ctx.tenantId);
   const docTypeName = new Map((docTypes ?? []).map((t) => [t.id, t.name]));
 
@@ -235,6 +262,8 @@ export default async function ClaimPage({
     ...trackingIds,
     ...(pendingItems ?? []).map((p) => p.id),
     ...(allDuplicateChecks ?? []).map((d) => d.id),
+    ...(financialEntries ?? []).map((e) => e.id),
+    claim.id,
   ];
   const { data: auditLogs } = await supabase
     .from("audit_logs")
@@ -588,6 +617,92 @@ export default async function ClaimPage({
         </section>
 
         <section className="mt-8">
+          <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+            <DollarSign className="size-3.5" /> Financeiro
+          </h2>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <form action={setDeclaredValue.bind(null, claim.id)} className="flex items-center gap-2">
+                <label htmlFor="declared_value" className="text-[12px] text-slate-500">
+                  Valor de carga/prejuízo declarado
+                </label>
+                <input
+                  id="declared_value"
+                  name="declared_value"
+                  type="number"
+                  step="0.01"
+                  defaultValue={claim.declared_value ?? ""}
+                  placeholder="0,00"
+                  className={`${input} w-32 text-[12px]`}
+                />
+                <button className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                  Salvar
+                </button>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 py-3 sm:grid-cols-4">
+              <FinancialStat label="Despesas" value={totals.expense} tone="rose" />
+              <FinancialStat label="Recebimentos" value={totals.receipt} tone="emerald" />
+              <FinancialStat label="Ressarcimentos" value={totals.reimbursement} tone="emerald" />
+              <FinancialStat label="Saldo" value={balance} tone={balance >= 0 ? "emerald" : "rose"} />
+            </div>
+
+            {(financialEntries ?? []).length > 0 && (
+              <ul className="divide-y divide-slate-100 border-t border-slate-100">
+                {(financialEntries ?? []).map((e) => (
+                  <li key={e.id} className="flex items-center justify-between gap-2 py-2 text-[12px]">
+                    <div className={e.status === "cancelled" ? "text-slate-400 line-through" : "text-slate-700"}>
+                      <span className="font-medium">{FINANCIAL_TYPE_LABEL[e.entry_type] ?? e.entry_type}</span> — {e.description}
+                      <span className="ml-1.5 text-slate-400">
+                        {new Date(e.entry_date).toLocaleDateString("pt-BR")} · {currency.format(Number(e.amount))}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          e.status === "paid"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : e.status === "cancelled"
+                              ? "bg-slate-100 text-slate-500"
+                              : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {e.status === "paid" ? "Pago" : e.status === "cancelled" ? "Cancelado" : "Pendente"}
+                      </span>
+                      {e.status === "pending" && (
+                        <>
+                          <form action={markFinancialEntry.bind(null, e.id, claim.id, "paid")}>
+                            <button className="text-emerald-600 hover:underline">Marcar pago</button>
+                          </form>
+                          <form action={markFinancialEntry.bind(null, e.id, claim.id, "cancelled")}>
+                            <button className="text-slate-400 hover:underline">Cancelar</button>
+                          </form>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form action={createFinancialEntry.bind(null, cycle.id)} className="mt-3 flex flex-wrap items-end gap-1.5 border-t border-slate-100 pt-3">
+              <input type="hidden" name="claim_id" value={claim.id} />
+              <select name="entry_type" required className={`${input} w-36 text-[12px]`}>
+                <option value="expense">Despesa</option>
+                <option value="receipt">Recebimento</option>
+                <option value="reimbursement">Ressarcimento</option>
+              </select>
+              <input name="description" required placeholder="Descrição" className={`${input} w-44 text-[12px]`} />
+              <input name="amount" type="number" step="0.01" required placeholder="Valor" className={`${input} w-24 text-[12px]`} />
+              <input name="entry_date" type="date" className={`${input} w-36 text-[12px]`} />
+              <button className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">Lançar</button>
+            </form>
+          </div>
+        </section>
+
+        <section className="mt-8">
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Documentos</h2>
 
           <div className="space-y-3">
@@ -732,6 +847,15 @@ export default async function ClaimPage({
           </ul>
         </section>
       </div>
+    </div>
+  );
+}
+
+function FinancialStat({ label, value, tone }: { label: string; value: number; tone: "emerald" | "rose" }) {
+  return (
+    <div>
+      <dt className="text-[11px] text-slate-500">{label}</dt>
+      <dd className={`text-[15px] font-semibold ${tone === "emerald" ? "text-emerald-700" : "text-rose-700"}`}>{currency.format(value)}</dd>
     </div>
   );
 }

@@ -497,6 +497,7 @@ export type Database = {
           claim_number: string
           created_at: string
           created_by: string | null
+          declared_value: number | null
           external_reference: string | null
           id: string
           location: Json | null
@@ -511,6 +512,7 @@ export type Database = {
           claim_number: string
           created_at?: string
           created_by?: string | null
+          declared_value?: number | null
           external_reference?: string | null
           id?: string
           location?: Json | null
@@ -525,6 +527,7 @@ export type Database = {
           claim_number?: string
           created_at?: string
           created_by?: string | null
+          declared_value?: number | null
           external_reference?: string | null
           id?: string
           location?: Json | null
@@ -658,6 +661,63 @@ export type Database = {
             columns: ["workflow_version_id"]
             isOneToOne: false
             referencedRelation: "workflow_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cycle_financial_entries: {
+        Row: {
+          amount: number
+          claim_cycle_id: string
+          created_at: string
+          created_by: string | null
+          description: string
+          entry_date: string
+          entry_type: string
+          id: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          claim_cycle_id: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          entry_date?: string
+          entry_type: string
+          id?: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          claim_cycle_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          entry_date?: string
+          entry_type?: string
+          id?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cycle_financial_entries_claim_cycle_id_fkey"
+            columns: ["claim_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "claim_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cycle_financial_entries_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
