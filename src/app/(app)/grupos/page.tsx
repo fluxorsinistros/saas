@@ -37,7 +37,7 @@ export default async function GruposPage() {
           </div>
           <div className="min-w-[200px] flex-[1.4]">
             <label htmlFor="g-desc" className="mb-1 block text-[12px] font-medium text-slate-600">
-              Descrição <span className="font-normal text-slate-400">(opcional)</span>
+              Descrição <span className="font-normal text-slate-500">(opcional)</span>
             </label>
             <input id="g-desc" name="description" className={input} />
           </div>

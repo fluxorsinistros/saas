@@ -19,7 +19,7 @@ export default function LoginPage() {
             e quando.
           </p>
         </div>
-        <p className="relative text-[12px] text-slate-500">Governança · Execução · Rastreabilidade</p>
+        <p className="relative text-[12px] text-slate-400">Governança · Execução · Rastreabilidade</p>
       </section>
 
       <section className="flex items-center justify-center px-6 py-12">

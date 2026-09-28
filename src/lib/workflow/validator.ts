@@ -8,19 +8,24 @@ export type Issue = {
 };
 
 // Workflow Validator (Documento 3 §7). Erro bloqueia publicação; aviso não.
-export function validateGraph(graph: Graph): Issue[] {
-  const issues: Issue[] = [];
+// `untouched` (crítica de design, P2): nós recém-criados que ainda não perderam o foco uma vez.
+// Enquanto "intocados", seus próprios problemas ficam em silêncio — evita punir quem acabou de arrastar um elemento.
+export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new Set()): Issue[] {
   const { nodes, edges } = graph;
+  if (nodes.length === 0) return [];
+
+  const issues: Issue[] = [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
-
-  if (nodes.length === 0) {
-    return [{ severity: "error", message: "O fluxo está vazio." }];
-  }
-
   const forward = edges.filter((e) => e.kind !== "return");
   const out = (id: string, list: GraphEdge[] = edges) => list.filter((e) => e.source === id);
   const inc = (id: string, list: GraphEdge[] = edges) => list.filter((e) => e.target === id);
   const title = (id: string) => byId.get(id)?.name || NODE_META[byId.get(id)!.type].label;
+
+  // Checagens estruturais (ponto de partida, alcançabilidade, ciclo) ignoram nós intocados,
+  // para que um elemento solto no quadro não seja tratado como "início" nem como "inalcançável".
+  const structural = nodes.filter((n) => !untouched.has(n.id));
+  const relevant = structural.length > 0 ? structural : nodes;
+  const isStructural = (id: string) => relevant.some((n) => n.id === id);
 
   for (const e of edges) {
     if (!byId.has(e.source) || !byId.has(e.target)) {
@@ -28,20 +33,19 @@ export function validateGraph(graph: Graph): Issue[] {
     }
   }
 
-  const entries = nodes.filter((n) => inc(n.id, forward).length === 0);
+  const entries = relevant.filter((n) => inc(n.id, forward).filter((e) => isStructural(e.source)).length === 0);
   if (entries.length === 0) {
     issues.push({ severity: "error", message: "Não há ponto de início: todo elemento recebe uma conexão." });
   } else if (entries.length > 1) {
-    for (const n of entries) {
-      issues.push({
-        severity: "error",
-        message: `"${title(n.id)}" não recebe conexão — o fluxo deve ter um único início.`,
-        nodeId: n.id,
-      });
-    }
+    const names = entries.map((n) => `"${title(n.id)}"`).join(" e ");
+    issues.push({
+      severity: "error",
+      message: `Há mais de um ponto de partida: ${names}. Ligue um deles ao restante do fluxo para haver um único início.`,
+      nodeId: entries[0].id,
+    });
   }
 
-  if (!nodes.some((n) => n.type === "end")) {
+  if (!relevant.some((n) => n.type === "end")) {
     issues.push({ severity: "error", message: "Adicione ao menos um elemento de Fim." });
   }
 
@@ -126,25 +130,28 @@ export function validateGraph(graph: Graph): Issue[] {
   }
 
   if (entries.length === 1) {
-    const reached = walk([entries[0].id], (id) => out(id).map((e) => e.target));
-    for (const n of nodes) {
+    const reached = walk([entries[0].id], (id) => out(id).filter((e) => isStructural(e.target)).map((e) => e.target));
+    for (const n of relevant) {
       if (!reached.has(n.id)) {
         issues.push({ severity: "error", message: `"${title(n.id)}" nunca é alcançado a partir do início.`, nodeId: n.id });
       }
     }
   }
 
-  const ends = nodes.filter((n) => n.type === "end").map((n) => n.id);
+  const ends = relevant.filter((n) => n.type === "end").map((n) => n.id);
   if (ends.length > 0) {
-    const canFinish = walk(ends, (id) => inc(id).map((e) => e.source));
-    for (const n of nodes) {
+    const canFinish = walk(ends, (id) => inc(id).filter((e) => isStructural(e.source)).map((e) => e.source));
+    for (const n of relevant) {
       if (!canFinish.has(n.id)) {
         issues.push({ severity: "error", message: `"${title(n.id)}" nunca chega a um Fim.`, nodeId: n.id });
       }
     }
   }
 
-  const cycleNode = findCycle(nodes.map((n) => n.id), forward);
+  const cycleNode = findCycle(
+    relevant.map((n) => n.id),
+    forward.filter((e) => isStructural(e.source) && isStructural(e.target)),
+  );
   if (cycleNode) {
     issues.push({
       severity: "error",
@@ -153,7 +160,7 @@ export function validateGraph(graph: Graph): Issue[] {
     });
   }
 
-  return dedupe(issues);
+  return dedupe(issues.filter((i) => !i.nodeId || !untouched.has(i.nodeId)));
 }
 
 function walk(start: string[], next: (id: string) => string[]) {

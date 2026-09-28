@@ -31,6 +31,70 @@ export type SavePayload = {
 
 export type ActionResult = { ok: true } | { ok: false; error: string; issues?: Issue[] };
 
+export type PublishDiff = {
+  hasPublishedBefore: boolean;
+  nodesAdded: number;
+  nodesRemoved: number;
+  nodesChanged: number;
+  edgesAdded: number;
+  edgesRemoved: number;
+};
+
+// Alimenta o diálogo de confirmação de publicação (crítica de design P1: publicar precisa dizer o que muda).
+export async function getPublishDiff(versionId: string): Promise<PublishDiff | { error: string }> {
+  await getTenantContext();
+  const supabase = await createClient();
+
+  const { data: version, error: vErr } = await supabase
+    .from("workflow_versions")
+    .select("workflow_id")
+    .eq("id", versionId)
+    .single();
+  if (vErr || !version) return { error: vErr?.message ?? "Versão não encontrada" };
+
+  const { data: published } = await supabase
+    .from("workflow_versions")
+    .select("id")
+    .eq("workflow_id", version.workflow_id)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (!published) {
+    const { count } = await supabase
+      .from("workflow_nodes")
+      .select("id", { count: "exact", head: true })
+      .eq("workflow_version_id", versionId);
+    return { hasPublishedBefore: false, nodesAdded: count ?? 0, nodesRemoved: 0, nodesChanged: 0, edgesAdded: 0, edgesRemoved: 0 };
+  }
+
+  const [{ data: draftNodes }, { data: prevNodes }, { data: draftEdges }, { data: prevEdges }] = await Promise.all([
+    supabase.from("workflow_nodes").select("id, name, node_type, group_id, config").eq("workflow_version_id", versionId),
+    supabase.from("workflow_nodes").select("id, name, node_type, group_id, config").eq("workflow_version_id", published.id),
+    supabase.from("workflow_edges").select("id").eq("workflow_version_id", versionId),
+    supabase.from("workflow_edges").select("id").eq("workflow_version_id", published.id),
+  ]);
+
+  // Nós carregam o mesmo id entre versões (create_draft_from_version gera novos ids, então comparamos por posição+nome
+  // seria frágil; em vez disso comparamos o conjunto de nomes normalizado, que é o que o usuário reconhece na tela).
+  const draftNames = new Map((draftNodes ?? []).map((n) => [`${n.node_type}::${n.name.trim().toLowerCase()}`, n]));
+  const prevNames = new Map((prevNodes ?? []).map((n) => [`${n.node_type}::${n.name.trim().toLowerCase()}`, n]));
+
+  let changed = 0;
+  for (const [key, node] of draftNames) {
+    const prev = prevNames.get(key);
+    if (prev && JSON.stringify(prev.config) !== JSON.stringify(node.config)) changed++;
+  }
+
+  return {
+    hasPublishedBefore: true,
+    nodesAdded: [...draftNames.keys()].filter((k) => !prevNames.has(k)).length,
+    nodesRemoved: [...prevNames.keys()].filter((k) => !draftNames.has(k)).length,
+    nodesChanged: changed,
+    edgesAdded: Math.max(0, (draftEdges?.length ?? 0) - (prevEdges?.length ?? 0)),
+    edgesRemoved: Math.max(0, (prevEdges?.length ?? 0) - (draftEdges?.length ?? 0)),
+  };
+}
+
 export async function createWorkflow(formData: FormData) {
   const ctx = await getTenantContext();
   const name = String(formData.get("name") ?? "").trim();
@@ -68,7 +132,7 @@ export async function saveDraft(versionId: string, payload: SavePayload): Promis
 }
 
 // A validação roda de novo aqui sobre o que está gravado: o navegador não é fonte de verdade (Documento 1 §56).
-export async function publishVersion(versionId: string): Promise<ActionResult> {
+export async function publishVersion(versionId: string, releaseNote: string): Promise<ActionResult> {
   await getTenantContext();
   const supabase = await createClient();
 
@@ -107,6 +171,7 @@ export async function publishVersion(versionId: string): Promise<ActionResult> {
   const { error } = await supabase.rpc("publish_workflow_version", {
     p_version_id: versionId,
     p_validation: { checked_at: new Date().toISOString(), warnings: issues } as unknown as Json,
+    p_release_note: releaseNote.trim() || undefined,
   });
   if (error) return { ok: false, error: error.message };
 

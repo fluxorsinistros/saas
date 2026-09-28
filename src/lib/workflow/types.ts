@@ -34,14 +34,38 @@ export type GraphEdge = {
 
 export type Graph = { nodes: GraphNode[]; edges: GraphEdge[] };
 
-export const NODE_META: Record<NodeType, { label: string; hint: string }> = {
-  stage: { label: "Etapa", hint: "Atividade executada por um grupo" },
-  decision: { label: "Decisão", hint: "Escolha única entre caminhos" },
-  parallel_split: { label: "Paralelo", hint: "Abre ramos simultâneos" },
-  join: { label: "Convergência", hint: "Aguarda ramos antes de seguir" },
-  wait: { label: "Espera", hint: "Aguarda terceiro ou prazo" },
-  pending: { label: "Pendência", hint: "Solicitação sem nova etapa" },
-  end: { label: "Fim", hint: "Encerra o caminho" },
+export const NODE_META: Record<NodeType, { label: string; hint: string; help: string }> = {
+  stage: {
+    label: "Etapa",
+    hint: "Atividade executada por um grupo",
+    help: "Um passo do processo. Só um grupo pode ser responsável, mas qualquer pessoa ativa nele pode executar.",
+  },
+  decision: {
+    label: "Decisão",
+    hint: "Escolha única entre caminhos",
+    help: "Uma pergunta com respostas exclusivas — só um dos caminhos seguintes é ativado.",
+  },
+  parallel_split: {
+    label: "Paralelo",
+    hint: "Abre ramos simultâneos",
+    help: "Ativa dois ou mais caminhos ao mesmo tempo. Use uma Convergência depois para reuni-los.",
+  },
+  join: {
+    label: "Convergência",
+    hint: "Aguarda ramos antes de seguir",
+    help: "Junta os caminhos abertos por um Paralelo. Só segue em frente quando a regra escolhida for satisfeita.",
+  },
+  wait: {
+    label: "Espera",
+    hint: "Aguarda terceiro ou prazo",
+    help: "Pausa o processo até uma resposta externa (ex.: seguradora) ou até um prazo vencer.",
+  },
+  pending: {
+    label: "Pendência",
+    hint: "Solicitação sem nova etapa",
+    help: "Uma solicitação (ex.: documento faltando) dentro da etapa atual — não move o processo para outro passo.",
+  },
+  end: { label: "Fim", hint: "Encerra o caminho", help: "Encerra este caminho do processo." },
 };
 
 export const JOIN_RULE_LABEL: Record<JoinRule, string> = {
@@ -49,6 +73,13 @@ export const JOIN_RULE_LABEL: Record<JoinRule, string> = {
   all: "Todos",
   any: "Qualquer um",
   min_count: "Mínimo de N",
+};
+
+export const JOIN_RULE_HELP: Record<JoinRule, string> = {
+  all_required: "Segue quando todo ramo marcado como obrigatório terminar. Ramos opcionais podem ficar pendentes.",
+  all: "Segue somente quando todos os ramos, obrigatórios ou não, terminarem.",
+  any: "Segue assim que o primeiro ramo terminar — os demais continuam em segundo plano.",
+  min_count: "Segue quando a quantidade de ramos concluídos atingir o número definido.",
 };
 
 // Tipos que exigem grupo responsável (Documento 1 §5.3: etapa aponta para grupo, não pessoa).

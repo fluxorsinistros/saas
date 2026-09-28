@@ -2843,6 +2843,7 @@ export type Database = {
           id: string
           published_at: string | null
           published_by: string | null
+          release_note: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -2855,6 +2856,7 @@ export type Database = {
           id?: string
           published_at?: string | null
           published_by?: string | null
+          release_note?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -2867,6 +2869,7 @@ export type Database = {
           id?: string
           published_at?: string | null
           published_by?: string | null
+          release_note?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
@@ -2953,7 +2956,11 @@ export type Database = {
       }
       create_tenant: { Args: { p_name: string }; Returns: string }
       publish_workflow_version: {
-        Args: { p_validation: Json; p_version_id: string }
+        Args: {
+          p_release_note?: string
+          p_validation: Json
+          p_version_id: string
+        }
         Returns: undefined
       }
       save_workflow_draft: {

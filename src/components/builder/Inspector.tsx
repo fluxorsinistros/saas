@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
-import { JOIN_RULE_LABEL, NODE_META, type JoinRule, type NodeConfig, type NodeType } from "@/lib/workflow/types";
+import { Copy, Trash2 } from "lucide-react";
+import { JOIN_RULE_HELP, JOIN_RULE_LABEL, NODE_META, type JoinRule, type NodeConfig, type NodeType } from "@/lib/workflow/types";
 import type { FlowEdge, FlowEdgeData, FlowNode, FlowNodeData } from "./context";
 
 type Group = { id: string; name: string };
@@ -20,19 +20,23 @@ export function NodeInspector({
   groups,
   readOnly,
   outgoing,
+  autoFocusName,
   onChange,
   onEdgeChange,
   onSelectEdge,
   onDelete,
+  onDuplicate,
 }: {
   node: FlowNode;
   groups: Group[];
   readOnly: boolean;
   outgoing: FlowEdge[];
+  autoFocusName?: boolean;
   onChange: (patch: Partial<FlowNodeData>) => void;
   onEdgeChange: (edgeId: string, patch: Partial<FlowEdgeData>) => void;
   onSelectEdge: (edgeId: string) => void;
   onDelete: () => void;
+  onDuplicate?: () => void;
 }) {
   const type = node.type as NodeType;
   const { data } = node;
@@ -40,7 +44,12 @@ export function NodeInspector({
 
   return (
     <div className="space-y-4">
-      <Header title={NODE_META[type].label} hint={NODE_META[type].hint} onDelete={readOnly ? undefined : onDelete} />
+      <Header
+        title={NODE_META[type].label}
+        hint={NODE_META[type].help}
+        onDelete={readOnly ? undefined : onDelete}
+        onDuplicate={readOnly ? undefined : onDuplicate}
+      />
 
       <div>
         <label className={label} htmlFor="node-name">
@@ -48,6 +57,7 @@ export function NodeInspector({
         </label>
         <input
           id="node-name"
+          autoFocus={autoFocusName}
           className={input}
           value={data.name}
           disabled={readOnly}
@@ -58,7 +68,7 @@ export function NodeInspector({
       {GROUP_TYPES.includes(type) && (
         <div>
           <label className={label} htmlFor="node-group">
-            Grupo responsável{type === "wait" && <span className="font-normal text-slate-400"> (opcional)</span>}
+            Grupo responsável{type === "wait" && <span className="font-normal text-slate-500"> (opcional)</span>}
           </label>
           <select
             id="node-group"
@@ -107,13 +117,17 @@ export function NodeInspector({
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {outgoing.map((e) => (
+              {outgoing.map((e, i) => (
                 <li key={e.id} className="flex items-center gap-1.5">
+                  <label htmlFor={`edge-opt-${e.id}`} className="sr-only">
+                    {type === "decision" ? `Nome da opção ${i + 1}` : `Nome do ramo ${i + 1}`}
+                  </label>
                   <input
+                    id={`edge-opt-${e.id}`}
                     className={input}
                     value={e.data?.label ?? ""}
                     disabled={readOnly}
-                    placeholder={type === "decision" ? "Nome da opção" : "Nome do ramo"}
+                    placeholder={type === "decision" ? `Opção ${i + 1}` : `Ramo ${i + 1}`}
                     onChange={(ev) => onEdgeChange(e.id, { label: ev.target.value })}
                   />
                   <button
@@ -149,6 +163,7 @@ export function NodeInspector({
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-[11px] text-slate-500">{JOIN_RULE_HELP[data.config.join_rule ?? "all_required"]}</p>
           </div>
           {data.config.join_rule === "min_count" && (
             <div>
@@ -199,12 +214,16 @@ export function NodeInspector({
 export function EdgeInspector({
   edge,
   sourceType,
+  sourceName,
+  targetName,
   readOnly,
   onChange,
   onDelete,
 }: {
   edge: FlowEdge;
   sourceType: NodeType | undefined;
+  sourceName: string;
+  targetName: string;
   readOnly: boolean;
   onChange: (patch: Partial<FlowEdgeData>) => void;
   onDelete: () => void;
@@ -220,6 +239,10 @@ export function EdgeInspector({
         hint={isDecision ? "Opção de uma decisão" : isParallel ? "Ramo de um paralelo" : "Transição entre passos"}
         onDelete={readOnly ? undefined : onDelete}
       />
+      <p className="-mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+        De <span className="font-medium text-slate-900">{sourceName || "—"}</span> para{" "}
+        <span className="font-medium text-slate-900">{targetName || "—"}</span>
+      </p>
       <div>
         <label className={label} htmlFor="edge-label">
           {isDecision ? "Opção" : isParallel ? "Nome do ramo" : "Rótulo (opcional)"}
@@ -252,24 +275,47 @@ export function EdgeInspector({
   );
 }
 
-function Header({ title, hint, onDelete }: { title: string; hint: string; onDelete?: () => void }) {
+function Header({
+  title,
+  hint,
+  onDelete,
+  onDuplicate,
+}: {
+  title: string;
+  hint: string;
+  onDelete?: () => void;
+  onDuplicate?: () => void;
+}) {
   return (
     <div className="flex items-start justify-between gap-2">
       <div>
         <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
         <p className="text-[12px] text-slate-500">{hint}</p>
       </div>
-      {onDelete && (
-        <button
-          type="button"
-          onClick={onDelete}
-          className="rounded-md p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-          aria-label="Excluir"
-          title="Excluir (Delete)"
-        >
-          <Trash2 className="size-4" />
-        </button>
-      )}
+      <div className="flex shrink-0 gap-0.5">
+        {onDuplicate && (
+          <button
+            type="button"
+            onClick={onDuplicate}
+            className="rounded-md p-1.5 text-slate-500 transition hover:bg-brand/5 hover:text-brand"
+            aria-label="Duplicar"
+            title="Duplicar (Ctrl+D)"
+          >
+            <Copy className="size-4" />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-md p-1.5 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+            aria-label="Excluir"
+            title="Excluir (Delete)"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -320,7 +366,7 @@ function SlaField({
   return (
     <div>
       <label className={label} htmlFor="sla-value">
-        SLA <span className="font-normal text-slate-400">(opcional)</span>
+        SLA <span className="font-normal text-slate-500">(opcional)</span>
       </label>
       <div className="flex gap-1.5">
         <input

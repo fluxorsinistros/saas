@@ -12,14 +12,15 @@ function issueRing(issue: "error" | "warning" | undefined, selected: boolean) {
   return "";
 }
 
-function IssueDot({ issue }: { issue?: "error" | "warning" }) {
+function IssueDot({ issue, className = "" }: { issue?: "error" | "warning"; className?: string }) {
   if (!issue) return null;
   return (
     <span
-      className={`absolute -right-1.5 -top-1.5 size-3 rounded-full border-2 border-white ${
-        issue === "error" ? "bg-rose-500" : "bg-amber-400"
-      }`}
+      role="img"
       aria-label={issue === "error" ? "Erro de validação" : "Aviso de validação"}
+      className={`absolute size-3 rounded-full border-2 border-white ${
+        issue === "error" ? "bg-rose-500" : "bg-amber-400"
+      } ${className || "-right-1.5 -top-1.5"}`}
     />
   );
 }
@@ -84,7 +85,7 @@ function CardNode({
           {NODE_META[node.type].label}
         </div>
         <div className="text-[13px] font-medium leading-snug text-slate-900">
-          {node.data.name || <span className="text-slate-400">Sem nome</span>}
+          {node.data.name || <span className="text-slate-500">Sem nome</span>}
         </div>
         <div className="mt-2 empty:hidden">
           <Chips data={node.data} />
@@ -127,17 +128,11 @@ export function DecisionNode(props: NodeProps<FlowNode>) {
       <div className="absolute inset-0 flex flex-col items-center justify-center px-9 text-center">
         <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-violet">Decisão</span>
         <span className="line-clamp-2 text-[12px] font-medium leading-tight text-slate-900">
-          {props.data.name || <span className="text-slate-400">Sem nome</span>}
+          {props.data.name || <span className="text-slate-500">Sem nome</span>}
         </span>
         {group && <span className="mt-0.5 truncate text-[10px] text-slate-500">{group}</span>}
       </div>
-      {issue && (
-        <span
-          className={`absolute right-7 top-5 size-3 rounded-full border-2 border-white ${
-            issue === "error" ? "bg-rose-500" : "bg-amber-400"
-          }`}
-        />
-      )}
+      <IssueDot issue={issue} className="right-7 top-5" />
       <Out />
     </div>
   );

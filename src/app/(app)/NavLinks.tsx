@@ -9,7 +9,7 @@ const LINKS = [
   { href: "/grupos", label: "Grupos", icon: Users },
 ];
 
-export function NavLinks() {
+export function NavLinks({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   return (
     <ul className="space-y-0.5">
@@ -19,13 +19,14 @@ export function NavLinks() {
           <li key={href}>
             <Link
               href={href}
+              title={collapsed ? label : undefined}
               aria-current={active ? "page" : undefined}
-              className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition ${
-                active ? "bg-brand text-white shadow-sm" : "text-slate-300 hover:bg-navy-700 hover:text-white"
-              }`}
+              className={`flex items-center gap-2.5 rounded-lg py-2 text-[13px] font-medium transition ${
+                collapsed ? "justify-center px-0" : "px-2.5"
+              } ${active ? "bg-brand text-white shadow-sm" : "text-slate-300 hover:bg-navy-700 hover:text-white"}`}
             >
-              <Icon className="size-4" />
-              {label}
+              <Icon className="size-4 shrink-0" />
+              {!collapsed && label}
             </Link>
           </li>
         );
