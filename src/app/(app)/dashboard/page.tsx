@@ -40,6 +40,11 @@ export default async function DashboardPage() {
           <Card label="Taxa de conclusão" value={`${completionRate}%`} />
         </div>
 
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Card label="Atrasados (SLA)" value={snap.slaOverdue.length} accent={snap.slaOverdue.length > 0 ? "text-rose-600" : undefined} />
+          <Card label="Próximos do prazo" value={snap.slaAtRisk.length} accent={snap.slaAtRisk.length > 0 ? "text-amber-600" : undefined} />
+        </div>
+
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Sinistros por tipo</h2>

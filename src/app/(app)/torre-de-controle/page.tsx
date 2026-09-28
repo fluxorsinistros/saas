@@ -44,6 +44,37 @@ export default async function TorreDeControlePage() {
           <Stat label="Concluídos" value={completed} tone="ok" />
         </div>
 
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Stat label="Atrasados (SLA)" value={snap.slaOverdue.length} tone="danger" />
+          <Stat label="Próximos do prazo" value={snap.slaAtRisk.length} tone="warning" />
+        </div>
+
+        {(snap.slaOverdue.length > 0 || snap.slaAtRisk.length > 0) && (
+          <section className="mt-8">
+            <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Clock3 className="size-3.5" /> Prazos (SLA)
+            </h2>
+            <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              {snap.slaOverdue.map((s) => (
+                <li key={s.cycleId} className="flex items-center justify-between px-4 py-2.5">
+                  <Link href={`/sinistros/${s.claimId}`} className="text-[13px] text-slate-800 hover:underline">
+                    {s.claimNumber}
+                  </Link>
+                  <span className="text-[12px] font-medium text-rose-700">{s.minutesOverdue}min em atraso</span>
+                </li>
+              ))}
+              {snap.slaAtRisk.map((s) => (
+                <li key={s.cycleId} className="flex items-center justify-between px-4 py-2.5">
+                  <Link href={`/sinistros/${s.claimId}`} className="text-[13px] text-slate-800 hover:underline">
+                    {s.claimNumber}
+                  </Link>
+                  <span className="text-[12px] font-medium text-amber-700">faltam {Math.abs(s.minutesOverdue)}min</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className="mt-8">
           <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
             <AlertTriangle className="size-3.5" /> Precisa de atenção agora
@@ -104,15 +135,17 @@ export default async function TorreDeControlePage() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: "neutral" | "brand" | "danger" | "ok" }) {
+function Stat({ label, value, tone }: { label: string; value: number; tone: "neutral" | "brand" | "danger" | "ok" | "warning" }) {
   const toneClass =
     tone === "danger"
       ? "text-rose-600"
-      : tone === "ok"
-        ? "text-emerald-600"
-        : tone === "brand"
-          ? "text-brand"
-          : "text-slate-900";
+      : tone === "warning"
+        ? "text-amber-600"
+        : tone === "ok"
+          ? "text-emerald-600"
+          : tone === "brand"
+            ? "text-brand"
+            : "text-slate-900";
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
       <dt className="text-[11px] text-slate-500">{label}</dt>

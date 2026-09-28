@@ -27,6 +27,11 @@ export type GroupBacklog = { groupId: string; groupName: string; count: number }
 
 export type CategoryCount = { categoryId: string; categoryName: string; count: number };
 
+// minutesOverdue: positivo = minutos de atraso (slaOverdue); negativo = minutos que faltam,
+// já dentro da faixa de alerta (slaAtRisk) — o sinal deixa as duas listas ordenáveis pela mesma
+// regra (mais urgente primeiro) sem precisar de dois campos.
+export type SlaItem = { cycleId: string; claimId: string; claimNumber: string; minutesOverdue: number };
+
 export type OperationalSnapshot = {
   totalCycles: number;
   statusCounts: CycleStatusCounts;
@@ -34,6 +39,8 @@ export type OperationalSnapshot = {
   aging: AgingCycle[];
   backlogByGroup: GroupBacklog[];
   byCategory: CategoryCount[];
+  slaOverdue: SlaItem[];
+  slaAtRisk: SlaItem[];
 };
 
 const OPEN_STATUSES = ["draft", "open", "in_progress", "waiting"];
@@ -129,5 +136,52 @@ export async function loadOperationalSnapshot(supabase: Supa, tenantId: string):
     .map(([groupId, count]) => ({ groupId, groupName: groupName.get(groupId) ?? "—", count }))
     .sort((a, b) => b.count - a.count);
 
-  return { totalCycles: (cycles ?? []).length, statusCounts, blocked, aging, backlogByGroup, byCategory };
+  // SLA (Documento 4/5 §6-§7): "próximos do prazo" e "atrasados" calculados ao vivo sobre
+  // sla_tracking, sem esperar o scheduler periódico (ainda não implementado — ver §10 do doc4).
+  const { data: openTracking } = cycleIds.length
+    ? await supabase
+        .from("sla_tracking")
+        .select("claim_cycle_id, started_at, target_at, workflow_slas(alert_thresholds)")
+        .in("claim_cycle_id", cycleIds)
+        .in("status", ["on_track", "at_risk"])
+    : { data: [] as { claim_cycle_id: string; started_at: string; target_at: string; workflow_slas: { alert_thresholds: number[] } | null }[] };
+
+  const cycleById = new Map((cycles ?? []).map((c) => [c.id, c]));
+  const overdueMap = new Map<string, number>();
+  const atRiskMap = new Map<string, number>();
+  const nowTs = Date.now();
+  for (const t of openTracking ?? []) {
+    const cycle = cycleById.get(t.claim_cycle_id);
+    if (!cycle) continue;
+    const started = new Date(t.started_at).getTime();
+    const target = new Date(t.target_at).getTime();
+    const minutesOverdue = Math.round((nowTs - target) / 60_000);
+    if (minutesOverdue >= 0) {
+      overdueMap.set(t.claim_cycle_id, Math.max(overdueMap.get(t.claim_cycle_id) ?? 0, minutesOverdue));
+      continue;
+    }
+    if (target <= started) continue;
+    // "próximo do prazo" = já cruzou o primeiro alert_threshold configurado (Documento 4 §4), a
+    // mesma régua do alerta do motor de SLA — não é um "falta pouco tempo" arbitrário da tela.
+    const elapsedPct = ((nowTs - started) / (target - started)) * 100;
+    const thresholds = (t.workflow_slas as unknown as { alert_thresholds: number[] } | null)?.alert_thresholds ?? [75, 90, 95, 100];
+    const firstThreshold = Math.min(...thresholds);
+    if (elapsedPct >= firstThreshold) {
+      atRiskMap.set(t.claim_cycle_id, Math.round((target - nowTs) / 60_000) * -1);
+    }
+  }
+
+  const toSlaItems = (map: Map<string, number>): SlaItem[] =>
+    [...map.entries()]
+      .map(([cycleId, minutesOverdue]) => {
+        const cycle = cycleById.get(cycleId)!;
+        return { cycleId, claimId: cycle.claim_id, claimNumber: claimById.get(cycle.claim_id)?.claim_number ?? "—", minutesOverdue };
+      })
+      .sort((a, b) => b.minutesOverdue - a.minutesOverdue)
+      .slice(0, 8);
+
+  const slaOverdue = toSlaItems(overdueMap);
+  const slaAtRisk = toSlaItems(atRiskMap);
+
+  return { totalCycles: (cycles ?? []).length, statusCounts, blocked, aging, backlogByGroup, byCategory, slaOverdue, slaAtRisk };
 }
