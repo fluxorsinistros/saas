@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckSquare, FileWarning, Gauge, LayoutDashboard, ShieldCheck, UsersRound, Users, Workflow } from "lucide-react";
+import { CheckSquare, FileWarning, Gauge, LayoutDashboard, ShieldCheck, UploadCloud, UsersRound, Users, Workflow } from "lucide-react";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/torre-de-controle", label: "Torre de Controle", icon: Gauge },
   { href: "/fluxos", label: "Fluxos", icon: Workflow },
   { href: "/sinistros", label: "Sinistros", icon: FileWarning },
+  { href: "/importacao", label: "Importação", icon: UploadCloud },
   { href: "/tarefas", label: "Tarefas", icon: CheckSquare },
   { href: "/usuarios", label: "Usuários", icon: UsersRound },
   { href: "/grupos", label: "Grupos", icon: Users },

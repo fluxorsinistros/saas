@@ -336,30 +336,43 @@ async function advance(
   }
 }
 
-export async function formalizeClaim(formData: FormData): Promise<void> {
-  const ctx = await getTenantContext();
-  const supabase = await createClient();
+export type FormalizeClaimInput = {
+  workflowName: string;
+  occurredAt?: string;
+  location?: string;
+  externalReference?: string;
+};
 
-  const workflowId = String(formData.get("workflow_id") ?? "");
-  const occurredAt = String(formData.get("occurred_at") ?? "");
-  const location = String(formData.get("location") ?? "").trim();
-  const externalReference = String(formData.get("external_reference") ?? "").trim();
-  if (!workflowId) throw new Error("Escolha um fluxo publicado.");
+// Rotina única de criação de sinistro (Documento 5 §29: a importação em massa "usa as mesmas regras
+// de criação manual" — não existe caminho de escrita paralelo para `claims`). formalizeClaim (form da
+// UI) e a importação em massa (createImport/confirmImport) chamam exatamente esta função.
+export async function createClaimAndCycle(
+  supabase: Supa,
+  tenantId: string,
+  userId: string,
+  input: FormalizeClaimInput,
+): Promise<{ claimId: string; claimNumber: string }> {
+  const workflowName = input.workflowName.trim();
+  if (!workflowName) throw new Error("Informe o fluxo.");
 
-  const { data: workflow } = await supabase.from("workflows").select("id, name").eq("id", workflowId).single();
-  if (!workflow) throw new Error("Fluxo não encontrado.");
+  const { data: workflow } = await supabase.from("workflows").select("id, name").eq("tenant_id", tenantId).ilike("name", workflowName).maybeSingle();
+  if (!workflow) throw new Error(`Fluxo "${workflowName}" não encontrado.`);
 
   const { data: version } = await supabase
     .from("workflow_versions")
     .select("id")
-    .eq("workflow_id", workflowId)
+    .eq("workflow_id", workflow.id)
     .eq("status", "published")
     .maybeSingle();
   if (!version) throw new Error(`"${workflow.name}" ainda não tem nenhuma versão publicada.`);
 
+  if (input.occurredAt && Number.isNaN(new Date(input.occurredAt).getTime())) {
+    throw new Error(`Data do evento inválida: "${input.occurredAt}".`);
+  }
+
   const graph = await loadGraph(supabase, version.id);
   const start = startNode(graph);
-  const claimTypeId = await ensureClaimType(supabase, ctx.tenantId, workflow.id, workflow.name);
+  const claimTypeId = await ensureClaimType(supabase, tenantId, workflow.id, workflow.name);
   const { data: claimType, error: typeErr } = await supabase
     .from("claim_types")
     .select("claim_category_id")
@@ -368,27 +381,27 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   if (typeErr || !claimType) throw new Error(typeErr?.message ?? "Tipo de sinistro inválido.");
 
   const year = new Date().getFullYear();
-  let claim: { id: string } | null = null;
+  let claim: { id: string; claim_number: string } | null = null;
   for (let attempt = 0; attempt < 5 && !claim; attempt++) {
     const { count } = await supabase
       .from("claims")
       .select("id", { count: "exact", head: true })
-      .eq("tenant_id", ctx.tenantId)
+      .eq("tenant_id", tenantId)
       .like("claim_number", `${year}-%`);
     const claimNumber = `${year}-${String((count ?? 0) + 1 + attempt).padStart(5, "0")}`;
     const { data, error } = await supabase
       .from("claims")
       .insert({
-        tenant_id: ctx.tenantId,
+        tenant_id: tenantId,
         claim_number: claimNumber,
         claim_category_id: claimType.claim_category_id,
         status: "active",
-        occurred_at: occurredAt ? new Date(occurredAt).toISOString() : null,
-        location: location ? ({ text: location } as unknown as Json) : null,
-        external_reference: externalReference || null,
-        created_by: ctx.userId,
+        occurred_at: input.occurredAt ? new Date(input.occurredAt).toISOString() : null,
+        location: input.location ? ({ text: input.location } as unknown as Json) : null,
+        external_reference: input.externalReference || null,
+        created_by: userId,
       })
-      .select("id")
+      .select("id, claim_number")
       .single();
     if (!error) claim = data;
     else if (error.code !== "23505") throw new Error(error.message);
@@ -398,32 +411,51 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   const { data: cycle, error: cycleErr } = await supabase
     .from("claim_cycles")
     .insert({
-      tenant_id: ctx.tenantId,
+      tenant_id: tenantId,
       claim_id: claim.id,
       cycle_number: 1,
       claim_type_id: claimTypeId,
       workflow_version_id: version.id,
       status: "open",
       formalized_at: new Date().toISOString(),
-      created_by: ctx.userId,
+      created_by: userId,
     })
     .select("id")
     .single();
   if (cycleErr || !cycle) throw new Error(cycleErr?.message ?? "Falha ao abrir o ciclo.");
 
   await supabase.from("cycle_configuration_snapshots").insert({
-    tenant_id: ctx.tenantId,
+    tenant_id: tenantId,
     claim_cycle_id: cycle.id,
     workflow_version_id: version.id,
     snapshot: graph as unknown as Json,
   });
 
-  await writeAudit(supabase, ctx.tenantId, "claim.created", "claim", claim.id);
-  await writeAudit(supabase, ctx.tenantId, "cycle.created", "claim_cycle", cycle.id);
-  await enterNode(supabase, ctx.tenantId, cycle.id, graph, start.id, "initial");
+  await writeAudit(supabase, tenantId, "claim.created", "claim", claim.id);
+  await writeAudit(supabase, tenantId, "cycle.created", "claim_cycle", cycle.id);
+  await enterNode(supabase, tenantId, cycle.id, graph, start.id, "initial");
+
+  return { claimId: claim.id, claimNumber: claim.claim_number };
+}
+
+export async function formalizeClaim(formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+
+  const workflowId = String(formData.get("workflow_id") ?? "");
+  if (!workflowId) throw new Error("Escolha um fluxo publicado.");
+  const { data: workflow } = await supabase.from("workflows").select("name").eq("id", workflowId).single();
+  if (!workflow) throw new Error("Fluxo não encontrado.");
+
+  const { claimId } = await createClaimAndCycle(supabase, ctx.tenantId, ctx.userId, {
+    workflowName: workflow.name,
+    occurredAt: String(formData.get("occurred_at") ?? "").trim() || undefined,
+    location: String(formData.get("location") ?? "").trim() || undefined,
+    externalReference: String(formData.get("external_reference") ?? "").trim() || undefined,
+  });
 
   revalidatePath("/sinistros");
-  redirect(`/sinistros/${claim.id}`);
+  redirect(`/sinistros/${claimId}`);
 }
 
 export async function completeActivity(activityInstanceId: string): Promise<void> {
