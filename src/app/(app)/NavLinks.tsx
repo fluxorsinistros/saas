@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Workflow } from "lucide-react";
+import { FileWarning, Users, Workflow } from "lucide-react";
 
 const LINKS = [
   { href: "/fluxos", label: "Fluxos", icon: Workflow },
+  { href: "/sinistros", label: "Sinistros", icon: FileWarning },
   { href: "/grupos", label: "Grupos", icon: Users },
 ];
 

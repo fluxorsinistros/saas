@@ -1725,6 +1725,24 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_admins: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       role_permissions: {
         Row: {
           permission_id: string
@@ -2965,6 +2983,18 @@ export type Database = {
       }
       save_workflow_draft: {
         Args: { p_edges: Json; p_nodes: Json; p_version_id: string }
+        Returns: undefined
+      }
+      write_audit: {
+        Args: {
+          p_action: string
+          p_entity_id: string
+          p_entity_type: string
+          p_new?: Json
+          p_previous?: Json
+          p_reason?: string
+          p_tenant_id: string
+        }
         Returns: undefined
       }
     }
