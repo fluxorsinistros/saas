@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Download, FileText, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Download, FileText, PauseCircle, PlayCircle, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
-import { chooseDecision, completeActivity } from "../actions";
+import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
+import { chooseDecision, completeActivity, pauseSla, resumeSla } from "../actions";
 import { requestDocument, reviewDocument, uploadDocumentVersion } from "../documents-actions";
 
 export const metadata: Metadata = { title: "Sinistro" };
@@ -34,6 +35,24 @@ const AUDIT_LABEL: Record<string, string> = {
   "document.received": "Documento recebido",
   "document.validated": "Documento validado",
   "document.rejected": "Documento rejeitado",
+  "sla.paused": "Prazo pausado",
+  "sla.resumed": "Prazo retomado",
+};
+
+const SLA_STATUS_STYLE: Record<string, string> = {
+  on_track: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  at_risk: "bg-amber-50 text-amber-700 ring-amber-200",
+  breached: "bg-rose-50 text-rose-700 ring-rose-200",
+  paused: "bg-slate-100 text-slate-600 ring-slate-200",
+  completed: "bg-slate-100 text-slate-500 ring-slate-200",
+};
+
+const SLA_STATUS_LABEL: Record<string, string> = {
+  on_track: "No prazo",
+  at_risk: "Perto do prazo",
+  breached: "Atrasado",
+  paused: "Pausado",
+  completed: "Encerrado",
 };
 
 const DOC_STATUS_LABEL: Record<string, string> = {
@@ -102,6 +121,22 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
   const decisionByStage = new Map((decisions ?? []).filter((d) => d.stage_instance_id).map((d) => [d.stage_instance_id as string, d]));
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
 
+  // SLA (Documento 4): relógio por etapa, status calculado ao vivo (sem esperar o scheduler
+  // periódico do §7, ainda não implementado). Pausa em aberto (sla_pauses.resumed_at is null)
+  // decide se mostramos "Retomar" em vez de "Pausar".
+  const { data: slaTracking } = stageIds.length
+    ? await supabase
+        .from("sla_tracking")
+        .select("id, stage_instance_id, status, started_at, target_at, workflow_slas(alert_thresholds)")
+        .in("stage_instance_id", stageIds)
+    : { data: [] as never[] };
+  const slaByStage = new Map((slaTracking ?? []).map((s) => [s.stage_instance_id, s]));
+  const trackingIds = (slaTracking ?? []).map((s) => s.id);
+  const { data: openPauses } = trackingIds.length
+    ? await supabase.from("sla_pauses").select("sla_tracking_id").in("sla_tracking_id", trackingIds).is("resumed_at", null)
+    : { data: [] as { sla_tracking_id: string }[] };
+  const pausedTrackingIds = new Set((openPauses ?? []).map((p) => p.sla_tracking_id));
+
   const { data: documents } = await supabase
     .from("documents")
     .select("id, status, is_required, document_type_id, requested_at")
@@ -136,6 +171,7 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
     ...(activities ?? []).map((a) => a.id),
     ...(decisions ?? []).map((d) => d.id),
     ...docIds,
+    ...trackingIds,
   ];
   const { data: auditLogs } = await supabase
     .from("audit_logs")
@@ -220,6 +256,14 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
               const activity = activityByStage.get(stage.id);
               const decision = decisionByStage.get(stage.id);
               const joinProgress = type === "join" ? joinProgressByNode.get(stage.node_id) : undefined;
+              const tracking = slaByStage.get(stage.id);
+              const isPaused = tracking ? pausedTrackingIds.has(tracking.id) : false;
+              const liveSla = tracking
+                ? computeLiveSlaStatus(
+                    { status: isPaused ? "paused" : tracking.status, started_at: tracking.started_at, target_at: tracking.target_at },
+                    (tracking.workflow_slas as unknown as { alert_thresholds: number[] } | null)?.alert_thresholds ?? undefined,
+                  )
+                : null;
               return (
                 <li key={stage.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -230,8 +274,55 @@ export default async function ClaimPage({ params }: { params: Promise<{ claimId:
                       </span>
                       <h3 className="text-[14px] font-medium text-slate-900">{node?.name ?? "—"}</h3>
                     </div>
-                    <StageBadge status={stage.status} />
+                    <div className="flex items-center gap-1.5">
+                      {liveSla && liveSla.status !== "completed" && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${SLA_STATUS_STYLE[liveSla.status]}`}
+                          title={tracking ? formatMinutesRemaining(tracking.target_at) : undefined}
+                        >
+                          {SLA_STATUS_LABEL[liveSla.status]}
+                        </span>
+                      )}
+                      <StageBadge status={stage.status} />
+                    </div>
                   </div>
+
+                  {liveSla && liveSla.status !== "completed" && tracking && (
+                    <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+                      <span className="text-[12px] text-slate-500">
+                        {isPaused ? "Prazo pausado" : formatMinutesRemaining(tracking.target_at)}
+                      </span>
+                      {isPaused ? (
+                        <form action={resumeSla.bind(null, tracking.id, claim.id)}>
+                          <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+                            <PlayCircle className="size-3.5" /> Retomar prazo
+                          </button>
+                        </form>
+                      ) : (
+                        <details className="relative">
+                          <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+                            <PauseCircle className="size-3.5" /> Pausar prazo
+                          </summary>
+                          <form
+                            action={pauseSla.bind(null, tracking.id)}
+                            className="absolute right-0 z-10 mt-2 w-64 space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+                          >
+                            <input type="hidden" name="claim_id" value={claim.id} />
+                            <select name="pause_type" required className={`${input} text-[12px]`}>
+                              <option value="">Tipo de pausa…</option>
+                              <option value="waiting_third_party">Aguardando terceiro</option>
+                              <option value="waiting_document">Aguardando documento</option>
+                              <option value="other">Outro</option>
+                            </select>
+                            <input name="reason" required placeholder="Motivo" className={`${input} text-[12px]`} />
+                            <button className="w-full rounded-md bg-brand py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">
+                              Pausar
+                            </button>
+                          </form>
+                        </details>
+                      )}
+                    </div>
+                  )}
 
                   {activity && type !== "end" && (
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">

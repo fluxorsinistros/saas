@@ -82,6 +82,7 @@ async function enterNode(
   supabase: Supa,
   tenantId: string,
   cycleId: string,
+  versionId: string,
   graph: Graph,
   nodeId: string,
   entryReason: string,
@@ -142,6 +143,7 @@ async function enterNode(
       question: node.name,
       options: options as unknown as Json,
     });
+    await startSlaTracking(supabase, tenantId, cycleId, versionId, nodeId, stage.id);
     return;
   }
 
@@ -151,12 +153,12 @@ async function enterNode(
   }
 
   if (node.type === "parallel_split") {
-    await openParallelSplit(supabase, tenantId, cycleId, graph, nodeId);
+    await openParallelSplit(supabase, tenantId, cycleId, versionId, graph, nodeId);
     return;
   }
 
   if (node.type === "join") {
-    await arriveAtJoin(supabase, tenantId, cycleId, graph, node, branchInstanceId);
+    await arriveAtJoin(supabase, tenantId, cycleId, versionId, graph, node, branchInstanceId);
     return;
   }
 
@@ -168,11 +170,47 @@ async function enterNode(
     assigned_at: now,
     started_at: now,
   });
+
+  await startSlaTracking(supabase, tenantId, cycleId, versionId, nodeId, stage.id);
+}
+
+// Cria o relógio de SLA (Documento 4 §1-§2) se a versão publicada tiver uma regra para este nó.
+// Sem calendário configurável ainda nesta fatia — corrido 24/7, comportamento explícito do §3 quando
+// `calendar_id` é nulo, não uma omissão.
+async function startSlaTracking(supabase: Supa, tenantId: string, cycleId: string, versionId: string, nodeId: string, stageInstanceId: string) {
+  const { data: sla } = await supabase
+    .from("workflow_slas")
+    .select("id, duration_minutes")
+    .eq("workflow_version_id", versionId)
+    .eq("node_id", nodeId)
+    .maybeSingle();
+  if (!sla) return;
+
+  const startedAt = new Date();
+  const targetAt = new Date(startedAt.getTime() + sla.duration_minutes * 60_000);
+  await supabase.from("sla_tracking").insert({
+    tenant_id: tenantId,
+    claim_cycle_id: cycleId,
+    workflow_sla_id: sla.id,
+    stage_instance_id: stageInstanceId,
+    started_at: startedAt.toISOString(),
+    target_at: targetAt.toISOString(),
+  });
+}
+
+// Encerra o(s) relógio(s) de SLA abertos para esta etapa (Documento 4 §8): 'breached' vira
+// 'completed' normalmente — o descumprimento já ocorrido continua sendo dado histórico, nunca apagado.
+async function completeSlaTracking(supabase: Supa, stageInstanceId: string) {
+  await supabase
+    .from("sla_tracking")
+    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .eq("stage_instance_id", stageInstanceId)
+    .not("status", "eq", "completed");
 }
 
 // Abre um Paralelo (Documento 3 §4): cria o evento de bifurcação (`branches`), um `branch_instances`
 // por ramo, e entra em cada ramo imediatamente e de forma independente.
-async function openParallelSplit(supabase: Supa, tenantId: string, cycleId: string, graph: Graph, nodeId: string) {
+async function openParallelSplit(supabase: Supa, tenantId: string, cycleId: string, versionId: string, graph: Graph, nodeId: string) {
   const outs = graph.edges.filter((e) => e.source === nodeId);
   if (outs.length === 0) {
     await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
@@ -202,7 +240,7 @@ async function openParallelSplit(supabase: Supa, tenantId: string, cycleId: stri
       .select("id")
       .single();
     if (biErr || !bi) throw new Error(biErr?.message ?? "Falha ao abrir um ramo.");
-    await enterNode(supabase, tenantId, cycleId, graph, edge.target, "advance", bi.id);
+    await enterNode(supabase, tenantId, cycleId, versionId, graph, edge.target, "advance", bi.id);
   }
 }
 
@@ -213,6 +251,7 @@ async function arriveAtJoin(
   supabase: Supa,
   tenantId: string,
   cycleId: string,
+  versionId: string,
   graph: Graph,
   node: GraphNode,
   branchInstanceId: string | null,
@@ -293,7 +332,7 @@ async function arriveAtJoin(
     await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, { reason: `"${node.name}" não tem saída configurada.` });
     return;
   }
-  await enterNode(supabase, tenantId, cycleId, graph, target.target, "advance", null);
+  await enterNode(supabase, tenantId, cycleId, versionId, graph, target.target, "advance", null);
 }
 
 // Resolve a transição a partir do nó concluído e entra no(s) próximo(s) nó(s), ou bloqueia o ciclo
@@ -332,7 +371,7 @@ async function advance(
   }
   if (result.kind === "end") return;
   for (const targetId of result.targets) {
-    await enterNode(supabase, tenantId, cycleId, graph, targetId, "advance", branchInstanceId);
+    await enterNode(supabase, tenantId, cycleId, versionId, graph, targetId, "advance", branchInstanceId);
   }
 }
 
@@ -433,7 +472,7 @@ export async function createClaimAndCycle(
 
   await writeAudit(supabase, tenantId, "claim.created", "claim", claim.id);
   await writeAudit(supabase, tenantId, "cycle.created", "claim_cycle", cycle.id);
-  await enterNode(supabase, tenantId, cycle.id, graph, start.id, "initial");
+  await enterNode(supabase, tenantId, cycle.id, version.id, graph, start.id, "initial");
 
   return { claimId: claim.id, claimNumber: claim.claim_number };
 }
@@ -494,6 +533,7 @@ export async function completeActivity(activityInstanceId: string): Promise<void
     .eq("id", activityInstanceId);
   await supabase.from("stage_instances").update({ status: "completed", exited_at: now }).eq("id", stage.id);
   await writeAudit(supabase, ctx.tenantId, "activity.completed", "activity_instance", activityInstanceId);
+  await completeSlaTracking(supabase, stage.id);
 
   await advance(supabase, ctx.tenantId, cycle.workflow_version_id, cycle.id, stage.node_id, undefined, stage.branch_instance_id);
 
@@ -541,6 +581,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
     .eq("id", decisionId);
   if (decision.stage_instance_id) {
     await supabase.from("stage_instances").update({ status: "completed", exited_at: now }).eq("id", decision.stage_instance_id);
+    await completeSlaTracking(supabase, decision.stage_instance_id);
   }
   await writeAudit(supabase, ctx.tenantId, "decision.made", "decision", decisionId, { next: { selected_option: selectedOption } });
 
@@ -548,4 +589,63 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
 
   revalidatePath("/sinistros");
   revalidatePath(`/sinistros/${cycle.claim_id}`);
+}
+
+// Pausa não é um botão livre (Documento 4 §5, §68.7): exige motivo e tipo. Autorização por tipo de
+// pausa fica fora desta fatia (o próprio Documento 4 §10 registra o catálogo de pause_type como
+// decisão de implementação em aberto) — hoje toda pausa é aceita sem exigir aprovação.
+export async function pauseSla(trackingId: string, formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+  const pauseType = String(formData.get("pause_type") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  const claimId = String(formData.get("claim_id") ?? "");
+  if (!pauseType) throw new Error("Escolha o tipo de pausa.");
+  if (!reason) throw new Error("Informe o motivo da pausa.");
+
+  const { data: tracking, error } = await supabase.from("sla_tracking").select("id, status").eq("id", trackingId).single();
+  if (error || !tracking) throw new Error("Relógio de SLA não encontrado.");
+  if (tracking.status === "completed" || tracking.status === "paused") throw new Error(`Este SLA não pode ser pausado (status atual: ${tracking.status}).`);
+
+  await supabase.from("sla_pauses").insert({ tenant_id: ctx.tenantId, sla_tracking_id: trackingId, pause_type: pauseType, reason });
+  await supabase.from("sla_tracking").update({ status: "paused" }).eq("id", trackingId);
+  await writeAudit(supabase, ctx.tenantId, "sla.paused", "sla_tracking", trackingId, { reason });
+
+  revalidatePath(`/sinistros/${claimId}`);
+}
+
+export async function resumeSla(trackingId: string, claimId: string): Promise<void> {
+  const ctx = await getTenantContext();
+  const supabase = await createClient();
+
+  const { data: pause, error: pErr } = await supabase
+    .from("sla_pauses")
+    .select("id, paused_at")
+    .eq("sla_tracking_id", trackingId)
+    .is("resumed_at", null)
+    .order("paused_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (pErr || !pause) throw new Error("Nenhuma pausa em aberto para este SLA.");
+
+  const { data: tracking, error: tErr } = await supabase
+    .from("sla_tracking")
+    .select("id, target_at, paused_minutes")
+    .eq("id", trackingId)
+    .single();
+  if (tErr || !tracking) throw new Error("Relógio de SLA não encontrado.");
+
+  const now = new Date();
+  const pausedMinutes = Math.round((now.getTime() - new Date(pause.paused_at).getTime()) / 60_000);
+  const newPausedTotal = tracking.paused_minutes + pausedMinutes;
+  const newTargetAt = new Date(new Date(tracking.target_at).getTime() + pausedMinutes * 60_000);
+
+  await supabase.from("sla_pauses").update({ resumed_at: now.toISOString() }).eq("id", pause.id);
+  await supabase
+    .from("sla_tracking")
+    .update({ status: "on_track", paused_minutes: newPausedTotal, target_at: newTargetAt.toISOString() })
+    .eq("id", trackingId);
+  await writeAudit(supabase, ctx.tenantId, "sla.resumed", "sla_tracking", trackingId, { next: { paused_minutes: newPausedTotal } });
+
+  revalidatePath(`/sinistros/${claimId}`);
 }
