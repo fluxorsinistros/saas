@@ -42,6 +42,9 @@ Nenhuma migração adicional foi necessária: `tenant_organizations.role_kind` j
 | 7 | GED (documentos) | seção 9 |
 | 8 | Importação em massa | seção 10 |
 | 9 | Configuração comercial (admin) | seção 11 |
+| 10 | Minhas Tarefas | seção 13 |
+| 11 | Financeiro do ciclo | seção 14 |
+| 12 | Linha do tempo simplificada (modo alternativo da Tela de Sinistro) | seção 15 |
 
 ---
 
@@ -161,7 +164,35 @@ Tela restrita a administradores de plataforma (não do tenant): CRUD de `plans`/
 
 ---
 
-## 13. O que ainda não está aqui
+## 13. Minhas Tarefas
+
+Tela cross-sinistro (diferente da lista de ações dentro da Tela de Sinistro, seção 5, que é escopada a um ciclo só). Agrega `activity_instances` com `status in ('not_started','in_progress')` do usuário logado, com três recortes:
+
+- **Minhas tarefas**: `activity_instances` cujo `group_id` está entre os grupos do usuário (via `group_members`), priorizadas por SLA (`sla_tracking.status`, Documento 4).
+- **Da minha equipe**: mesmo filtro, mas sem restringir a quem já iniciou — mostra tudo que está no backlog do grupo, não só o que o usuário individualmente tocou (coerente com §5.3: grupo é responsável, não pessoa; a tarefa pertence ao grupo até alguém iniciar).
+- **Todas**: leque completo, restrito às `activity_instances` que a permissão do usuário permite ver (não é "toda atividade de todo tenant" para qualquer papel).
+
+Cada linha mostra: sinistro, tipo, etapa, prazo, status. Ação "Iniciar"/"Concluir" direto da lista quando a atividade não exige campos adicionais; caso exija, leva à Tela de Sinistro na aba correspondente. Não duplica dado — é uma projeção de `activity_instances` + `sla_tracking`, sem tabela própria.
+
+---
+
+## 14. Financeiro do ciclo
+
+Aba dentro da Tela de Sinistro (não tela isolada), cobrindo o lado de valores do §20 (responsabilidade financeira) e do modelo comercial (Documento 2, §10):
+
+- **Resumo**: valor de carga/prejuízo declarado (`claims`/`claim_cycles`, campo de valor do domínio), total de despesas, recebimentos, ressarcimentos, saldo.
+- **Movimentações**: lista de lançamentos (despesa/recebimento/ressarcimento) com tipo, valor, data, status (pago/pendente). Este é um dado de **domínio do sinistro** (guincho, armazenagem, reparo, ressarcimento de seguradora), diferente de `billing_events` (Documento 2, §10), que é a cobrança do SaaS ao tenant — os dois nunca devem ser confundidos na implementação. Se o produto vier a precisar de uma tabela própria para lançamentos financeiros do sinistro (ex. `cycle_financial_entries`), ela é uma extensão do Documento 2 a fazer quando esta tela for implementada, não antes.
+- Todo lançamento é auditável (`audit_logs`) e reflete a responsabilidade definida em `decisions` (§20: exclusiva ou compartilhada entre organizações).
+
+---
+
+## 15. Linha do tempo simplificada (modo alternativo)
+
+Visão alternativa da execução (seção 5), para o usuário que só quer saber "em que pé está e o que falta" sem ler um grafo. Mesma fonte de dados (`stage_instances` em ordem cronológica de `entered_at`), renderizada como trilha linear com marcos (não o grafo completo com ramos/joins visíveis). Ramos paralelos aparecem como sub-trilhas recolhidas por padrão, expansíveis — o grafo completo (seção 5) continua existindo como modo "avançado" para quem precisa ver bifurcação/convergência de verdade. Alternância entre os dois modos é preferência de usuário (client-side), nunca dado de configuração do tenant.
+
+---
+
+## 16. O que ainda não está aqui
 
 - Wireframes/mockups pixel-level — este documento define conteúdo e comportamento, não layout visual.
 - Especificação de componentes reutilizáveis (design system) — decisão de implementação (ex.: shadcn/ui sobre Next.js, alinhado à stack do §55).
