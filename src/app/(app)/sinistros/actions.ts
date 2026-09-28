@@ -10,9 +10,9 @@ import { resolveTransition, startNode } from "@/lib/workflow/engine";
 import type { Graph } from "@/lib/workflow/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
-type Supa = SupabaseClient<Database>;
+export type Supa = SupabaseClient<Database>;
 
-async function writeAudit(
+export async function writeAudit(
   supabase: Supa,
   tenantId: string,
   action: string,
