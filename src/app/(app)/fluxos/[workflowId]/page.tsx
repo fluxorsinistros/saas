@@ -32,7 +32,7 @@ export default async function WorkflowPage({
     versions.find((x) => x.id === v) ?? versions.find((x) => x.status === "draft") ?? versions[0];
   if (!version) notFound();
 
-  const [{ data: nodes }, { data: edges }, { data: groups }] = await Promise.all([
+  const [{ data: nodes }, { data: edges }, { data: groups }, { data: calendars }] = await Promise.all([
     supabase
       .from("workflow_nodes")
       .select("id, node_type, name, group_id, config, position")
@@ -43,6 +43,7 @@ export default async function WorkflowPage({
       .eq("workflow_version_id", version.id)
       .order("order_index"),
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
+    supabase.from("sla_calendars").select("id, name").eq("tenant_id", ctx.tenantId).order("name"),
   ]);
 
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
@@ -56,6 +57,7 @@ export default async function WorkflowPage({
       initialNodes={nodes ?? []}
       initialEdges={edges ?? []}
       groups={groups ?? []}
+      calendars={calendars ?? []}
       canEdit={perms.has("workflow.edit")}
       canPublish={perms.has("workflow.publish")}
     />

@@ -18,6 +18,7 @@ const LOOP_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
 export function NodeInspector({
   node,
   groups,
+  calendars = [],
   readOnly,
   outgoing,
   autoFocusName,
@@ -29,6 +30,7 @@ export function NodeInspector({
 }: {
   node: FlowNode;
   groups: Group[];
+  calendars?: { id: string; name: string }[];
   readOnly: boolean;
   outgoing: FlowEdge[];
   autoFocusName?: boolean;
@@ -89,6 +91,28 @@ export function NodeInspector({
 
       {SLA_TYPES.includes(type) && (
         <SlaField minutes={data.config.sla_minutes} readOnly={readOnly} onChange={(m) => setConfig({ sla_minutes: m })} />
+      )}
+
+      {SLA_TYPES.includes(type) && data.config.sla_minutes && calendars.length > 0 && (
+        <div>
+          <label className={label} htmlFor="node-sla-calendar">
+            Calendário do SLA <span className="font-normal text-slate-500">(opcional — sem isso conta corrido, 24/7)</span>
+          </label>
+          <select
+            id="node-sla-calendar"
+            className={input}
+            value={data.config.sla_calendar_id ?? ""}
+            disabled={readOnly}
+            onChange={(e) => setConfig({ sla_calendar_id: e.target.value || undefined })}
+          >
+            <option value="">Corrido (24/7)</option>
+            {calendars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       {(type === "stage" || type === "wait" || type === "pending") && (

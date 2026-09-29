@@ -7,6 +7,7 @@ export type NodeConfig = {
   description?: string;
   question?: string;
   sla_minutes?: number;
+  sla_calendar_id?: string;
   loop_max?: number;
   join_rule?: JoinRule;
   min_count?: number;

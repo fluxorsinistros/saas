@@ -86,6 +86,7 @@ type Props = {
   initialNodes: DbNode[];
   initialEdges: DbEdge[];
   groups: { id: string; name: string }[];
+  calendars?: { id: string; name: string }[];
   canEdit: boolean;
   canPublish: boolean;
 };
@@ -188,7 +189,7 @@ export function WorkflowBuilder(props: Props) {
   );
 }
 
-function Builder({ workflow, version, versions, initialNodes, initialEdges, groups, canEdit, canPublish }: Props) {
+function Builder({ workflow, version, versions, initialNodes, initialEdges, groups, calendars = [], canEdit, canPublish }: Props) {
   const router = useRouter();
   const { screenToFlowPosition, setCenter, fitView, zoomIn, zoomOut, deleteElements, getViewport } = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -868,6 +869,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   key={selectedNode.id}
                   node={selectedNode}
                   groups={groups}
+                  calendars={calendars}
                   readOnly={readOnly}
                   autoFocusName={pendingIds.has(selectedNode.id)}
                   outgoing={edges.filter((e) => e.source === selectedNode.id)}

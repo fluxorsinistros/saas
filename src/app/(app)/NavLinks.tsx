@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckSquare, FileWarning, Gauge, LayoutDashboard, ShieldCheck, UploadCloud, UsersRound, Users, Workflow } from "lucide-react";
+import { CalendarClock, CheckSquare, FileWarning, Gauge, LayoutDashboard, ShieldCheck, UploadCloud, UsersRound, Users, Workflow } from "lucide-react";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/tarefas", label: "Tarefas", icon: CheckSquare },
   { href: "/usuarios", label: "Usuários", icon: UsersRound },
   { href: "/grupos", label: "Grupos", icon: Users },
+  { href: "/calendarios", label: "Calendários", icon: CalendarClock },
 ];
 
 const ADMIN_LINK = { href: "/admin", label: "Administração", icon: ShieldCheck };

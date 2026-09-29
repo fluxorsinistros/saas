@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { requirePermission } from "@/lib/permissions";
+import { addBusinessMinutes } from "@/lib/sla";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { resolveTransition, startNode } from "@/lib/workflow/engine";
 import type { Graph, GraphNode } from "@/lib/workflow/types";
@@ -181,14 +182,30 @@ async function enterNode(
 async function startSlaTracking(supabase: Supa, tenantId: string, cycleId: string, versionId: string, nodeId: string, stageInstanceId: string) {
   const { data: sla } = await supabase
     .from("workflow_slas")
-    .select("id, duration_minutes")
+    .select("id, duration_minutes, calendar_id")
     .eq("workflow_version_id", versionId)
     .eq("node_id", nodeId)
     .maybeSingle();
   if (!sla) return;
 
   const startedAt = new Date();
-  const targetAt = new Date(startedAt.getTime() + sla.duration_minutes * 60_000);
+  let targetAt = new Date(startedAt.getTime() + sla.duration_minutes * 60_000);
+
+  if (sla.calendar_id) {
+    const { data: calendar } = await supabase
+      .from("sla_calendars")
+      .select("business_days, business_start, business_end")
+      .eq("id", sla.calendar_id)
+      .maybeSingle();
+    if (calendar) {
+      const { data: exceptions } = await supabase
+        .from("sla_calendar_exceptions")
+        .select("exception_date, is_working_day")
+        .eq("calendar_id", sla.calendar_id);
+      targetAt = addBusinessMinutes(startedAt, sla.duration_minutes, calendar, exceptions ?? []);
+    }
+  }
+
   await supabase.from("sla_tracking").insert({
     tenant_id: tenantId,
     claim_cycle_id: cycleId,
