@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight, Plus, Workflow } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { getPermissionCodes } from "@/lib/permissions";
 import { createWorkflow } from "./actions";
 
 export const metadata: Metadata = { title: "Fluxos" };
@@ -10,6 +11,7 @@ export const metadata: Metadata = { title: "Fluxos" };
 export default async function FluxosPage() {
   const ctx = await getTenantContext();
   const supabase = await createClient();
+  const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
   const { data: workflows } = await supabase
     .from("workflows")
     .select("id, name, description, updated_at, workflow_versions(id, version_number, status, published_at)")
@@ -30,34 +32,36 @@ export default async function FluxosPage() {
           </div>
         </div>
 
-        <form action={createWorkflow} className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-          <div className="min-w-[220px] flex-1">
-            <label htmlFor="wf-name" className="mb-1 block text-[12px] font-medium text-slate-600">
-              Novo fluxo
-            </label>
-            <input
-              id="wf-name"
-              name="name"
-              required
-              placeholder="Ex.: Sinistro de roubo"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-            />
-          </div>
-          <div className="min-w-[220px] flex-[1.4]">
-            <label htmlFor="wf-desc" className="mb-1 block text-[12px] font-medium text-slate-600">
-              Descrição <span className="font-normal text-slate-500">(opcional)</span>
-            </label>
-            <input
-              id="wf-desc"
-              name="description"
-              placeholder="Para que serve este fluxo"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-            />
-          </div>
-          <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
-            <Plus className="size-4" /> Criar e desenhar
-          </button>
-        </form>
+        {perms.has("workflow.edit") && (
+          <form action={createWorkflow} className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="min-w-[220px] flex-1">
+              <label htmlFor="wf-name" className="mb-1 block text-[12px] font-medium text-slate-600">
+                Novo fluxo
+              </label>
+              <input
+                id="wf-name"
+                name="name"
+                required
+                placeholder="Ex.: Sinistro de roubo"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+              />
+            </div>
+            <div className="min-w-[220px] flex-[1.4]">
+              <label htmlFor="wf-desc" className="mb-1 block text-[12px] font-medium text-slate-600">
+                Descrição <span className="font-normal text-slate-500">(opcional)</span>
+              </label>
+              <input
+                id="wf-desc"
+                name="description"
+                placeholder="Para que serve este fluxo"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+              />
+            </div>
+            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+              <Plus className="size-4" /> Criar e desenhar
+            </button>
+          </form>
+        )}
 
         {!workflows?.length ? (
           <div className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">

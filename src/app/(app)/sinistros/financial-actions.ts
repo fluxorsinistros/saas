@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { requirePermission } from "@/lib/permissions";
 import { writeAudit } from "./actions";
 
 function toAmount(raw: FormDataEntryValue | null): number {
@@ -13,6 +14,7 @@ function toAmount(raw: FormDataEntryValue | null): number {
 
 export async function setDeclaredValue(claimId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "financial.manage");
   const supabase = await createClient();
   const raw = String(formData.get("declared_value") ?? "").trim();
   const value = raw === "" ? null : Number(raw.replace(",", "."));
@@ -27,6 +29,7 @@ export async function setDeclaredValue(claimId: string, formData: FormData): Pro
 
 export async function createFinancialEntry(cycleId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "financial.manage");
   const supabase = await createClient();
   const entryType = String(formData.get("entry_type") ?? "");
   const description = String(formData.get("description") ?? "").trim();
@@ -59,6 +62,7 @@ export async function createFinancialEntry(cycleId: string, formData: FormData):
 
 export async function markFinancialEntry(entryId: string, claimId: string, status: "paid" | "cancelled"): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "financial.manage");
   const supabase = await createClient();
   await supabase.from("cycle_financial_entries").update({ status }).eq("id", entryId);
   await writeAudit(supabase, ctx.tenantId, status === "paid" ? "financial_entry.paid" : "financial_entry.cancelled", "cycle_financial_entry", entryId);

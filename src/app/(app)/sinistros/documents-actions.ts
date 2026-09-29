@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { writeAudit, type Supa } from "./actions";
+import { requirePermission } from "@/lib/permissions";
 
 // Sem tela própria de "tipos de documento" ainda (mesma decisão de ensureClaimType em actions.ts):
 // o nome digitado vira o tipo, reaproveitando um já existente com o mesmo nome quando houver.
@@ -117,6 +118,7 @@ export async function uploadDocumentVersion(formData: FormData): Promise<void> {
 
 export async function reviewDocument(formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "document.validate");
   const supabase = await createClient();
   const claimId = String(formData.get("claim_id") ?? "");
   const documentId = String(formData.get("document_id") ?? "");

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { requirePermission } from "@/lib/permissions";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { resolveTransition, startNode } from "@/lib/workflow/engine";
 import type { Graph, GraphNode } from "@/lib/workflow/types";
@@ -563,6 +564,7 @@ export async function createClaimAndCycle(
 
 export async function formalizeClaim(formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.formalize");
   const supabase = await createClient();
 
   const workflowId = String(formData.get("workflow_id") ?? "");
@@ -583,6 +585,7 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
 
 export async function completeActivity(activityInstanceId: string): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.execute");
   const supabase = await createClient();
 
   const { data: activity, error: aErr } = await supabase
@@ -627,6 +630,7 @@ export async function completeActivity(activityInstanceId: string): Promise<void
 
 export async function chooseDecision(decisionId: string, selectedOption: string, justification: string): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.execute");
   const supabase = await createClient();
 
   const { data: decision, error: dErr } = await supabase
@@ -740,6 +744,7 @@ export async function resumeSla(trackingId: string, claimId: string): Promise<vo
 // `role_permissions` existir (gap conhecido) — por ora exige motivo obrigatório e fica auditado.
 export async function reopenCycle(cycleId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.reopen");
   const supabase = await createClient();
   const reason = String(formData.get("reason") ?? "").trim();
   if (!reason) throw new Error("Informe o motivo da reabertura.");
@@ -775,6 +780,7 @@ export async function reopenCycle(cycleId: string, formData: FormData): Promise<
 // mudado desde que o ciclo velho abriu — o velho já estava preso à versão dele, imutável).
 export async function discardCycle(cycleId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.discard");
   const supabase = await createClient();
   const reason = String(formData.get("reason") ?? "").trim();
   if (!reason) throw new Error("Informe o motivo do descarte.");

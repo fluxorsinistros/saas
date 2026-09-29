@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { hasPermission, requirePermission } from "@/lib/permissions";
 import { validateGraph, type Issue } from "@/lib/workflow/validator";
 import type { Graph, NodeConfig, NodeType } from "@/lib/workflow/types";
 import type { Json } from "@/lib/supabase/database.types";
@@ -97,6 +98,7 @@ export async function getPublishDiff(versionId: string): Promise<PublishDiff | {
 
 export async function createWorkflow(formData: FormData) {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   if (!name) return;
@@ -119,7 +121,8 @@ export async function createWorkflow(formData: FormData) {
 }
 
 export async function saveDraft(versionId: string, payload: SavePayload): Promise<ActionResult> {
-  await getTenantContext();
+  const ctx = await getTenantContext();
+  if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
   const supabase = await createClient();
   const { error } = await supabase.rpc("save_workflow_draft", {
     p_version_id: versionId,
@@ -133,7 +136,8 @@ export async function saveDraft(versionId: string, payload: SavePayload): Promis
 
 // A validação roda de novo aqui sobre o que está gravado: o navegador não é fonte de verdade (Documento 1 §56).
 export async function publishVersion(versionId: string, releaseNote: string): Promise<ActionResult> {
-  await getTenantContext();
+  const ctx = await getTenantContext();
+  if (!(await hasPermission(ctx, "workflow.publish"))) return { ok: false, error: "Você não tem permissão para publicar fluxos." };
   const supabase = await createClient();
 
   const [{ data: nodes, error: nErr }, { data: edges, error: eErr }] = await Promise.all([
@@ -180,7 +184,8 @@ export async function publishVersion(versionId: string, releaseNote: string): Pr
 }
 
 export async function createNewVersion(versionId: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  await getTenantContext();
+  const ctx = await getTenantContext();
+  if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_draft_from_version", { p_version_id: versionId });
   if (error || !data) return { ok: false, error: error?.message ?? "Falha ao criar versão" };

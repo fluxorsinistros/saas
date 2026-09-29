@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { getPermissionCodes } from "@/lib/permissions";
 import { confirmImport, ignoreImportRow, reviseImportRow } from "../actions";
 
 export const metadata: Metadata = { title: "Importação" };
@@ -33,6 +34,7 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
   const { importId } = await params;
   const ctx = await getTenantContext();
   const supabase = await createClient();
+  const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
   const { data: imp } = await supabase
     .from("imports")
@@ -165,7 +167,7 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
           </ul>
         </section>
 
-        {!isDone && (
+        {!isDone && perms.has("import.confirm") && (
           <form action={confirmImport.bind(null, importId)} className="mt-6 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
             <label className="flex items-center gap-1.5 text-[12px] text-slate-600">
               <input type="checkbox" name="include_duplicates" className="size-3.5 accent-[var(--color-brand)]" />

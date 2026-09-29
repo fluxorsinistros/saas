@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight, FileWarning, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { getPermissionCodes } from "@/lib/permissions";
 import { formalizeClaim } from "./actions";
 
 export const metadata: Metadata = { title: "Sinistros" };
@@ -29,6 +30,7 @@ const CYCLE_STATUS_STYLE: Record<string, string> = {
 export default async function SinistrosPage() {
   const ctx = await getTenantContext();
   const supabase = await createClient();
+  const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
   const [{ data: claims }, { data: publishedWorkflows }] = await Promise.all([
     supabase
@@ -54,7 +56,7 @@ export default async function SinistrosPage() {
           afetam ciclos já abertos.
         </p>
 
-        {options.length === 0 ? (
+        {!perms.has("claim.formalize") ? null : options.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-4 text-[13px] text-slate-500">
             Nenhum fluxo publicado ainda.{" "}
             <Link href="/fluxos" className="font-medium text-brand hover:underline">

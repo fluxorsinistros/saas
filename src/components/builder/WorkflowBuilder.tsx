@@ -86,6 +86,8 @@ type Props = {
   initialNodes: DbNode[];
   initialEdges: DbEdge[];
   groups: { id: string; name: string }[];
+  canEdit: boolean;
+  canPublish: boolean;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -186,7 +188,7 @@ export function WorkflowBuilder(props: Props) {
   );
 }
 
-function Builder({ workflow, version, versions, initialNodes, initialEdges, groups }: Props) {
+function Builder({ workflow, version, versions, initialNodes, initialEdges, groups, canEdit, canPublish }: Props) {
   const router = useRouter();
   const { screenToFlowPosition, setCenter, fitView, zoomIn, zoomOut, deleteElements, getViewport } = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -215,7 +217,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
   const pastRef = useRef<Snapshot[]>([]);
   const futureRef = useRef<Snapshot[]>([]);
 
-  const readOnly = version.status !== "draft";
+  const readOnly = version.status !== "draft" || !canEdit;
   const hasDraft = versions.some((v) => v.status === "draft");
 
   const payload = useMemo(() => toPayload(nodes, edges), [nodes, edges]);
@@ -644,15 +646,17 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
               )}
             </span>
             {readOnly ? (
-              <button
-                type="button"
-                onClick={newVersion}
-                disabled={pending || hasDraft}
-                title={hasDraft ? "Já existe um rascunho para este fluxo" : undefined}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <CopyPlus className="size-4" /> Nova versão
-              </button>
+              canEdit && (
+                <button
+                  type="button"
+                  onClick={newVersion}
+                  disabled={pending || hasDraft}
+                  title={hasDraft ? "Já existe um rascunho para este fluxo" : undefined}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <CopyPlus className="size-4" /> Nova versão
+                </button>
+              )
             ) : (
               <>
                 <button
@@ -664,15 +668,17 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                 >
                   <Save className="size-4" /> Salvar
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void publish()}
-                  disabled={errors.length > 0 || pending || nodes.length === 0}
-                  title={errors.length ? "Corrija os erros para publicar" : undefined}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Rocket className="size-4" /> Publicar
-                </button>
+                {canPublish && (
+                  <button
+                    type="button"
+                    onClick={() => void publish()}
+                    disabled={errors.length > 0 || pending || nodes.length === 0}
+                    title={errors.length ? "Corrija os erros para publicar" : undefined}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Rocket className="size-4" /> Publicar
+                  </button>
+                )}
               </>
             )}
           </div>

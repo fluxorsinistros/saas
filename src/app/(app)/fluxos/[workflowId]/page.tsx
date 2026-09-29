@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { getPermissionCodes } from "@/lib/permissions";
 import { WorkflowBuilder } from "@/components/builder/WorkflowBuilder";
 
 export const metadata: Metadata = { title: "Editor de fluxo" };
@@ -44,6 +45,8 @@ export default async function WorkflowPage({
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
   ]);
 
+  const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
+
   return (
     <WorkflowBuilder
       key={version.id}
@@ -53,6 +56,8 @@ export default async function WorkflowPage({
       initialNodes={nodes ?? []}
       initialEdges={edges ?? []}
       groups={groups ?? []}
+      canEdit={perms.has("workflow.edit")}
+      canPublish={perms.has("workflow.publish")}
     />
   );
 }

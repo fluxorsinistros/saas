@@ -7,6 +7,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
+import { getPermissionCodes } from "@/lib/permissions";
 import {
   cancelPendingItem,
   chooseDecision,
@@ -109,6 +110,7 @@ export default async function ClaimPage({
   const { ciclo } = await searchParams;
   const ctx = await getTenantContext();
   const supabase = await createClient();
+  const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
   const { data: claim } = await supabase
     .from("claims")
@@ -344,7 +346,7 @@ export default async function ClaimPage({
           )}
         </div>
 
-        {cycle.status === "completed" && cycle.id === allCycles[0].id && (
+        {cycle.status === "completed" && cycle.id === allCycles[0].id && perms.has("claim.reopen") && (
           <details className="mt-3 group">
             <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-700">
               Reabrir este ciclo
@@ -361,7 +363,7 @@ export default async function ClaimPage({
           </details>
         )}
 
-        {cycle.status !== "completed" && cycle.status !== "discarded" && cycle.id === allCycles[0].id && (
+        {cycle.status !== "completed" && cycle.status !== "discarded" && cycle.id === allCycles[0].id && perms.has("claim.discard") && (
           <details className="mt-3 group">
             <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-rose-600 hover:text-rose-700">
               Descartar e reiniciar este ciclo
@@ -502,14 +504,16 @@ export default async function ClaimPage({
                       <span className="text-[12px] text-slate-500">
                         Grupo: <span className="font-medium text-slate-700">{groupName.get(activity.group_id ?? "") ?? "—"}</span>
                       </span>
-                      {activity.status === "in_progress" && cycle.status !== "discarded" ? (
+                      {activity.status === "in_progress" && cycle.status !== "discarded" && perms.has("claim.execute") ? (
                         <form action={completeActivity.bind(null, activity.id)}>
                           <button className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600">
                             Concluir
                           </button>
                         </form>
-                      ) : activity.status === "in_progress" ? (
+                      ) : activity.status === "in_progress" && cycle.status === "discarded" ? (
                         <span className="text-[12px] text-slate-400">Ciclo descartado</span>
+                      ) : activity.status === "in_progress" ? (
+                        <span className="text-[12px] text-slate-400">Sem permissão para concluir</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
                           <CheckCircle2 className="size-3.5" /> Concluída
@@ -597,6 +601,8 @@ export default async function ClaimPage({
                         </p>
                       ) : cycle.status === "discarded" ? (
                         <p className="mt-2 text-[12px] text-slate-400">Ciclo descartado</p>
+                      ) : !perms.has("claim.execute") ? (
+                        <p className="mt-2 text-[12px] text-slate-400">Sem permissão para decidir</p>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {((decision.options as string[]) ?? []).map((opt) => (
@@ -623,23 +629,32 @@ export default async function ClaimPage({
 
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              <form action={setDeclaredValue.bind(null, claim.id)} className="flex items-center gap-2">
-                <label htmlFor="declared_value" className="text-[12px] text-slate-500">
-                  Valor de carga/prejuízo declarado
-                </label>
-                <input
-                  id="declared_value"
-                  name="declared_value"
-                  type="number"
-                  step="0.01"
-                  defaultValue={claim.declared_value ?? ""}
-                  placeholder="0,00"
-                  className={`${input} w-32 text-[12px]`}
-                />
-                <button className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
-                  Salvar
-                </button>
-              </form>
+              {perms.has("financial.manage") ? (
+                <form action={setDeclaredValue.bind(null, claim.id)} className="flex items-center gap-2">
+                  <label htmlFor="declared_value" className="text-[12px] text-slate-500">
+                    Valor de carga/prejuízo declarado
+                  </label>
+                  <input
+                    id="declared_value"
+                    name="declared_value"
+                    type="number"
+                    step="0.01"
+                    defaultValue={claim.declared_value ?? ""}
+                    placeholder="0,00"
+                    className={`${input} w-32 text-[12px]`}
+                  />
+                  <button className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                    Salvar
+                  </button>
+                </form>
+              ) : (
+                <span className="text-[12px] text-slate-500">
+                  Valor de carga/prejuízo declarado:{" "}
+                  <span className="font-medium text-slate-700">
+                    {claim.declared_value != null ? currency.format(Number(claim.declared_value)) : "—"}
+                  </span>
+                </span>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3 py-3 sm:grid-cols-4">
@@ -671,7 +686,7 @@ export default async function ClaimPage({
                       >
                         {e.status === "paid" ? "Pago" : e.status === "cancelled" ? "Cancelado" : "Pendente"}
                       </span>
-                      {e.status === "pending" && (
+                      {e.status === "pending" && perms.has("financial.manage") && (
                         <>
                           <form action={markFinancialEntry.bind(null, e.id, claim.id, "paid")}>
                             <button className="text-emerald-600 hover:underline">Marcar pago</button>
@@ -687,18 +702,20 @@ export default async function ClaimPage({
               </ul>
             )}
 
-            <form action={createFinancialEntry.bind(null, cycle.id)} className="mt-3 flex flex-wrap items-end gap-1.5 border-t border-slate-100 pt-3">
-              <input type="hidden" name="claim_id" value={claim.id} />
-              <select name="entry_type" required className={`${input} w-36 text-[12px]`}>
-                <option value="expense">Despesa</option>
-                <option value="receipt">Recebimento</option>
-                <option value="reimbursement">Ressarcimento</option>
-              </select>
-              <input name="description" required placeholder="Descrição" className={`${input} w-44 text-[12px]`} />
-              <input name="amount" type="number" step="0.01" required placeholder="Valor" className={`${input} w-24 text-[12px]`} />
-              <input name="entry_date" type="date" className={`${input} w-36 text-[12px]`} />
-              <button className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">Lançar</button>
-            </form>
+            {perms.has("financial.manage") && (
+              <form action={createFinancialEntry.bind(null, cycle.id)} className="mt-3 flex flex-wrap items-end gap-1.5 border-t border-slate-100 pt-3">
+                <input type="hidden" name="claim_id" value={claim.id} />
+                <select name="entry_type" required className={`${input} w-36 text-[12px]`}>
+                  <option value="expense">Despesa</option>
+                  <option value="receipt">Recebimento</option>
+                  <option value="reimbursement">Ressarcimento</option>
+                </select>
+                <input name="description" required placeholder="Descrição" className={`${input} w-44 text-[12px]`} />
+                <input name="amount" type="number" step="0.01" required placeholder="Valor" className={`${input} w-24 text-[12px]`} />
+                <input name="entry_date" type="date" className={`${input} w-36 text-[12px]`} />
+                <button className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">Lançar</button>
+              </form>
+            )}
           </div>
         </section>
 
@@ -708,7 +725,7 @@ export default async function ClaimPage({
           <div className="space-y-3">
             {(documents ?? []).map((doc) => {
               const versions = versionsByDoc.get(doc.id) ?? [];
-              const canReview = doc.status === "received" || doc.status === "in_validation";
+              const canReview = (doc.status === "received" || doc.status === "in_validation") && perms.has("document.validate");
               return (
                 <div key={doc.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">

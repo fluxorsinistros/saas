@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Building2, Plus, UserPlus, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { addMember, addMemberToGroup, createOrganization, removeMemberFromGroup, toggleMemberStatus } from "./actions";
+import { getPermissionCodes } from "@/lib/permissions";
+import { addMember, addMemberToGroup, createOrganization, removeMemberFromGroup, setMemberRole, toggleMemberStatus } from "./actions";
 
 export const metadata: Metadata = { title: "Usuários e organizações" };
 
@@ -23,11 +24,13 @@ const input =
 export default async function UsuariosPage() {
   const ctx = await getTenantContext();
   const supabase = await createClient();
+  const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
+  const canManage = perms.has("user.manage");
 
-  const [{ data: memberships }, { data: groups }, { data: tenantOrgs }] = await Promise.all([
+  const [{ data: memberships }, { data: groups }, { data: tenantOrgs }, { data: roles }] = await Promise.all([
     supabase
       .from("tenant_memberships")
-      .select("id, status, user_id, organization_id, joined_at")
+      .select("id, status, user_id, organization_id, joined_at, membership_roles(role_id)")
       .eq("tenant_id", ctx.tenantId)
       .order("joined_at", { ascending: true }),
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
@@ -35,7 +38,9 @@ export default async function UsuariosPage() {
       .from("tenant_organizations")
       .select("id, role_kind, is_owner, organizations(id, name)")
       .eq("tenant_id", ctx.tenantId),
+    supabase.from("roles").select("id, name").or(`tenant_id.is.null,tenant_id.eq.${ctx.tenantId}`).order("name"),
   ]);
+  const roleNameById = new Map((roles ?? []).map((r) => [r.id, r.name]));
 
   const userIds = [...new Set((memberships ?? []).map((m) => m.user_id))];
   const { data: profiles } = userIds.length
@@ -69,21 +74,23 @@ export default async function UsuariosPage() {
         <section>
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Membros</h2>
 
-          <form action={addMember} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-            <div className="min-w-[240px] flex-1">
-              <label htmlFor="email" className="mb-1 block text-[12px] font-medium text-slate-600">
-                Adicionar pelo e-mail
-              </label>
-              <input id="email" name="email" type="email" required placeholder="pessoa@empresa.com" className={input} />
-              <p className="mt-1 text-[11px] text-slate-500">
-                A pessoa precisa já ter uma conta (tela de login → Criar conta). Convite por e-mail para quem ainda não tem
-                conta é um passo futuro.
-              </p>
-            </div>
-            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
-              <UserPlus className="size-4" /> Adicionar
-            </button>
-          </form>
+          {canManage && (
+            <form action={addMember} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="min-w-[240px] flex-1">
+                <label htmlFor="email" className="mb-1 block text-[12px] font-medium text-slate-600">
+                  Adicionar pelo e-mail
+                </label>
+                <input id="email" name="email" type="email" required placeholder="pessoa@empresa.com" className={input} />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  A pessoa precisa já ter uma conta (tela de login → Criar conta). Convite por e-mail para quem ainda não tem
+                  conta é um passo futuro.
+                </p>
+              </div>
+              <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+                <UserPlus className="size-4" /> Adicionar
+              </button>
+            </form>
+          )}
 
           <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {(memberships ?? []).map((m) => {
@@ -92,6 +99,7 @@ export default async function UsuariosPage() {
               const myGroups = groupsByMembership.get(m.id) ?? [];
               const availableGroups = (groups ?? []).filter((g) => !myGroups.some((mg) => mg.group_id === g.id));
               const orgName = m.organization_id ? orgNameByMembershipOrgId.get(m.organization_id) : null;
+              const currentRoleId = m.membership_roles?.[0]?.role_id;
               return (
                 <li key={m.id} className={`px-5 py-4 ${active ? "" : "bg-slate-50/70"}`}>
                   <div className="flex flex-wrap items-center gap-3">
@@ -102,18 +110,48 @@ export default async function UsuariosPage() {
                         {orgName && ` · ${orgName}`}
                       </div>
                     </div>
-                    <form action={toggleMemberStatus.bind(null, m.id, m.status)}>
-                      <button
-                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset transition ${
-                          active
-                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
-                            : "bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200"
+                    {currentRoleId && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                        {roleNameById.get(currentRoleId) ?? "—"}
+                      </span>
+                    )}
+                    {canManage && (
+                      <form action={toggleMemberStatus.bind(null, m.id, m.status)}>
+                        <button
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset transition ${
+                            active
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
+                              : "bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200"
+                          }`}
+                        >
+                          {active ? "Ativo" : "Inativo"}
+                        </button>
+                      </form>
+                    )}
+                    {!canManage && (
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                          active ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"
                         }`}
                       >
                         {active ? "Ativo" : "Inativo"}
-                      </button>
-                    </form>
+                      </span>
+                    )}
                   </div>
+
+                  {canManage && (
+                    <form action={setMemberRole.bind(null, m.id)} className="mt-2 flex items-center gap-1.5">
+                      <label className="text-[11px] text-slate-500">Papel:</label>
+                      <select name="role_id" defaultValue={currentRoleId ?? ""} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px]">
+                        {(roles ?? []).map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="rounded-md px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand/5">Salvar</button>
+                    </form>
+                  )}
 
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {myGroups.map((mg) => (
@@ -122,14 +160,16 @@ export default async function UsuariosPage() {
                         className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
                       >
                         {groupName.get(mg.group_id) ?? "—"}
-                        <form action={removeMemberFromGroup.bind(null, mg.id)}>
-                          <button className="text-slate-400 hover:text-rose-600" aria-label={`Remover do grupo ${groupName.get(mg.group_id)}`}>
-                            <X className="size-3" />
-                          </button>
-                        </form>
+                        {canManage && (
+                          <form action={removeMemberFromGroup.bind(null, mg.id)}>
+                            <button className="text-slate-400 hover:text-rose-600" aria-label={`Remover do grupo ${groupName.get(mg.group_id)}`}>
+                              <X className="size-3" />
+                            </button>
+                          </form>
+                        )}
                       </span>
                     ))}
-                    {availableGroups.length > 0 && (
+                    {canManage && availableGroups.length > 0 && (
                       <form action={addMemberToGroup} className="inline-flex items-center gap-1">
                         <input type="hidden" name="membership_id" value={m.id} />
                         <select
@@ -163,31 +203,33 @@ export default async function UsuariosPage() {
             própria do produto, só de membros vinculados a elas na lista de acima.
           </p>
 
-          <form action={createOrganization} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-            <div className="min-w-[200px] flex-1">
-              <label htmlFor="org-name" className="mb-1 block text-[12px] font-medium text-slate-600">
-                Nome
-              </label>
-              <input id="org-name" name="name" required placeholder="Ex.: Seguradora Alfa" className={input} />
-            </div>
-            <div className="min-w-[180px]">
-              <label htmlFor="org-role" className="mb-1 block text-[12px] font-medium text-slate-600">
-                Papel
-              </label>
-              <select id="org-role" name="role_kind" defaultValue="seguradora" className={input}>
-                {Object.entries(ROLE_KIND_LABEL)
-                  .filter(([k]) => k !== "interno")
-                  .map(([k, label]) => (
-                    <option key={k} value={k}>
-                      {label}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
-              <Plus className="size-4" /> Adicionar organização
-            </button>
-          </form>
+          {canManage && (
+            <form action={createOrganization} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="min-w-[200px] flex-1">
+                <label htmlFor="org-name" className="mb-1 block text-[12px] font-medium text-slate-600">
+                  Nome
+                </label>
+                <input id="org-name" name="name" required placeholder="Ex.: Seguradora Alfa" className={input} />
+              </div>
+              <div className="min-w-[180px]">
+                <label htmlFor="org-role" className="mb-1 block text-[12px] font-medium text-slate-600">
+                  Papel
+                </label>
+                <select id="org-role" name="role_kind" defaultValue="seguradora" className={input}>
+                  {Object.entries(ROLE_KIND_LABEL)
+                    .filter(([k]) => k !== "interno")
+                    .map(([k, label]) => (
+                      <option key={k} value={k}>
+                        {label}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+                <Plus className="size-4" /> Adicionar organização
+              </button>
+            </form>
+          )}
 
           <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {(tenantOrgs ?? []).map((t) => (

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
+import { requirePermission } from "@/lib/permissions";
 import { createClaimAndCycle, writeAudit, type Supa } from "@/app/(app)/sinistros/actions";
 import { csvToRows, type ImportRowData } from "./csv";
 import type { Json } from "@/lib/supabase/database.types";
@@ -146,6 +147,7 @@ async function recalcImportCounts(supabase: Supa, importId: string): Promise<voi
 // formalização manual (§29). Nenhuma linha 'error' ou 'ignored' vira sinistro.
 export async function confirmImport(importId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "import.confirm");
   const supabase = await createClient();
   const includeDuplicates = formData.get("include_duplicates") === "on";
 
