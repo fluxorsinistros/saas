@@ -8,6 +8,8 @@ import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
 import { getPermissionCodes } from "@/lib/permissions";
+import { ExecutionViewToggle } from "@/components/execution/ExecutionViewToggle";
+import { ExecutionGraph } from "@/components/execution/ExecutionGraph";
 import {
   cancelPendingItem,
   chooseDecision,
@@ -159,6 +161,14 @@ export default async function ClaimPage({
   const graph = await loadGraph(supabase, cycle.workflow_version_id);
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
 
+  // Posições dos nós (Documento 5 §5, modo "grafo completo") — loadGraph não carrega isso porque o
+  // motor de execução não precisa; aqui é só pra desenhar.
+  const { data: nodePositions } = await supabase
+    .from("workflow_nodes")
+    .select("id, position")
+    .eq("workflow_version_id", cycle.workflow_version_id);
+  const positionById = new Map((nodePositions ?? []).map((n) => [n.id, n.position as unknown as { x: number; y: number }]));
+
   const { data: stages } = await supabase
     .from("stage_instances")
     .select("id, node_id, pass_number, status, entered_at, exited_at")
@@ -306,6 +316,24 @@ export default async function ClaimPage({
     });
   }
 
+  // Grafo completo (Documento 5 §5/§15): status por nó derivado da passagem mais recente por ele —
+  // mesma fonte de dados da trilha linear, só desenhada como grafo em vez de lista cronológica.
+  const latestStageByNode = new Map<string, { id: string; status: string }>();
+  for (const s of [...(stages ?? [])].reverse()) latestStageByNode.set(s.node_id, { id: s.id, status: s.status });
+  const mostRecentStageId = stages?.[0]?.id;
+  const execNodes = graph.nodes.map((n) => {
+    const pos = positionById.get(n.id) ?? { x: 0, y: 0 };
+    const latest = latestStageByNode.get(n.id);
+    let status: "pending" | "in_progress" | "completed" | "blocked" = "pending";
+    if (latest) {
+      if (latest.status === "completed") status = "completed";
+      else status = "in_progress";
+      if (cycle.status === "blocked" && latest.id === mostRecentStageId) status = "blocked";
+    }
+    return { id: n.id, type: n.type, name: n.name, x: pos.x ?? 0, y: pos.y ?? 0, status };
+  });
+  const execEdges = graph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: e.label || undefined }));
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-8 py-8">
@@ -424,6 +452,7 @@ export default async function ClaimPage({
 
         <section className="mt-6">
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Execução</h2>
+          <ExecutionViewToggle graph={<ExecutionGraph nodes={execNodes} edges={execEdges} />} timeline={
           <ol className="space-y-3">
             {(stages ?? []).map((stage) => {
               const node = nodeById.get(stage.node_id);
@@ -620,6 +649,7 @@ export default async function ClaimPage({
               );
             })}
           </ol>
+          } />
         </section>
 
         <section className="mt-8">
