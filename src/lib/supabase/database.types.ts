@@ -2414,6 +2414,9 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          onboarding_completed_at: string | null
+          onboarding_step: number
+          operating_model: string | null
           settings: Json
           slug: string
           status: string
@@ -2423,6 +2426,9 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          onboarding_completed_at?: string | null
+          onboarding_step?: number
+          operating_model?: string | null
           settings?: Json
           slug: string
           status?: string
@@ -2432,6 +2438,9 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          onboarding_completed_at?: string | null
+          onboarding_step?: number
+          operating_model?: string | null
           settings?: Json
           slug?: string
           status?: string

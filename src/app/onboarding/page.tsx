@@ -13,12 +13,15 @@ export default async function OnboardingPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { count } = await supabase
+  const { data: memberships } = await supabase
     .from("tenant_memberships")
-    .select("id", { count: "exact", head: true })
+    .select("tenant_id, tenants(onboarding_completed_at)")
     .eq("user_id", user.id)
     .eq("status", "active");
-  if (count) redirect("/fluxos");
+  if (memberships?.length) {
+    const pending = memberships.find((m) => !m.tenants?.onboarding_completed_at);
+    redirect(pending ? "/onboarding/wizard" : "/fluxos");
+  }
 
   return (
     <main className="flex min-h-full items-center justify-center px-6 py-12">
