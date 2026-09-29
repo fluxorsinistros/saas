@@ -3063,6 +3063,10 @@ export type Database = {
         Args: { p_edges: Json; p_nodes: Json; p_version_id: string }
         Returns: undefined
       }
+      set_membership_role: {
+        Args: { p_membership_id: string; p_role_id: string }
+        Returns: undefined
+      }
       write_audit: {
         Args: {
           p_action: string
