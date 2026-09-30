@@ -26,61 +26,43 @@ export async function addMember(formData: FormData): Promise<void> {
   revalidatePath("/usuarios");
 }
 
-export async function toggleMemberStatus(membershipId: string, currentStatus: string): Promise<void> {
+export type AccessState = { ok: boolean; message: string } | null;
+
+// Tipo, grupo e situação de um membro, por um Administrador da conta. As regras ficam no banco
+// (tenant_update_member): ninguém altera o próprio acesso, Gestor não aparece, Administrador não fica em grupo.
+export async function updateMemberAccess(_prev: AccessState, formData: FormData): Promise<AccessState> {
   const ctx = await getTenantContext();
   await requirePermission(ctx, "user.manage");
   const supabase = await createClient();
-  const next = currentStatus === "active" ? "inactive" : "active";
-  if (next === "active") {
+  const membershipId = String(formData.get("membership_id") ?? "");
+  const roleId = String(formData.get("role_id") ?? "");
+  const active = formData.get("active") === "on";
+  if (!membershipId || !roleId) return { ok: false, message: "Escolha o tipo." };
+
+  // Reativar (ou ativar de novo) consome uma vaga de usuário do plano
+  const { data: current } = await supabase.from("tenant_memberships").select("status").eq("id", membershipId).maybeSingle();
+  if (active && current?.status !== "active") {
     const { count: activeUsers } = await supabase
       .from("tenant_memberships")
       .select("id", { count: "exact", head: true })
       .eq("tenant_id", ctx.tenantId)
       .eq("status", "active");
-    await assertCountLimit(supabase, ctx.tenantId, "users", "usuários", activeUsers ?? 0);
+    try {
+      await assertCountLimit(supabase, ctx.tenantId, "users", "usuários", activeUsers ?? 0);
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : "Limite do plano atingido." };
+    }
   }
-  const { error } = await supabase
-    .from("tenant_memberships")
-    .update({ status: next, left_at: next === "inactive" ? new Date().toISOString() : null })
-    .eq("id", membershipId);
-  if (error) throw new Error(error.message);
-  revalidatePath("/usuarios");
-}
 
-// Papel do membro (Documento 1 §32): quem cria o tenant vira Administrador, quem é adicionado depois
-// entra como Operador — esta ação é o único jeito de mudar isso depois, e por isso também exige
-// user.manage (senão qualquer Operador conseguiria se promover).
-export async function setMemberRole(membershipId: string, formData: FormData): Promise<void> {
-  const ctx = await getTenantContext();
-  await requirePermission(ctx, "user.manage");
-  const supabase = await createClient();
-  const roleId = String(formData.get("role_id") ?? "");
-  if (!roleId) throw new Error("Escolha um papel.");
-
-  const { error } = await supabase.rpc("set_membership_role", { p_membership_id: membershipId, p_role_id: roleId });
-  if (error) throw new Error(error.message);
+  const { error } = await supabase.rpc("tenant_update_member", {
+    p_membership_id: membershipId,
+    p_role_id: roleId,
+    p_group_id: String(formData.get("group_id") ?? "") || null,
+    p_active: active,
+  });
+  if (error) return { ok: false, message: error.message };
   revalidatePath("/usuarios");
-}
-
-export async function addMemberToGroup(formData: FormData): Promise<void> {
-  const ctx = await getTenantContext();
-  await requirePermission(ctx, "user.manage");
-  const supabase = await createClient();
-  const membershipId = String(formData.get("membership_id") ?? "");
-  const groupId = String(formData.get("group_id") ?? "");
-  if (!membershipId || !groupId) return;
-  const { error } = await supabase.from("group_members").insert({ membership_id: membershipId, group_id: groupId });
-  if (error && error.code !== "23505") throw new Error(error.message);
-  revalidatePath("/usuarios");
-}
-
-export async function removeMemberFromGroup(groupMemberId: string): Promise<void> {
-  const ctx = await getTenantContext();
-  await requirePermission(ctx, "user.manage");
-  const supabase = await createClient();
-  const { error } = await supabase.from("group_members").delete().eq("id", groupMemberId);
-  if (error) throw new Error(error.message);
-  revalidatePath("/usuarios");
+  return { ok: true, message: "Acesso salvo." };
 }
 
 const ROLE_KINDS = ["transportadora", "embarcador", "seguradora", "corretora", "gerenciadora_risco", "fornecedor", "outro"] as const;

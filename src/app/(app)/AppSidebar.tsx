@@ -1,7 +1,8 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
 import { NavLinks } from "./NavLinks";
@@ -18,15 +19,45 @@ type Props = {
   platformMode?: boolean;
 };
 
-// Dentro do editor de fluxo (a tela principal, Documento 5 §2), o menu recolhe para dar
-// o máximo de espaço ao quadro — a crítica de design apontou o quadro como o maior gargalo.
+// O menu recolhe e expande pelo botão do topo e a escolha fica guardada no navegador. Sem escolha, dentro
+// do editor de fluxo (a tela principal, Documento 5 §2) ele já abre recolhido para dar o máximo de espaço
+// ao quadro — a crítica de design apontou o quadro como o maior gargalo.
+type Pref = "collapsed" | "expanded" | null;
+const PREF_KEY = "sidebar";
+const listeners = new Set<() => void>();
+
+function subscribe(onChange: () => void) {
+  listeners.add(onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+function readPref(): Pref {
+  try {
+    const v = window.localStorage.getItem(PREF_KEY);
+    return v === "collapsed" || v === "expanded" ? v : null;
+  } catch {
+    return null; // navegação anônima ou armazenamento bloqueado: segue sem memória
+  }
+}
+function writePref(v: Exclude<Pref, null>) {
+  try {
+    window.localStorage.setItem(PREF_KEY, v);
+  } catch {}
+  listeners.forEach((l) => l());
+}
+
 function useCollapsed() {
   const pathname = usePathname();
-  return /^\/fluxos\/[^/]+/.test(pathname);
+  const pref = useSyncExternalStore(subscribe, readPref, () => null);
+  const collapsed = pref ? pref === "collapsed" : /^\/fluxos\/[^/]+/.test(pathname);
+  return { collapsed, toggle: () => writePref(collapsed ? "expanded" : "collapsed") };
 }
 
 export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin, brand, platformMode = false }: Props) {
-  const collapsed = useCollapsed();
+  const { collapsed, toggle } = useCollapsed();
 
   return (
     <aside
@@ -34,8 +65,18 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
         collapsed ? "w-14" : "w-[232px]"
       }`}
     >
-      <div className={`pb-4 pt-5 ${collapsed ? "px-2" : "px-4"}`}>
+      <div className={`pb-4 pt-5 ${collapsed ? "flex flex-col items-center gap-3 px-2" : "flex items-start justify-between gap-2 px-4"}`}>
         <BrandMark tone="dark" compact={collapsed} brand={brand} />
+        <button
+          type="button"
+          onClick={toggle}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          aria-expanded={!collapsed}
+          className="rounded-md p-1.5 text-slate-400 transition hover:bg-navy-700 hover:text-white"
+        >
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+        </button>
       </div>
 
       {!collapsed && (
@@ -43,7 +84,7 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
           {platformMode ? (
             <div className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-2">
               <div className="text-[11px] text-slate-500">Acesso</div>
-              <div className="truncate text-[13px] font-medium text-white">Administrador da plataforma</div>
+              <div className="truncate text-[13px] font-medium text-white">Gestor da plataforma</div>
             </div>
           ) : tenants.length > 1 ? (
             <form action={switchTenant}>

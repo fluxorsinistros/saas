@@ -1,6 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { writeAudit } from "@/app/(app)/sinistros/actions";
@@ -34,7 +37,7 @@ export async function createPlan(formData: FormData): Promise<void> {
   if (error || !data) throw new Error(error?.message ?? "Falha ao criar plano.");
 
   await writeAudit(supabase, null, "plan.created", "plan", data.id, { next: { code, name } });
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
 }
 
 // Edita nome e preços de um plano existente. O código (standard, professional…) não muda.
@@ -55,7 +58,7 @@ export async function updatePlan(formData: FormData): Promise<void> {
   if (error) throw new Error(error.message);
 
   await writeAudit(supabase, null, "plan.updated", "plan", planId, { next });
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
 }
 
 // Vazio = sem valor; "ilimitado" = null; número aceita vírgula. Lança erro em texto inválido.
@@ -95,7 +98,7 @@ export async function savePlanLimits(formData: FormData): Promise<void> {
   await writeAudit(supabase, null, "plan_limit.set", "plan", planId, {
     next: Object.fromEntries(toSet.map((s) => [s.limit_key, s.limit_value])) as Json,
   });
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
 }
 
 export async function removePlanLimit(limitId: string): Promise<void> {
@@ -103,7 +106,7 @@ export async function removePlanLimit(limitId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_limits").delete().eq("id", limitId);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
 }
 
 export async function assignContract(formData: FormData): Promise<void> {
@@ -119,22 +122,158 @@ export async function assignContract(formData: FormData): Promise<void> {
   if (error) throw new Error(error.message);
 
   await writeAudit(supabase, null, "contract.assigned", "tenant", tenantId, { next: { plan_id: planId } });
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
 }
 
-// Cria uma nova empresa cliente com o admin da plataforma já como Administrador dela — usa a
-// mesma RPC create_tenant do onboarding (Documento 1 §64), só que a partir de /admin, porque quem
-// já é membro de algum tenant nunca vê o formulário de onboarding (a página redireciona direto).
-export async function createTenantAsAdmin(formData: FormData): Promise<void> {
+export type ActionState = { ok: boolean; message: string } | null;
+
+const INVITE_MESSAGE =
+  "Convite registrado. Peça para a pessoa criar a conta com este e-mail (tela de login → Criar conta) e confirmar; no primeiro acesso ela entra na empresa com o tipo de acesso definido.";
+
+// Cria a empresa cliente SEM incluir o administrador da plataforma como membro, e opcionalmente já dá
+// acesso de administrador a um e-mail. Erros voltam como mensagem (Server Action lançando erro vira
+// texto genérico em produção).
+export async function createTenantAsAdmin(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requirePlatformAdmin();
   const supabase = await createClient();
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Nome da empresa é obrigatório.");
+  const adminEmail = String(formData.get("admin_email") ?? "").trim();
+  if (!name) return { ok: false, message: "Nome da empresa é obrigatório." };
 
-  const { data, error } = await supabase.rpc("create_tenant", { p_name: name });
-  if (error || !data) throw new Error(error?.message ?? "Não foi possível criar a empresa.");
+  const { data: tenantId, error } = await supabase.rpc("admin_create_tenant", { p_name: name, p_admin_email: adminEmail || undefined });
+  if (error || !tenantId) return { ok: false, message: error?.message ?? "Não foi possível criar a empresa." };
 
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
+  let message = `Empresa "${name}" criada.`;
+  if (adminEmail) {
+    const { data: ex } = await supabase.rpc("admin_list_tenant_users", { p_tenant_ids: [tenantId] });
+    const pending = (ex ?? []).some((r) => r.pending);
+    message += pending ? ` ${INVITE_MESSAGE}` : " Acesso de administrador concedido.";
+  }
+  return { ok: true, message };
+}
+
+const EMAIL_LIMIT_MESSAGE =
+  "O limite de e-mails do Supabase foi atingido (o envio padrão é bem baixo). Tente mais tarde ou configure um SMTP próprio (ex.: Resend) em Authentication → SMTP.";
+
+function emailError(message: string): string {
+  return /rate limit/i.test(message) ? EMAIL_LIMIT_MESSAGE : message;
+}
+
+async function siteOrigin(): Promise<string> {
+  const h = await headers();
+  return h.get("origin") ?? `https://${h.get("host")}`;
+}
+
+// Cliente sem cookies e SEM PKCE. O e-mail de redefinição/convite é aberto no navegador da pessoa, que não
+// tem o "code verifier" de um fluxo PKCE iniciado aqui — por isso o link volta com o token no endereço
+// (#access_token) e a página /redefinir-senha o usa.
+function implicitClient() {
+  return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+    auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+async function sendInviteMail(email: string): Promise<string | null> {
+  const origin = await siteOrigin();
+  const { error } = await implicitClient().auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, emailRedirectTo: `${origin}/redefinir-senha?convite=1` },
+  });
+  return error ? emailError(error.message) : null;
+}
+
+// Adiciona um usuário à empresa com o tipo (papel) escolhido; sem conta ainda = convite (e, se marcado, e-mail).
+export async function addTenantUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  const roleId = String(formData.get("role_id") ?? "");
+  const email = String(formData.get("email") ?? "").trim();
+  const sendMail = formData.get("send_invite") === "on";
+  if (!tenantId || !roleId || !email) return { ok: false, message: "Informe empresa, tipo e e-mail." };
+
+  const { data, error } = await supabase.rpc("admin_add_tenant_user", { p_tenant_id: tenantId, p_email: email, p_role_id: roleId });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin", "layout");
+
+  if (data === "added") return { ok: true, message: "Usuário adicionado. Ele já pode entrar na empresa." };
+  if (!sendMail) return { ok: true, message: INVITE_MESSAGE };
+  const mailError = await sendInviteMail(email);
+  return mailError
+    ? { ok: true, message: `Convite registrado, mas o e-mail não foi enviado: ${mailError} Use "Reenviar convite" depois.` }
+    : { ok: true, message: `Convite registrado e e-mail enviado para ${email}. A pessoa define a senha pelo link.` };
+}
+
+export async function sendInviteEmail(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { ok: false, message: "E-mail não informado." };
+  const mailError = await sendInviteMail(email);
+  return mailError ? { ok: false, message: mailError } : { ok: true, message: `Convite enviado para ${email}.` };
+}
+
+export async function sendPasswordReset(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { ok: false, message: "E-mail não informado." };
+  const origin = await siteOrigin();
+  const { error } = await implicitClient().auth.resetPasswordForEmail(email, { redirectTo: `${origin}/redefinir-senha` });
+  return error ? { ok: false, message: emailError(error.message) } : { ok: true, message: `Enviamos o link de redefinição para ${email}.` };
+}
+
+// Define diretamente a senha de um usuário. Exige a chave de serviço do Supabase (só no servidor).
+export async function setUserPassword(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const userId = String(formData.get("user_id") ?? "");
+  const password = String(formData.get("password") ?? "");
+  if (!userId) return { ok: false, message: "Usuário não informado." };
+  if (password.length < 8) return { ok: false, message: "A senha precisa ter pelo menos 8 caracteres." };
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    return {
+      ok: false,
+      message: "Para definir senha diretamente é preciso configurar SUPABASE_SERVICE_ROLE_KEY no servidor (.env.local e Vercel). Enquanto isso, use \"Enviar redefinição\".",
+    };
+  }
+  const { data: allowed } = await supabase.rpc("admin_can_manage_user", { p_user_id: userId });
+  if (!allowed) return { ok: false, message: "Esta tela não altera a senha de outro Gestor da plataforma." };
+
+  const admin = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  if (error) return { ok: false, message: error.message };
+
+  await writeAudit(supabase, null, "user.password_set_by_platform", "user", userId);
+  return { ok: true, message: "Senha alterada. Combine com a pessoa como ela vai receber a nova senha." };
+}
+
+// Inativa (some o acesso na hora) ou reativa um usuário da empresa. Nada é apagado.
+export async function setMemberActive(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const membershipId = String(formData.get("membership_id") ?? "");
+  const active = formData.get("active") === "true";
+  if (!membershipId) return { ok: false, message: "Usuário não informado." };
+  // Volta como mensagem: a regra "a conta precisa manter um Administrador ativo" é checada pelo banco
+  const { error } = await supabase.rpc("admin_set_member_active", { p_membership_id: membershipId, p_active: active });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: active ? "Usuário reativado." : "Usuário inativado." };
+}
+
+// Cancela um convite pendente.
+export async function revokeTenantAccess(formData: FormData): Promise<void> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const inviteId = String(formData.get("invite_id") ?? "") || undefined;
+  if (!inviteId) return;
+  const { error } = await supabase.rpc("admin_revoke_tenant_access", { p_invite_id: inviteId });
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin", "layout");
 }
 
 export async function updateContractOverrides(formData: FormData): Promise<void> {
@@ -159,7 +298,7 @@ export async function updateContractOverrides(formData: FormData): Promise<void>
   if (error) throw new Error(error.message);
 
   await writeAudit(supabase, null, "contract.overrides_updated", "tenant_contract", contractId, { next: overrides as Json });
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
 }
 
 // Suspende ou reativa a conta de um cliente. Suspensa: ninguém da empresa acessa nada (RLS), mas os
@@ -182,7 +321,7 @@ export async function setTenantStatus(formData: FormData): Promise<void> {
   await writeAudit(supabase, null, status === "suspended" ? "tenant.suspended" : "tenant.reactivated", "tenant", tenantId, {
     next: { status, reason: reason || null },
   });
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
 }
 
 const LOGO_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" };
@@ -242,5 +381,98 @@ export async function setWhiteLabel(formData: FormData): Promise<void> {
   if (error) throw new Error(error.message);
 
   await writeAudit(supabase, null, "contract.white_label_updated", "tenant_contract", contractId, { next });
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
+}
+
+// Renomeia a conta (empresa cliente).
+export async function renameTenant(formData: FormData): Promise<void> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!tenantId || !name) throw new Error("O nome da conta é obrigatório.");
+  const { error } = await supabase.from("tenants").update({ name }).eq("id", tenantId);
+  if (error) throw new Error(error.message);
+  await writeAudit(supabase, null, "tenant.renamed", "tenant", tenantId, { next: { name } });
+  revalidatePath("/admin", "layout");
+}
+
+// Marca própria da conta (white-label): nome, subtítulo, cor e logo. Só vale se o white-label estiver liberado no contrato.
+export async function saveTenantBranding(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  const name = String(formData.get("brand_name") ?? "").trim();
+  const tagline = String(formData.get("brand_tagline") ?? "").trim();
+  const color = String(formData.get("brand_color") ?? "").trim();
+  if (!tenantId) return { ok: false, message: "Conta não informada." };
+  if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, message: "A cor precisa estar no formato #RRGGBB." };
+
+  const { data: contract } = await supabase.from("tenant_contracts").select("white_label_enabled").eq("tenant_id", tenantId).maybeSingle();
+  if (!contract?.white_label_enabled) return { ok: false, message: "O white-label não está liberado para esta conta (aba Plano e cobrança)." };
+
+  const { data: tenant } = await supabase.from("tenants").select("settings").eq("id", tenantId).single();
+  const settings = ((tenant?.settings ?? {}) as Record<string, Json>) ?? {};
+  const previous = (settings.branding ?? {}) as { logo_path?: string | null };
+  let logoPath = previous.logo_path ?? null;
+
+  const file = formData.get("logo");
+  if (file instanceof File && file.size > 0) {
+    const ext = LOGO_TYPES[file.type];
+    if (!ext) return { ok: false, message: "Logo precisa ser PNG, JPG, WEBP ou SVG." };
+    if (file.size > LOGO_MAX_BYTES) return { ok: false, message: "Logo grande demais: máximo de 1 MB." };
+    const path = `tenants/${tenantId}/logo-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("branding").upload(path, file, { contentType: file.type });
+    if (error) return { ok: false, message: error.message };
+    if (logoPath) await supabase.storage.from("branding").remove([logoPath]);
+    logoPath = path;
+  } else if (formData.get("remove_logo") === "on" && logoPath) {
+    await supabase.storage.from("branding").remove([logoPath]);
+    logoPath = null;
+  }
+
+  // Sem nome = a conta volta a usar a marca da plataforma
+  const next: Record<string, Json> = { ...settings };
+  if (name) next.branding = { name, tagline, primary_color: color || null, logo_path: logoPath };
+  else delete next.branding;
+
+  const { error } = await supabase.from("tenants").update({ settings: next as Json }).eq("id", tenantId);
+  if (error) return { ok: false, message: error.message };
+  await writeAudit(supabase, null, "tenant.branding_updated", "tenant", tenantId, { next: { name: name || null, color: color || null, logo: !!logoPath } });
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: name ? "Marca da conta salva." : "Marca removida: a conta usa a marca da plataforma." };
+}
+
+// Salva a pessoa inteira (dados, tipo, empresa, situação e grupo) de uma vez. Trocar a empresa move o usuário;
+// trocar o tipo para Gestor o tira das empresas; tirar de Gestor exige escolher a empresa.
+export async function saveUserEdit(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const id = String(formData.get("id") ?? "");
+  const fullName = String(formData.get("full_name") ?? "").trim();
+  const tipo = String(formData.get("tipo") ?? "");
+  if (!id) return { ok: false, message: "Usuário não informado." };
+  if (!fullName) return { ok: false, message: "O nome é obrigatório." };
+  if (!["gestor", "Administrador", "Operador"].includes(tipo)) return { ok: false, message: "Escolha o tipo." };
+
+  const isGestor = tipo === "gestor";
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  if (!isGestor && !tenantId) return { ok: false, message: "Escolha a empresa." };
+
+  const { data: newId, error } = await supabase.rpc("admin_save_person", {
+    p_id: id,
+    p_full_name: fullName,
+    p_phone: String(formData.get("phone") ?? ""),
+    p_cpf: String(formData.get("cpf") ?? ""),
+    p_kind: isGestor ? "gestor" : "member",
+    p_tenant_id: isGestor ? null : tenantId,
+    p_role_name: isGestor ? "Operador" : tipo,
+    p_active: isGestor ? true : formData.get("active") === "on",
+    p_group_id: String(formData.get("group_id") ?? "") || null,
+  });
+  if (error || !newId) return { ok: false, message: error?.message ?? "Não foi possível salvar." };
+  revalidatePath("/admin", "layout");
+  // Mudou de empresa ou de nível: o endereço antigo pode nem existir mais, então o redirecionamento sai do servidor
+  if (newId !== id) redirect(`/admin/usuarios/${newId}`);
+  return { ok: true, message: "Usuário salvo." };
 }

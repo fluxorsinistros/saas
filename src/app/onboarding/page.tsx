@@ -14,6 +14,8 @@ export default async function OnboardingPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   if (await isPlatformAdmin()) redirect("/admin");
+  const { data: claimed } = await supabase.rpc("claim_pending_invites");
+  if (claimed && claimed > 0) redirect("/dashboard");
 
   const { data: memberships } = await supabase
     .from("tenant_memberships")

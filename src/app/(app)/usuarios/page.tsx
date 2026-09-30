@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Building2, Plus, UserPlus, X } from "lucide-react";
+import { Building2, Plus, UserPlus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
-import { addMember, addMemberToGroup, createOrganization, removeMemberFromGroup, setMemberRole, toggleMemberStatus } from "./actions";
+import { addMember, createOrganization } from "./actions";
+import { MemberAccessForm } from "./member-access-form";
 
 export const metadata: Metadata = { title: "Usuários e organizações" };
 
@@ -38,9 +39,14 @@ export default async function UsuariosPage() {
       .from("tenant_organizations")
       .select("id, role_kind, is_owner, organizations(id, name)")
       .eq("tenant_id", ctx.tenantId),
-    supabase.from("roles").select("id, name").or(`tenant_id.is.null,tenant_id.eq.${ctx.tenantId}`).order("name"),
+    supabase.from("roles").select("id, name, tenant_id").or(`tenant_id.is.null,tenant_id.eq.${ctx.tenantId}`).order("name"),
   ]);
   const roleNameById = new Map((roles ?? []).map((r) => [r.id, r.name]));
+  // papéis elegíveis: só Administrador e Operador, preferindo o papel próprio da empresa quando tem o mesmo nome
+  const roleOptions = ["Administrador", "Operador"].flatMap((name) => {
+    const candidates = (roles ?? []).filter((r) => r.name === name);
+    return candidates.length ? [candidates.find((r) => r.tenant_id === ctx.tenantId) ?? candidates[0]] : [];
+  });
 
   const userIds = [...new Set((memberships ?? []).map((m) => m.user_id))];
   const { data: profiles } = userIds.length
@@ -96,100 +102,59 @@ export default async function UsuariosPage() {
             {(memberships ?? []).map((m) => {
               const profile = profileById.get(m.user_id);
               const active = m.status === "active";
-              const myGroups = groupsByMembership.get(m.id) ?? [];
-              const availableGroups = (groups ?? []).filter((g) => !myGroups.some((mg) => mg.group_id === g.id));
+              const isSelf = m.user_id === ctx.userId;
+              const myGroup = (groupsByMembership.get(m.id) ?? [])[0];
               const orgName = m.organization_id ? orgNameByMembershipOrgId.get(m.organization_id) : null;
               const currentRoleId = m.membership_roles?.[0]?.role_id;
+              const currentRoleName = currentRoleId ? roleNameById.get(currentRoleId) : undefined;
+              // o seletor usa o papel da lista (o da empresa, se houver), mesmo que o usuário tenha o de sistema de mesmo nome
+              const formRoleId = roleOptions.find((r) => r.name === currentRoleName)?.id ?? currentRoleId ?? "";
               return (
                 <li key={m.id} className={`px-5 py-4 ${active ? "" : "bg-slate-50/70"}`}>
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="min-w-[180px] flex-1">
-                      <div className="text-[14px] font-medium text-slate-900">{profile?.full_name ?? "—"}</div>
+                      <div className="text-[14px] font-medium text-slate-900">
+                        {profile?.full_name ?? "—"}
+                        {isSelf && <span className="ml-2 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Você</span>}
+                      </div>
                       <div className="text-[12px] text-slate-500">
                         {profile?.email ?? m.user_id}
                         {orgName && ` · ${orgName}`}
                       </div>
                     </div>
-                    {currentRoleId && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                        {roleNameById.get(currentRoleId) ?? "—"}
+                    {currentRoleName && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{currentRoleName}</span>
+                    )}
+                    {myGroup && (
+                      <span className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-medium text-violet">
+                        {groupName.get(myGroup.group_id) ?? "—"}
                       </span>
                     )}
-                    {canManage && (
-                      <form action={toggleMemberStatus.bind(null, m.id, m.status)}>
-                        <button
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset transition ${
-                            active
-                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
-                              : "bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200"
-                          }`}
-                        >
-                          {active ? "Ativo" : "Inativo"}
-                        </button>
-                      </form>
-                    )}
-                    {!canManage && (
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
-                          active ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"
-                        }`}
-                      >
-                        {active ? "Ativo" : "Inativo"}
-                      </span>
-                    )}
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                        active ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"
+                      }`}
+                    >
+                      {active ? "Ativo" : "Inativo"}
+                    </span>
                   </div>
 
-                  {canManage && (
-                    <form action={setMemberRole.bind(null, m.id)} className="mt-2 flex items-center gap-1.5">
-                      <label className="text-[11px] text-slate-500">Papel:</label>
-                      <select name="role_id" defaultValue={currentRoleId ?? ""} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px]">
-                        {(roles ?? []).map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button className="rounded-md px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand/5">Salvar</button>
-                    </form>
-                  )}
-
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {myGroups.map((mg) => (
-                      <span
-                        key={mg.id}
-                        className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
-                      >
-                        {groupName.get(mg.group_id) ?? "—"}
-                        {canManage && (
-                          <form action={removeMemberFromGroup.bind(null, mg.id)}>
-                            <button className="text-slate-400 hover:text-rose-600" aria-label={`Remover do grupo ${groupName.get(mg.group_id)}`}>
-                              <X className="size-3" />
-                            </button>
-                          </form>
-                        )}
-                      </span>
+                  {canManage &&
+                    (isSelf ? (
+                      <p className="mt-2 text-[11px] text-slate-400">Você não pode alterar o seu próprio acesso. Peça a outro Administrador.</p>
+                    ) : (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer list-none text-[12px] font-medium text-brand hover:underline">Editar acesso</summary>
+                        <MemberAccessForm
+                          membershipId={m.id}
+                          roleId={formRoleId}
+                          groupId={myGroup?.group_id ?? ""}
+                          active={active}
+                          roles={roleOptions.map((r) => ({ id: r.id, name: r.name }))}
+                          groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name }))}
+                        />
+                      </details>
                     ))}
-                    {canManage && availableGroups.length > 0 && (
-                      <form action={addMemberToGroup} className="inline-flex items-center gap-1">
-                        <input type="hidden" name="membership_id" value={m.id} />
-                        <select
-                          name="group_id"
-                          defaultValue=""
-                          className="rounded-md border border-dashed border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-500"
-                        >
-                          <option value="" disabled>
-                            + grupo
-                          </option>
-                          {availableGroups.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button className="rounded-md px-1.5 py-0.5 text-[11px] text-brand hover:bg-brand/5">Adicionar</button>
-                      </form>
-                    )}
-                  </div>
                 </li>
               );
             })}

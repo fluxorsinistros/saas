@@ -22,7 +22,7 @@ export const getTenantContext = cache(async (): Promise<TenantContext> => {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  // Administrador de plataforma é global: não pertence a empresa nenhuma e só usa /admin.
+  // O Gestor da plataforma é global: não pertence a empresa nenhuma e só usa /admin.
   if (await isPlatformAdmin()) redirect("/admin");
 
   const { data: memberships } = await supabase
@@ -36,6 +36,10 @@ export const getTenantContext = cache(async (): Promise<TenantContext> => {
     .filter((t): t is { id: string; name: string } => !!t);
 
   if (tenants.length === 0) {
+    // Convite pendente para este e-mail (o admin da plataforma deu acesso antes de a pessoa ter conta)?
+    const { data: claimed } = await supabase.rpc("claim_pending_invites");
+    if (claimed && claimed > 0) redirect("/dashboard");
+
     // RLS esconde contas suspensas: antes de mandar para o onboarding, ver se o problema é suspensão.
     const { data: blocked } = await supabase.rpc("my_blocked_tenants");
     if (!blocked?.length) redirect("/onboarding");

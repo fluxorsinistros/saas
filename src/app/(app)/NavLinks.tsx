@@ -17,6 +17,11 @@ const LINKS = [
 ];
 
 const ADMIN_LINK = { href: "/admin", label: "Administração", icon: ShieldCheck };
+// Menu do administrador geral da plataforma (sem empresa). Contas, Planos e Marca são abas de Administração.
+const PLATFORM_LINKS = [
+  { href: "/admin", label: "Administração", icon: ShieldCheck },
+  { href: "/admin/usuarios", label: "Usuários", icon: UsersRound },
+];
 
 export function NavLinks({
   collapsed = false,
@@ -28,11 +33,12 @@ export function NavLinks({
   platformOnly?: boolean;
 }) {
   const pathname = usePathname();
-  const links = platformOnly ? [ADMIN_LINK] : isPlatformAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
+  const links = platformOnly ? PLATFORM_LINKS : isPlatformAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
   return (
     <ul className="space-y-0.5">
       {links.map(({ href, label, icon: Icon }) => {
-        const active = pathname.startsWith(href);
+        // "/admin" só fica ativo nele mesmo, para não acender junto com "/admin/usuarios"
+        const active = href === "/admin" ? pathname.startsWith("/admin") && !pathname.startsWith("/admin/usuarios") : pathname.startsWith(href);
         return (
           <li key={href}>
             <Link

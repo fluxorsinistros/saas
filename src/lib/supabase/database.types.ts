@@ -3105,6 +3105,101 @@ export type Database = {
         Returns: string
       }
       create_tenant: { Args: { p_name: string }; Returns: string }
+      tenant_update_member: {
+        Args: { p_membership_id: string; p_role_id: string; p_group_id?: string | null; p_active: boolean }
+        Returns: undefined
+      }
+      admin_create_tenant: { Args: { p_name: string; p_admin_email?: string }; Returns: string }
+      admin_grant_tenant_admin: { Args: { p_tenant_id: string; p_email: string }; Returns: string }
+      admin_add_tenant_user: { Args: { p_tenant_id: string; p_email: string; p_role_id: string }; Returns: string }
+      admin_can_manage_user: { Args: { p_user_id: string }; Returns: boolean }
+      admin_list_tenant_users: {
+        Args: { p_tenant_ids: string[] }
+        Returns: {
+          tenant_id: string
+          membership_id: string | null
+          invite_id: string | null
+          user_id: string | null
+          email: string
+          full_name: string | null
+          role_name: string | null
+          pending: boolean
+          status: string
+        }[]
+      }
+      admin_search_users: {
+        Args: {
+          p_q?: string
+          p_tenant_id?: string
+          p_role_name?: string
+          p_status?: string
+          p_group_name?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          total: number
+          tenant_id: string | null
+          tenant_name: string
+          membership_id: string | null
+          invite_id: string | null
+          user_id: string | null
+          email: string
+          full_name: string | null
+          role_id: string | null
+          role_name: string | null
+          groups: string | null
+          pending: boolean
+          status: string
+        }[]
+      }
+      admin_group_names: { Args: Record<PropertyKey, never>; Returns: string[] }
+      admin_get_person: {
+        Args: { p_id: string }
+        Returns: {
+          kind: string
+          membership_id: string | null
+          tenant_id: string | null
+          user_id: string
+          email: string
+          full_name: string | null
+          phone: string | null
+          cpf: string | null
+          role_name: string | null
+          status: string
+          group_id: string | null
+        }[]
+      }
+      admin_all_groups: { Args: Record<PropertyKey, never>; Returns: { id: string; tenant_id: string; name: string }[] }
+      admin_save_person: {
+        Args: {
+          p_id: string
+          p_full_name: string
+          p_phone: string
+          p_cpf: string
+          p_kind: string
+          p_tenant_id?: string | null
+          p_role_name: string
+          p_active: boolean
+          p_group_id?: string | null
+        }
+        Returns: string
+      }
+      admin_tenant_audit: {
+        Args: { p_tenant_id: string; p_limit?: number }
+        Returns: {
+          id: string
+          created_at: string
+          action: string
+          actor_email: string | null
+          entity_type: string
+          new_value: Json | null
+          reason: string | null
+        }[]
+      }
+      admin_set_member_active: { Args: { p_membership_id: string; p_active: boolean }; Returns: undefined }
+      admin_revoke_tenant_access: { Args: { p_membership_id?: string; p_invite_id?: string }; Returns: undefined }
+      claim_pending_invites: { Args: Record<PropertyKey, never>; Returns: number }
       my_blocked_tenants: {
         Args: Record<PropertyKey, never>
         Returns: { id: string; name: string; status: string; suspension_reason: string | null }[]
