@@ -26,7 +26,7 @@ export async function createPlan(formData: FormData): Promise<void> {
       name,
       setup_fee: money(formData, "setup_fee"),
       monthly_fee: money(formData, "monthly_fee"),
-      cycle_price: money(formData, "cycle_price"),
+      claim_price: money(formData, "claim_price"),
     })
     .select("id")
     .single();
@@ -75,6 +75,21 @@ export async function assignContract(formData: FormData): Promise<void> {
   if (error) throw new Error(error.message);
 
   await writeAudit(supabase, null, "contract.assigned", "tenant", tenantId, { next: { plan_id: planId } });
+  revalidatePath("/admin");
+}
+
+// Cria uma nova empresa cliente com o admin da plataforma já como Administrador dela — usa a
+// mesma RPC create_tenant do onboarding (Documento 1 §64), só que a partir de /admin, porque quem
+// já é membro de algum tenant nunca vê o formulário de onboarding (a página redireciona direto).
+export async function createTenantAsAdmin(formData: FormData): Promise<void> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) throw new Error("Nome da empresa é obrigatório.");
+
+  const { data, error } = await supabase.rpc("create_tenant", { p_name: name });
+  if (error || !data) throw new Error(error?.message ?? "Não foi possível criar a empresa.");
+
   revalidatePath("/admin");
 }
 

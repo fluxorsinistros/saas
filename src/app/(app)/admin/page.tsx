@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Building2, Plus, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
-import { assignContract, createPlan, removePlanLimit, updateContractOverrides, upsertPlanLimit } from "./actions";
+import { assignContract, createPlan, createTenantAsAdmin, removePlanLimit, updateContractOverrides, upsertPlanLimit } from "./actions";
 
 export const metadata: Metadata = { title: "Administração de plataforma" };
 
@@ -15,7 +15,7 @@ export default async function AdminPage() {
   const supabase = await createClient();
 
   const [{ data: plans }, { data: limits }, { data: tenants }, { data: contracts }] = await Promise.all([
-    supabase.from("plans").select("id, code, name, setup_fee, monthly_fee, cycle_price, status").order("cycle_price"),
+    supabase.from("plans").select("id, code, name, setup_fee, monthly_fee, claim_price, status").order("claim_price"),
     supabase.from("plan_limits").select("id, plan_id, limit_key, limit_value"),
     supabase.from("tenants").select("id, name").order("name"),
     supabase.from("tenant_contracts").select("id, tenant_id, plan_id, overrides, status"),
@@ -66,10 +66,10 @@ export default async function AdminPage() {
               <input id="monthly_fee" name="monthly_fee" type="number" step="0.01" defaultValue="0" className={input} />
             </div>
             <div className="w-28">
-              <label htmlFor="cycle_price" className="mb-1 block text-[12px] font-medium text-slate-600">
-                Por ciclo
+              <label htmlFor="claim_price" className="mb-1 block text-[12px] font-medium text-slate-600">
+                Por sinistro
               </label>
-              <input id="cycle_price" name="cycle_price" type="number" step="0.01" defaultValue="0" className={input} />
+              <input id="claim_price" name="claim_price" type="number" step="0.01" defaultValue="0" className={input} />
             </div>
             <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600">
               <Plus className="size-4" /> Criar plano
@@ -87,7 +87,7 @@ export default async function AdminPage() {
                   <div className="flex items-center gap-3 text-[12px] text-slate-500">
                     <span>Implantação {currency.format(plan.setup_fee)}</span>
                     <span>Mensal {currency.format(plan.monthly_fee)}</span>
-                    <span>Ciclo {currency.format(plan.cycle_price)}</span>
+                    <span>Sinistro {currency.format(plan.claim_price)}</span>
                   </div>
                 </summary>
                 <div className="border-t border-slate-100 px-4 py-3">
@@ -110,7 +110,7 @@ export default async function AdminPage() {
                   </ul>
                   <form action={upsertPlanLimit} className="flex flex-wrap items-end gap-2">
                     <input type="hidden" name="plan_id" value={plan.id} />
-                    <input name="limit_key" required placeholder="ex.: users, storage_per_cycle_mb" className={`${input} w-56`} />
+                    <input name="limit_key" required placeholder="ex.: users, storage_per_claim_mb" className={`${input} w-56`} />
                     <input name="limit_value" placeholder="vazio = ilimitado" className={`${input} w-40`} />
                     <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
                       Definir
@@ -128,6 +128,18 @@ export default async function AdminPage() {
             O efetivo aparece sempre ao lado do padrão do plano — nunca escondemos quando um contrato sobrescreveu algo
             (Documento 5 §11).
           </p>
+
+          <form action={createTenantAsAdmin} className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="min-w-[220px] flex-1">
+              <label htmlFor="tenant_name" className="mb-1 block text-[12px] font-medium text-slate-600">
+                Nova empresa cliente
+              </label>
+              <input id="tenant_name" name="name" required placeholder="Nome da empresa" className={input} />
+            </div>
+            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+              <Plus className="size-4" /> Criar empresa
+            </button>
+          </form>
 
           <ul className="space-y-3">
             {(tenants ?? []).map((t) => {

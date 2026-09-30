@@ -126,8 +126,8 @@ plans → plan_limits → tenant_contracts (overrides) → tenant_effective_limi
 - `plans`/`plan_limits`: catálogo global, somente leitura para qualquer autenticado (preço não é segredo de tenant).
 - `tenant_contracts.overrides jsonb`: contrato pode sobrescrever qualquer limite/preço padrão do plano.
 - `tenant_effective_limits`: tabela materializada (recalculada quando plano/contrato muda) para consulta rápida sem recomputar a cadeia toda a cada request.
-- `billing_events`: eventos de cobrança (`cycle_open`, `cycle_overage`, `plan_change`, `limit_override`, `contract_change` — §65), com `competence_date` para o modelo "cobra na abertura, ajusta excedente no encerramento" (§63).
-- `storage_usage`: consumo por ciclo, separando franquia/consumo/excedente (§44).
+- `billing_events`: eventos de cobrança (`claim_open`, `cycle_overage`, `plan_change`, `limit_override`, `contract_change` — §65), com `competence_date` para o modelo "cobra na abertura, ajusta excedente no encerramento" (§63). **Cobrança é por sinistro** (decisão 2026-09-30, migração 0029): `claim_id` identifica o sinistro e um índice único garante uma única `claim_open` por sinistro, mesmo com vários ciclos. `plans.claim_price` é o valor por sinistro.
+- `storage_usage`: consumo por sinistro (`claim_id`), separando franquia/consumo/excedente (§44). Limites em `plan_limits`: `file_max_mb` (10), `storage_per_claim_mb` (50/100/200) e `storage_overage_price_per_mb`.
 
 Nenhum valor comercial é constante de código — tudo é linha nessas tabelas (§64).
 

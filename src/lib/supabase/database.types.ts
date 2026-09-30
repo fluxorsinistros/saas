@@ -138,6 +138,7 @@ export type Database = {
         Row: {
           amount: number | null
           claim_cycle_id: string | null
+          claim_id: string | null
           competence_date: string | null
           created_at: string
           details: Json
@@ -150,6 +151,7 @@ export type Database = {
         Insert: {
           amount?: number | null
           claim_cycle_id?: string | null
+          claim_id?: string | null
           competence_date?: string | null
           created_at?: string
           details?: Json
@@ -162,6 +164,7 @@ export type Database = {
         Update: {
           amount?: number | null
           claim_cycle_id?: string | null
+          claim_id?: string | null
           competence_date?: string | null
           created_at?: string
           details?: Json
@@ -1753,7 +1756,7 @@ export type Database = {
         Row: {
           code: string
           created_at: string
-          cycle_price: number
+          claim_price: number
           id: string
           monthly_fee: number
           name: string
@@ -1764,7 +1767,7 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string
-          cycle_price?: number
+          claim_price?: number
           id?: string
           monthly_fee?: number
           name: string
@@ -1775,7 +1778,7 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string
-          cycle_price?: number
+          claim_price?: number
           id?: string
           monthly_fee?: number
           name?: string
@@ -2179,6 +2182,7 @@ export type Database = {
         Row: {
           bytes_used: number
           claim_cycle_id: string | null
+          claim_id: string | null
           id: string
           measured_at: string
           overage_bytes: number
@@ -2188,6 +2192,7 @@ export type Database = {
         Insert: {
           bytes_used?: number
           claim_cycle_id?: string | null
+          claim_id?: string | null
           id?: string
           measured_at?: string
           overage_bytes?: number
@@ -2197,6 +2202,7 @@ export type Database = {
         Update: {
           bytes_used?: number
           claim_cycle_id?: string | null
+          claim_id?: string | null
           id?: string
           measured_at?: string
           overage_bytes?: number
