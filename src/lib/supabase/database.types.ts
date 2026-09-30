@@ -3105,6 +3105,34 @@ export type Database = {
         Returns: string
       }
       create_tenant: { Args: { p_name: string }; Returns: string }
+      tenant_add_user: {
+        Args: { p_tenant_id: string; p_email: string; p_role_id: string; p_group_id?: string | null }
+        Returns: string
+      }
+      tenant_cancel_invite: { Args: { p_invite_id: string }; Returns: undefined }
+      tenant_search_users: {
+        Args: {
+          p_tenant_id: string
+          p_q?: string
+          p_role_name?: string
+          p_status?: string
+          p_group_name?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          total: number
+          membership_id: string | null
+          invite_id: string | null
+          user_id: string | null
+          email: string
+          full_name: string | null
+          role_name: string | null
+          groups: string | null
+          pending: boolean
+          status: string
+        }[]
+      }
       tenant_update_member: {
         Args: { p_membership_id: string; p_role_id: string; p_group_id?: string | null; p_active: boolean }
         Returns: undefined

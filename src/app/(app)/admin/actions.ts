@@ -1,9 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { sendInviteMail, sendResetMail } from "@/lib/auth-mail";
 import { createClient } from "@/lib/supabase/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { writeAudit } from "@/app/(app)/sinistros/actions";
@@ -153,36 +153,6 @@ export async function createTenantAsAdmin(_prev: ActionState, formData: FormData
   return { ok: true, message };
 }
 
-const EMAIL_LIMIT_MESSAGE =
-  "O limite de e-mails do Supabase foi atingido (o envio padrão é bem baixo). Tente mais tarde ou configure um SMTP próprio (ex.: Resend) em Authentication → SMTP.";
-
-function emailError(message: string): string {
-  return /rate limit/i.test(message) ? EMAIL_LIMIT_MESSAGE : message;
-}
-
-async function siteOrigin(): Promise<string> {
-  const h = await headers();
-  return h.get("origin") ?? `https://${h.get("host")}`;
-}
-
-// Cliente sem cookies e SEM PKCE. O e-mail de redefinição/convite é aberto no navegador da pessoa, que não
-// tem o "code verifier" de um fluxo PKCE iniciado aqui — por isso o link volta com o token no endereço
-// (#access_token) e a página /redefinir-senha o usa.
-function implicitClient() {
-  return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
-    auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-}
-
-async function sendInviteMail(email: string): Promise<string | null> {
-  const origin = await siteOrigin();
-  const { error } = await implicitClient().auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: true, emailRedirectTo: `${origin}/redefinir-senha?convite=1` },
-  });
-  return error ? emailError(error.message) : null;
-}
-
 // Adiciona um usuário à empresa com o tipo (papel) escolhido; sem conta ainda = convite (e, se marcado, e-mail).
 export async function addTenantUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requirePlatformAdmin();
@@ -217,9 +187,8 @@ export async function sendPasswordReset(_prev: ActionState, formData: FormData):
   await requirePlatformAdmin();
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { ok: false, message: "E-mail não informado." };
-  const origin = await siteOrigin();
-  const { error } = await implicitClient().auth.resetPasswordForEmail(email, { redirectTo: `${origin}/redefinir-senha` });
-  return error ? { ok: false, message: emailError(error.message) } : { ok: true, message: `Enviamos o link de redefinição para ${email}.` };
+  const mailError = await sendResetMail(email);
+  return mailError ? { ok: false, message: mailError } : { ok: true, message: `Enviamos o link de redefinição para ${email}.` };
 }
 
 // Define diretamente a senha de um usuário. Exige a chave de serviço do Supabase (só no servidor).
