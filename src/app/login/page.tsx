@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LoginForm } from "./LoginForm";
-import { BrandMark } from "@/components/BrandMark";
+import { PlatformBrandMark } from "@/components/PlatformBrandMark";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -9,7 +9,7 @@ export default function LoginPage() {
     <main className="grid min-h-full lg:grid-cols-[1.05fr_1fr]">
       <section className="relative hidden overflow-hidden bg-navy p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <FlowBackdrop />
-        <BrandMark tone="dark" />
+        <PlatformBrandMark tone="dark" />
         <div className="relative max-w-md">
           <p className="text-[34px] font-semibold leading-[1.15] tracking-tight">
             Do evento à resolução, <span className="text-cyan">cada etapa rastreada.</span>
@@ -25,7 +25,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-10 lg:hidden">
-            <BrandMark tone="light" />
+            <PlatformBrandMark tone="light" />
           </div>
           <LoginForm />
         </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { BrandMark } from "@/components/BrandMark";
+import { PlatformBrandMark } from "@/components/PlatformBrandMark";
 import { OnboardingForm } from "./OnboardingForm";
 
 export const metadata: Metadata = { title: "Configurar empresa" };
@@ -23,10 +23,13 @@ export default async function OnboardingPage() {
     redirect(pending ? "/onboarding/wizard" : "/fluxos");
   }
 
+  const { data: blocked } = await supabase.rpc("my_blocked_tenants");
+  if (blocked?.length) redirect("/conta-suspensa");
+
   return (
     <main className="flex min-h-full items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
-        <BrandMark tone="light" />
+        <PlatformBrandMark tone="light" />
         <h1 className="mt-10 text-[22px] font-semibold tracking-tight text-slate-900">Vamos configurar sua empresa</h1>
         <p className="mt-1 text-[14px] text-slate-500">
           Criamos o seu ambiente com grupos operacionais sugeridos (Regulação, Jurídico, Financeiro…). Você pode ajustar tudo

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { writeAudit } from "@/app/(app)/sinistros/actions";
+import { assertCountLimit } from "@/lib/limits";
 
 // Cada passo grava estado parcial em `tenants.onboarding_step` (Documento 5 §3: "não é uma transação
 // única no final, para permitir retomar") — nunca volta um passo já visitado, só avança.
@@ -30,6 +31,9 @@ export async function createClaimTypeStep(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Informe o nome do tipo de sinistro.");
+
+  const { count: typeCount } = await supabase.from("claim_types").select("id", { count: "exact", head: true }).eq("tenant_id", ctx.tenantId);
+  await assertCountLimit(supabase, ctx.tenantId, "claim_types", "tipos de sinistro", typeCount ?? 0);
 
   const { data: category, error: catErr } = await supabase
     .from("claim_categories")
@@ -65,6 +69,8 @@ export async function addGroupStep(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Informe o nome do grupo.");
+  const { count: groupCount } = await supabase.from("groups").select("id", { count: "exact", head: true }).eq("tenant_id", ctx.tenantId);
+  await assertCountLimit(supabase, ctx.tenantId, "groups", "grupos", groupCount ?? 0);
   await supabase.from("groups").insert({ tenant_id: ctx.tenantId, name });
   await advanceStep(ctx.tenantId, 5);
   revalidatePath("/onboarding/wizard");
@@ -75,6 +81,13 @@ export async function inviteUserStep(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const email = String(formData.get("email") ?? "").trim();
   if (!email) throw new Error("Informe um e-mail.");
+
+  const { count: activeUsers } = await supabase
+    .from("tenant_memberships")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", ctx.tenantId)
+    .eq("status", "active");
+  await assertCountLimit(supabase, ctx.tenantId, "users", "usuários", activeUsers ?? 0);
 
   const { error } = await supabase.rpc("add_tenant_member", { p_tenant_id: ctx.tenantId, p_email: email });
   if (error) throw new Error(error.message);

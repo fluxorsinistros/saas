@@ -22,7 +22,9 @@ import {
   resolvePendingItem,
   resumeSla,
 } from "../actions";
-import { requestDocument, reviewDocument, uploadDocumentVersion } from "../documents-actions";
+import { requestDocument, reviewDocument } from "../documents-actions";
+import { DocumentUploadForm } from "@/components/documents/DocumentUploadForm";
+import { getLimits, isAllowed, limitOf } from "@/lib/limits";
 import { createFinancialEntry, markFinancialEntry, setDeclaredValue } from "../financial-actions";
 
 export const metadata: Metadata = { title: "Sinistro" };
@@ -112,6 +114,12 @@ export default async function ClaimPage({
   const { ciclo } = await searchParams;
   const ctx = await getTenantContext();
   const supabase = await createClient();
+  const limits = await getLimits(supabase, ctx.tenantId);
+  const fileMaxMb = limitOf(limits, "file_max_mb");
+  const uploadHint =
+    fileMaxMb === null
+      ? "Fotos são compactadas antes do envio."
+      : `Máx. ${fileMaxMb} MB por arquivo${isAllowed(limits, "allow_file_overage") ? " (acima disso, com cobrança extra)" : ""}. Fotos são compactadas antes do envio.`;
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
   const { data: claim } = await supabase
@@ -806,18 +814,7 @@ export default async function ClaimPage({
                   )}
 
                   <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-                    <form action={uploadDocumentVersion} className="flex items-center gap-2">
-                      <input type="hidden" name="claim_id" value={claim.id} />
-                      <input type="hidden" name="claim_cycle_id" value={cycle.id} />
-                      <input type="hidden" name="document_id" value={doc.id} />
-                      <label className="sr-only" htmlFor={`file-${doc.id}`}>
-                        Enviar nova versão de {docTypeName.get(doc.document_type_id)}
-                      </label>
-                      <input id={`file-${doc.id}`} name="file" type="file" required className="text-[12px]" />
-                      <button className="inline-flex items-center gap-1 rounded-md bg-brand px-2.5 py-1 text-[12px] font-medium text-white hover:bg-brand-600">
-                        <Upload className="size-3" /> Enviar
-                      </button>
-                    </form>
+                    <DocumentUploadForm variant="version" claimId={claim.id} claimCycleId={cycle.id} documentId={doc.id} hint={uploadHint} />
 
                     {canReview && (
                       <>
@@ -865,16 +862,7 @@ export default async function ClaimPage({
               </button>
             </form>
 
-            <form action={uploadDocumentVersion} className="rounded-xl border border-dashed border-slate-300 bg-white p-3">
-              <p className="mb-2 text-[12px] font-medium text-slate-600">Enviar documento avulso</p>
-              <input type="hidden" name="claim_id" value={claim.id} />
-              <input type="hidden" name="claim_cycle_id" value={cycle.id} />
-              <input name="type_name" required placeholder="Ex.: Nota fiscal" className={`${input} mb-1.5`} />
-              <input name="file" type="file" required className="mb-2 w-full text-[12px]" />
-              <button className="w-full rounded-lg bg-brand py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">
-                Enviar
-              </button>
-            </form>
+            <DocumentUploadForm variant="standalone" claimId={claim.id} claimCycleId={cycle.id} hint={uploadHint} />
           </div>
         </section>
 

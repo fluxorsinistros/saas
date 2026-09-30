@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { BrandMark } from "@/components/BrandMark";
+import { PlatformBrandMark } from "@/components/PlatformBrandMark";
 import {
   addGroupStep,
   createClaimTypeStep,
@@ -66,7 +66,7 @@ export default async function OnboardingWizardPage() {
   return (
     <main className="flex min-h-full items-center justify-center px-6 py-12">
       <div className="w-full max-w-xl">
-        <BrandMark tone="light" />
+        <PlatformBrandMark tone="light" />
         <h1 className="mt-6 text-[22px] font-semibold tracking-tight text-slate-900">Configurando {tenant.name}</h1>
         <p className="mt-1 text-[14px] text-slate-500">Poucos passos — cada um já fica salvo, dá pra sair e voltar depois.</p>
 

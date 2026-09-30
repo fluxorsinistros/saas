@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { BrandMark } from "@/components/BrandMark";
+import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
 import { NavLinks } from "./NavLinks";
 import { switchTenant } from "./tenant-actions";
@@ -13,6 +13,7 @@ type Props = {
   tenants: { id: string; name: string }[];
   email: string;
   isPlatformAdmin: boolean;
+  brand: Brand;
 };
 
 // Dentro do editor de fluxo (a tela principal, Documento 5 §2), o menu recolhe para dar
@@ -22,7 +23,7 @@ function useCollapsed() {
   return /^\/fluxos\/[^/]+/.test(pathname);
 }
 
-export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin }: Props) {
+export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin, brand }: Props) {
   const collapsed = useCollapsed();
 
   return (
@@ -32,7 +33,7 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
       }`}
     >
       <div className={`pb-4 pt-5 ${collapsed ? "px-2" : "px-4"}`}>
-        <BrandMark tone="dark" compact={collapsed} />
+        <BrandMark tone="dark" compact={collapsed} brand={brand} />
       </div>
 
       {!collapsed && (

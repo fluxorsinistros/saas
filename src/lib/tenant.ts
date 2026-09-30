@@ -3,6 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isPlatformAdmin } from "@/lib/platform-admin";
 
 export const TENANT_COOKIE = "tenant_id";
 
@@ -28,11 +29,18 @@ export const getTenantContext = cache(async (): Promise<TenantContext> => {
     .eq("user_id", user.id)
     .eq("status", "active");
 
-  const tenants = (memberships ?? [])
+  let tenants = (memberships ?? [])
     .map((m) => m.tenants)
     .filter((t): t is { id: string; name: string } => !!t);
 
-  if (tenants.length === 0) redirect("/onboarding");
+  if (tenants.length === 0) {
+    // RLS esconde contas suspensas: antes de mandar para o onboarding, ver se o problema é suspensão.
+    const { data: blocked } = await supabase.rpc("my_blocked_tenants");
+    if (!blocked?.length) redirect("/onboarding");
+    // Administrador de plataforma continua entrando (precisa do /admin para reativar); os dados da conta seguem bloqueados.
+    if (!(await isPlatformAdmin())) redirect("/conta-suspensa");
+    tenants = blocked.map((b) => ({ id: b.id, name: b.name }));
+  }
 
   const preferred = (await cookies()).get(TENANT_COOKIE)?.value;
   const current = tenants.find((t) => t.id === preferred) ?? tenants[0];

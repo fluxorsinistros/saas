@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { getPlatformBrand } from "@/lib/branding";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,13 +13,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "Gerenciador de Sinistros",
-    template: "%s · Gerenciador de Sinistros",
-  },
-  description: "Governança, execução e rastreabilidade do ciclo de sinistros.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getPlatformBrand();
+  return {
+    title: { default: brand.name, template: `%s · ${brand.name}` },
+    description: "Governança, execução e rastreabilidade do ciclo de sinistros.",
+  };
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

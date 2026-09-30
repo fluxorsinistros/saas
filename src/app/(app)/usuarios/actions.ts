@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { requirePermission } from "@/lib/permissions";
+import { assertCountLimit } from "@/lib/limits";
 
 export async function addMember(formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
@@ -11,6 +12,13 @@ export async function addMember(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const email = String(formData.get("email") ?? "").trim();
   if (!email) throw new Error("Informe um e-mail.");
+
+  const { count: activeUsers } = await supabase
+    .from("tenant_memberships")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", ctx.tenantId)
+    .eq("status", "active");
+  await assertCountLimit(supabase, ctx.tenantId, "users", "usuários", activeUsers ?? 0);
 
   const { error } = await supabase.rpc("add_tenant_member", { p_tenant_id: ctx.tenantId, p_email: email });
   if (error) throw new Error(error.message);
@@ -23,6 +31,14 @@ export async function toggleMemberStatus(membershipId: string, currentStatus: st
   await requirePermission(ctx, "user.manage");
   const supabase = await createClient();
   const next = currentStatus === "active" ? "inactive" : "active";
+  if (next === "active") {
+    const { count: activeUsers } = await supabase
+      .from("tenant_memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", ctx.tenantId)
+      .eq("status", "active");
+    await assertCountLimit(supabase, ctx.tenantId, "users", "usuários", activeUsers ?? 0);
+  }
   const { error } = await supabase
     .from("tenant_memberships")
     .update({ status: next, left_at: next === "inactive" ? new Date().toISOString() : null })
@@ -77,6 +93,13 @@ export async function createOrganization(formData: FormData): Promise<void> {
   const roleKind = String(formData.get("role_kind") ?? "outro");
   if (!name) throw new Error("Nome da organização é obrigatório.");
   const kind = (ROLE_KINDS as readonly string[]).includes(roleKind) ? roleKind : "outro";
+
+  const { count: partners } = await supabase
+    .from("tenant_organizations")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", ctx.tenantId)
+    .eq("is_owner", false);
+  await assertCountLimit(supabase, ctx.tenantId, "organizations", "organizações participantes", partners ?? 0);
 
   const { error } = await supabase.rpc("create_partner_organization", { p_tenant_id: ctx.tenantId, p_name: name, p_role_kind: kind });
   if (error) throw new Error(error.message);

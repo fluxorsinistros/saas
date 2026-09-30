@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { assertCountLimit } from "@/lib/limits";
 import { getTenantContext } from "@/lib/tenant";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import { validateGraph, type Issue } from "@/lib/workflow/validator";
@@ -104,6 +105,8 @@ export async function createWorkflow(formData: FormData) {
   if (!name) return;
 
   const supabase = await createClient();
+  const { count: workflowCount } = await supabase.from("workflows").select("id", { count: "exact", head: true }).eq("tenant_id", ctx.tenantId);
+  await assertCountLimit(supabase, ctx.tenantId, "workflows", "workflows", workflowCount ?? 0);
   const { data: wf, error } = await supabase
     .from("workflows")
     .insert({ tenant_id: ctx.tenantId, name, description })

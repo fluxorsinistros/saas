@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { assertCountLimit } from "@/lib/limits";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -47,6 +48,9 @@ async function ensureClaimType(supabase: Supa, tenantId: string, workflowId: str
     .eq("default_workflow_id", workflowId)
     .maybeSingle();
   if (existing) return existing.id;
+
+  const { count: typeCount } = await supabase.from("claim_types").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId);
+  await assertCountLimit(supabase, tenantId, "claim_types", "tipos de sinistro", typeCount ?? 0);
 
   let categoryId: string;
   const { data: category } = await supabase

@@ -1788,6 +1788,33 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_settings: {
+        Row: {
+          id: boolean
+          logo_path: string | null
+          product_name: string
+          tagline: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: boolean
+          logo_path?: string | null
+          product_name?: string
+          tagline?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: boolean
+          logo_path?: string | null
+          product_name?: string
+          tagline?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       platform_admins: {
         Row: {
           granted_at: string
@@ -2238,6 +2265,8 @@ export type Database = {
           status: string
           tenant_id: string
           updated_at: string
+          white_label_enabled: boolean
+          white_label_surcharge_pct: number
         }
         Insert: {
           billing_organization_id?: string | null
@@ -2250,6 +2279,8 @@ export type Database = {
           status?: string
           tenant_id: string
           updated_at?: string
+          white_label_enabled?: boolean
+          white_label_surcharge_pct?: number
         }
         Update: {
           billing_organization_id?: string | null
@@ -2262,6 +2293,8 @@ export type Database = {
           status?: string
           tenant_id?: string
           updated_at?: string
+          white_label_enabled?: boolean
+          white_label_surcharge_pct?: number
         }
         Relationships: [
           {
@@ -2426,6 +2459,8 @@ export type Database = {
           settings: Json
           slug: string
           status: string
+          suspended_at: string | null
+          suspension_reason: string | null
           updated_at: string
         }
         Insert: {
@@ -2438,6 +2473,8 @@ export type Database = {
           settings?: Json
           slug: string
           status?: string
+          suspended_at?: string | null
+          suspension_reason?: string | null
           updated_at?: string
         }
         Update: {
@@ -2450,6 +2487,8 @@ export type Database = {
           settings?: Json
           slug?: string
           status?: string
+          suspended_at?: string | null
+          suspension_reason?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -3066,6 +3105,10 @@ export type Database = {
         Returns: string
       }
       create_tenant: { Args: { p_name: string }; Returns: string }
+      my_blocked_tenants: {
+        Args: Record<PropertyKey, never>
+        Returns: { id: string; name: string; status: string; suspension_reason: string | null }[]
+      }
       publish_workflow_version: {
         Args: {
           p_release_note?: string
