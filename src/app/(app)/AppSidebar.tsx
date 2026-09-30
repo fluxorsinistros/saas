@@ -14,6 +14,8 @@ type Props = {
   email: string;
   isPlatformAdmin: boolean;
   brand: Brand;
+  /** Administrador geral da plataforma: sem empresa, só a área de Administração. */
+  platformMode?: boolean;
 };
 
 // Dentro do editor de fluxo (a tela principal, Documento 5 §2), o menu recolhe para dar
@@ -23,7 +25,7 @@ function useCollapsed() {
   return /^\/fluxos\/[^/]+/.test(pathname);
 }
 
-export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin, brand }: Props) {
+export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin, brand, platformMode = false }: Props) {
   const collapsed = useCollapsed();
 
   return (
@@ -38,7 +40,12 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
 
       {!collapsed && (
         <div className="px-3">
-          {tenants.length > 1 ? (
+          {platformMode ? (
+            <div className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-2">
+              <div className="text-[11px] text-slate-500">Acesso</div>
+              <div className="truncate text-[13px] font-medium text-white">Administrador da plataforma</div>
+            </div>
+          ) : tenants.length > 1 ? (
             <form action={switchTenant}>
               <label htmlFor="tenant" className="sr-only">
                 Empresa
@@ -67,7 +74,7 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
       )}
 
       <nav className={`mt-5 flex-1 ${collapsed ? "px-2" : "px-3"}`} aria-label="Principal">
-        <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} />
+        <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} platformOnly={platformMode} />
       </nav>
 
       <div className={`border-t border-navy-700 py-3 ${collapsed ? "px-2" : "px-3"}`}>

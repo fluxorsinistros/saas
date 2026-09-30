@@ -18,9 +18,17 @@ const LINKS = [
 
 const ADMIN_LINK = { href: "/admin", label: "Administração", icon: ShieldCheck };
 
-export function NavLinks({ collapsed = false, isPlatformAdmin = false }: { collapsed?: boolean; isPlatformAdmin?: boolean }) {
+export function NavLinks({
+  collapsed = false,
+  isPlatformAdmin = false,
+  platformOnly = false,
+}: {
+  collapsed?: boolean;
+  isPlatformAdmin?: boolean;
+  platformOnly?: boolean;
+}) {
   const pathname = usePathname();
-  const links = isPlatformAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
+  const links = platformOnly ? [ADMIN_LINK] : isPlatformAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
   return (
     <ul className="space-y-0.5">
       {links.map(({ href, label, icon: Icon }) => {

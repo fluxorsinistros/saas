@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isPlatformAdmin } from "@/lib/platform-admin";
 import { PlatformBrandMark } from "@/components/PlatformBrandMark";
 import { OnboardingForm } from "./OnboardingForm";
 
@@ -12,6 +13,7 @@ export default async function OnboardingPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  if (await isPlatformAdmin()) redirect("/admin");
 
   const { data: memberships } = await supabase
     .from("tenant_memberships")
