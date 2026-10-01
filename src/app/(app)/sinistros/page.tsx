@@ -27,15 +27,47 @@ const CYCLE_STATUS_STYLE: Record<string, string> = {
   in_progress: "bg-sky-50 text-sky-700 ring-sky-200",
 };
 
-export default async function SinistrosPage() {
+export default async function SinistrosPage({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
   const ctx = await getTenantContext();
   const supabase = await createClient();
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
+  // Quem é Administrador vê e escolhe qualquer grupo (inclusive "Todos"); Operador só enxerga os
+  // próprios grupos — grupo é conceito de Operador (decisão do usuário), igual à visibilidade de
+  // menu em src/lib/screens.ts.
+  const { data: membership } = await supabase
+    .from("tenant_memberships")
+    .select("id, membership_roles(roles(name))")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("user_id", ctx.userId)
+    .eq("status", "active")
+    .maybeSingle();
+  const isAdmin = (membership?.membership_roles ?? []).some(
+    (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
+  );
+  const { data: myGroupRows } = membership
+    ? await supabase.from("group_members").select("groups(id, name)").eq("membership_id", membership.id)
+    : { data: [] as { groups: { id: string; name: string } | null }[] };
+  const myGroups = (myGroupRows ?? []).map((g) => g.groups).filter((g): g is { id: string; name: string } => !!g);
+
+  const { data: allGroups } = isAdmin
+    ? await supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name")
+    : { data: [] as { id: string; name: string }[] };
+  const groupOptions = isAdmin ? allGroups ?? [] : myGroups;
+
+  const sp = await searchParams;
+  const requestedGroup = sp.grupo ?? "";
+  // Operador sem grupo escolhido vê só o(s) próprio(s); "todos" só existe pra Administrador.
+  const groupFilter = isAdmin
+    ? requestedGroup === "todos"
+      ? null
+      : (groupOptions.find((g) => g.id === requestedGroup)?.id ?? null)
+    : (groupOptions.find((g) => g.id === requestedGroup)?.id ?? groupOptions[0]?.id ?? null);
+
   const [{ data: claims }, { data: publishedWorkflows }] = await Promise.all([
     supabase
       .from("claims")
-      .select("id, claim_number, status, created_at, claim_cycles(status, cycle_number)")
+      .select("id, claim_number, status, created_at, claim_cycles(id, status, cycle_number)")
       .eq("tenant_id", ctx.tenantId)
       .order("created_at", { ascending: false }),
     supabase
@@ -44,6 +76,34 @@ export default async function SinistrosPage() {
       .eq("tenant_id", ctx.tenantId)
       .eq("status", "active"),
   ]);
+
+  // Grupo "responsável agora" = grupo da(s) atividade(s) em aberto do ciclo atual de cada sinistro
+  // (pode ter mais de um em paralelo) — é isso que responde "o que está na fila do meu grupo".
+  const currentCycleByClaim = new Map((claims ?? []).map((c) => [c.id, [...c.claim_cycles].sort((a, b) => b.cycle_number - a.cycle_number)[0]]));
+  const cycleIds = [...currentCycleByClaim.values()].filter(Boolean).map((c) => c!.id);
+  const { data: openStages } = cycleIds.length
+    ? await supabase.from("stage_instances").select("id, claim_cycle_id").in("claim_cycle_id", cycleIds).eq("status", "in_progress")
+    : { data: [] as { id: string; claim_cycle_id: string }[] };
+  const stageIds = (openStages ?? []).map((s) => s.id);
+  const { data: openActivities } = stageIds.length
+    ? await supabase.from("activity_instances").select("stage_instance_id, group_id").in("stage_instance_id", stageIds).in("status", ["not_started", "in_progress"])
+    : { data: [] as { stage_instance_id: string; group_id: string | null }[] };
+  const cycleOfStage = new Map((openStages ?? []).map((s) => [s.id, s.claim_cycle_id]));
+  const groupsByCycle = new Map<string, Set<string>>();
+  for (const a of openActivities ?? []) {
+    if (!a.group_id) continue;
+    const cycleId = cycleOfStage.get(a.stage_instance_id);
+    if (!cycleId) continue;
+    if (!groupsByCycle.has(cycleId)) groupsByCycle.set(cycleId, new Set());
+    groupsByCycle.get(cycleId)!.add(a.group_id);
+  }
+  const groupNameById = new Map(groupOptions.map((g) => [g.id, g.name]));
+
+  const visibleClaims = (claims ?? []).filter((c) => {
+    if (!groupFilter) return true;
+    const cycle = currentCycleByClaim.get(c.id);
+    return !!cycle && (groupsByCycle.get(cycle.id)?.has(groupFilter) ?? false);
+  });
 
   const options = (publishedWorkflows ?? []).filter((w) => w.workflow_versions.some((v) => v.status === "published"));
 
@@ -112,16 +172,45 @@ export default async function SinistrosPage() {
           </form>
         )}
 
-        {!claims?.length ? (
+        {groupOptions.length > 0 && (
+          <form method="get" className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="min-w-[220px]">
+              <label htmlFor="grupo" className="mb-1 block text-[12px] font-medium text-slate-600">
+                Grupo responsável agora
+              </label>
+              <select
+                id="grupo"
+                name="grupo"
+                defaultValue={isAdmin ? (groupFilter ?? "todos") : groupFilter ?? ""}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+              >
+                {isAdmin && <option value="todos">Todos</option>}
+                {groupOptions.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50">
+              Filtrar
+            </button>
+          </form>
+        )}
+
+        {!visibleClaims.length ? (
           <div className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <FileWarning className="mx-auto size-8 text-slate-300" />
-            <p className="mt-3 text-[15px] font-medium text-slate-800">Nenhum sinistro ainda</p>
+            <p className="mt-3 text-[15px] font-medium text-slate-800">
+              {claims?.length ? "Nenhum sinistro parado no grupo selecionado agora." : "Nenhum sinistro ainda"}
+            </p>
           </div>
         ) : (
           <ul className="mt-6 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            {claims.map((c) => {
-              const cycle = [...c.claim_cycles].sort((a, b) => b.cycle_number - a.cycle_number)[0];
+            {visibleClaims.map((c) => {
+              const cycle = currentCycleByClaim.get(c.id);
               const status = cycle?.status ?? c.status;
+              const activeGroups = cycle ? [...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id)).filter(Boolean) : [];
               return (
                 <li key={c.id}>
                   <Link href={`/sinistros/${c.id}`} className="group flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50">
@@ -130,6 +219,9 @@ export default async function SinistrosPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[14px] font-medium text-slate-900">{c.claim_number}</div>
+                      {activeGroups.length > 0 && (
+                        <div className="truncate text-[12px] text-slate-500">Aguardando: {activeGroups.join(", ")}</div>
+                      )}
                     </div>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
