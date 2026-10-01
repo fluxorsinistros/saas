@@ -34,8 +34,22 @@ export type SavePayload = {
 export type ActionResult = { ok: true } | { ok: false; error: string; issues?: Issue[] };
 
 export type FieldResult =
-  | { ok: true; field: { id: string; key: string; label: string; field_type: string; options: string[] | null } }
+  | {
+      ok: true;
+      field: {
+        id: string;
+        key: string;
+        label: string;
+        field_type: string;
+        options: string[] | null;
+        required: boolean;
+        is_unique: boolean;
+        default_value: string | null;
+      };
+    }
   | { ok: false; error: string };
+
+const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value";
 
 // Campo personalizado "estilo SHARP" (Documento 1): o cliente cria quantos quiser, sem migração
 // nova — isso só grava uma linha de catálogo. A chave vira o identificador estável em
@@ -70,11 +84,28 @@ export async function createWorkflowField(workflowId: string, formData: FormData
     return { ok: false, error: "Lista de opções precisa de pelo menos um item (separado por vírgula)." };
   }
 
+  const required = formData.get("required") === "on";
+  const isUnique = formData.get("is_unique") === "on";
+  const defaultValue = String(formData.get("default_value") ?? "").trim() || null;
+  if (defaultValue && fieldType === "select" && !options?.includes(defaultValue)) {
+    return { ok: false, error: "O valor padrão precisa ser uma das opções da lista." };
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("workflow_fields")
-    .insert({ tenant_id: ctx.tenantId, workflow_id: workflowId, key, label, field_type: fieldType, options })
-    .select("id, key, label, field_type, options")
+    .insert({
+      tenant_id: ctx.tenantId,
+      workflow_id: workflowId,
+      key,
+      label,
+      field_type: fieldType,
+      options,
+      required,
+      is_unique: isUnique,
+      default_value: defaultValue,
+    })
+    .select(FIELD_SELECT)
     .single();
   if (error || !data) {
     return { ok: false, error: error?.code === "23505" ? "Já existe um campo com esse nome neste fluxo." : (error?.message ?? "Falha ao criar campo.") };
@@ -83,8 +114,9 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   return { ok: true, field: { ...data, options: data.options as string[] | null } };
 }
 
-// Só rótulo e opções são editáveis — tipo e chave ficam travados depois de criado, porque
-// claims.custom_fields já pode ter valores gravados sob essa chave, no formato daquele tipo.
+// Rótulo, opções, obrigatoriedade, duplicidade e valor padrão são editáveis — tipo e chave ficam
+// travados depois de criado, porque claims.custom_fields já pode ter valores gravados sob essa
+// chave, no formato daquele tipo.
 export async function updateWorkflowField(fieldId: string, workflowId: string, formData: FormData): Promise<FieldResult> {
   const ctx = await getTenantContext();
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
@@ -107,16 +139,38 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
     return { ok: false, error: "Lista de opções precisa de pelo menos um item (separado por vírgula)." };
   }
 
+  const required = formData.get("required") === "on";
+  const isUnique = formData.get("is_unique") === "on";
+  const defaultValue = String(formData.get("default_value") ?? "").trim() || null;
+  if (defaultValue && existing.field_type === "select" && !options?.includes(defaultValue)) {
+    return { ok: false, error: "O valor padrão precisa ser uma das opções da lista." };
+  }
+
   const { data, error } = await supabase
     .from("workflow_fields")
-    .update({ label, options })
+    .update({ label, options, required, is_unique: isUnique, default_value: defaultValue })
     .eq("id", fieldId)
     .eq("tenant_id", ctx.tenantId)
-    .select("id, key, label, field_type, options")
+    .select(FIELD_SELECT)
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? "Falha ao salvar campo." };
   revalidatePath(`/fluxos/${workflowId}`);
   return { ok: true, field: { ...data, options: data.options as string[] | null } };
+}
+
+// Exclusão é do catálogo, não retroativa: sinistros que já guardaram valor sob essa chave em
+// claims.custom_fields mantêm o dado (histórico nunca se apaga sozinho, Documento 2 §3), só some
+// da lista de campos disponíveis pra escolher em etapas novas. Etapas que já tinham essa chave em
+// config.field_keys simplesmente param de mostrá-la (filtro já existente ignora campo inexistente).
+export async function deleteWorkflowField(fieldId: string, workflowId: string): Promise<ActionResult> {
+  const ctx = await getTenantContext();
+  if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("workflow_fields").delete().eq("id", fieldId).eq("tenant_id", ctx.tenantId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/fluxos/${workflowId}`);
+  return { ok: true };
 }
 
 export type PublishDiff = {

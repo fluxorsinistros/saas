@@ -2788,31 +2788,40 @@ export type Database = {
       workflow_fields: {
         Row: {
           created_at: string
+          default_value: string | null
           field_type: string
           id: string
+          is_unique: boolean
           key: string
           label: string
           options: Json | null
+          required: boolean
           tenant_id: string
           workflow_id: string
         }
         Insert: {
           created_at?: string
+          default_value?: string | null
           field_type: string
           id?: string
+          is_unique?: boolean
           key: string
           label: string
           options?: Json | null
+          required?: boolean
           tenant_id: string
           workflow_id: string
         }
         Update: {
           created_at?: string
+          default_value?: string | null
           field_type?: string
           id?: string
+          is_unique?: boolean
           key?: string
           label?: string
           options?: Json | null
+          required?: boolean
           tenant_id?: string
           workflow_id?: string
         }

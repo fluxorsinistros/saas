@@ -636,24 +636,30 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
 
   // Campos personalizados desta etapa (Documento 1, "estilo SHARP") caem na mesma ficha do
   // sinistro — nunca sobrescrevem o que outra etapa já preencheu, só somam (merge raso). Anexo é
-  // tratado à parte: o valor vira o caminho do arquivo no Storage, não o texto bruto.
-  const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
-  if (fieldEntries.length) {
+  // tratado à parte: o valor vira o caminho do arquivo no Storage, não o texto bruto. Obrigatório
+  // e duplicidade são validados aqui, não só escondendo/marcando o input (Documento 1 §56).
+  const { data: nodeRow } = await supabase.from("workflow_nodes").select("config").eq("id", stage.node_id).single();
+  const stageFieldKeys = ((nodeRow?.config as { field_keys?: string[] } | null)?.field_keys ?? []) as string[];
+  if (stageFieldKeys.length) {
     const { data: versionRow } = await supabase
       .from("workflow_versions")
       .select("workflow_id")
       .eq("id", cycle.workflow_version_id)
       .single();
-    const keys = fieldEntries.map(([k]) => k.slice("field_".length));
     const { data: fieldDefs } = versionRow
-      ? await supabase.from("workflow_fields").select("key, field_type").eq("workflow_id", versionRow.workflow_id).in("key", keys)
-      : { data: [] as { key: string; field_type: string }[] };
-    const typeByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f.field_type]));
+      ? await supabase
+          .from("workflow_fields")
+          .select("key, label, field_type, required, is_unique")
+          .eq("workflow_id", versionRow.workflow_id)
+          .in("key", stageFieldKeys)
+      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean }[] };
+    const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
+    const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
     const patch: Record<string, string> = {};
     for (const [k, v] of fieldEntries) {
       const key = k.slice("field_".length);
-      if (typeByKey.get(key) === "attachment") {
+      if (defByKey.get(key)?.field_type === "attachment") {
         if (!(v instanceof File) || v.size === 0) continue;
         const path = `${ctx.tenantId}/custom-fields/${cycle.claim_id}/${key}-${Date.now()}-${v.name}`;
         const { error: upErr } = await supabase.storage.from("documents").upload(path, v, { contentType: v.type });
@@ -664,10 +670,28 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
       if (value !== "") patch[key] = value;
     }
 
+    const { data: claimRow } = await supabase.from("claims").select("custom_fields").eq("id", cycle.claim_id).single();
+    const current = (claimRow?.custom_fields ?? {}) as Record<string, string>;
+    const merged = { ...current, ...patch };
+
+    for (const def of fieldDefs ?? []) {
+      if (def.required && !merged[def.key]) throw new Error(`O campo "${def.label}" é obrigatório.`);
+    }
+    for (const def of fieldDefs ?? []) {
+      if (!def.is_unique || !patch[def.key]) continue;
+      const { data: dupe } = await supabase
+        .from("claims")
+        .select("id")
+        .eq("tenant_id", ctx.tenantId)
+        .neq("id", cycle.claim_id)
+        .eq(`custom_fields->>${def.key}`, patch[def.key])
+        .limit(1)
+        .maybeSingle();
+      if (dupe) throw new Error(`O valor informado em "${def.label}" já está em uso em outro sinistro.`);
+    }
+
     if (Object.keys(patch).length) {
-      const { data: claimRow } = await supabase.from("claims").select("custom_fields").eq("id", cycle.claim_id).single();
-      const current = (claimRow?.custom_fields ?? {}) as Record<string, string>;
-      await supabase.from("claims").update({ custom_fields: { ...current, ...patch } }).eq("id", cycle.claim_id);
+      await supabase.from("claims").update({ custom_fields: merged }).eq("id", cycle.claim_id);
     }
   }
 

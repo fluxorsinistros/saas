@@ -24,6 +24,9 @@ export type WorkflowField = {
   label: string;
   field_type: FieldType;
   options: string[] | null;
+  required: boolean;
+  is_unique: boolean;
+  default_value: string | null;
 };
 
 export const FIELD_TYPE_LABEL: Record<FieldType, string> = {

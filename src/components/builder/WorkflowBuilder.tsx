@@ -55,6 +55,7 @@ import { TEMPLATES, type WorkflowTemplate } from "@/lib/workflow/templates";
 import {
   createNewVersion,
   createWorkflowField,
+  deleteWorkflowField,
   getPublishDiff,
   publishVersion,
   saveDraft,
@@ -219,6 +220,23 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
       return res;
     },
     [workflow.id],
+  );
+  const handleDeleteField = useCallback(
+    async (fieldId: string, key: string) => {
+      const res = await deleteWorkflowField(fieldId, workflow.id);
+      if (res.ok) {
+        setFields((fs) => fs.filter((f) => f.id !== fieldId));
+        setNodes((ns) =>
+          ns.map((n) =>
+            n.data.config.field_keys?.includes(key)
+              ? { ...n, data: { ...n.data, config: { ...n.data.config, field_keys: n.data.config.field_keys!.filter((k) => k !== key) } } }
+              : n,
+          ),
+        );
+      }
+      return res;
+    },
+    [workflow.id, setNodes],
   );
   const [selection, setSelection] = useState<{ node?: string; edge?: string }>({});
   const [savedJson, setSavedJson] = useState(() =>
@@ -896,6 +914,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   fields={fields}
                   onCreateField={handleCreateField}
                   onUpdateField={handleUpdateField}
+                  onDeleteField={handleDeleteField}
                   readOnly={readOnly}
                   autoFocusName={pendingIds.has(selectedNode.id)}
                   outgoing={edges.filter((e) => e.source === selectedNode.id)}

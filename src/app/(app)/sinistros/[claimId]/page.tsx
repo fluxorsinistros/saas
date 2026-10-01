@@ -171,7 +171,7 @@ export default async function ClaimPage({
   // catálogo do fluxo; os valores caem todos em claims.custom_fields, nunca por etapa.
   const { data: workflowFields } = await supabase
     .from("workflow_fields")
-    .select("id, key, label, field_type, options")
+    .select("id, key, label, field_type, options, required, is_unique, default_value")
     .eq("workflow_id", version!.workflow_id);
   const fieldByKey = new Map((workflowFields ?? []).map((f) => [f.key, f]));
   const hasPersonField = (workflowFields ?? []).some((f) => f.field_type === "person");
@@ -591,12 +591,14 @@ export default async function ClaimPage({
                                 <div key={f.key}>
                                   <label htmlFor={`field-${f.key}`} className="mb-1 block text-[12px] font-medium text-slate-600">
                                     {f.label}
+                                    {f.required && <span className="text-rose-600"> *</span>}
                                   </label>
                                   {f.field_type === "select" ? (
                                     <select
                                       id={`field-${f.key}`}
                                       name={`field_${f.key}`}
-                                      defaultValue={customFields[f.key] ?? ""}
+                                      required={f.required}
+                                      defaultValue={customFields[f.key] ?? f.default_value ?? ""}
                                       className={`${input} text-[13px]`}
                                     >
                                       <option value="">Selecione…</option>
@@ -610,7 +612,8 @@ export default async function ClaimPage({
                                     <select
                                       id={`field-${f.key}`}
                                       name={`field_${f.key}`}
-                                      defaultValue={customFields[f.key] ?? ""}
+                                      required={f.required}
+                                      defaultValue={customFields[f.key] ?? f.default_value ?? ""}
                                       className={`${input} text-[13px]`}
                                     >
                                       <option value="">Selecione…</option>
@@ -621,7 +624,8 @@ export default async function ClaimPage({
                                     <select
                                       id={`field-${f.key}`}
                                       name={`field_${f.key}`}
-                                      defaultValue={customFields[f.key] ?? ""}
+                                      required={f.required}
+                                      defaultValue={customFields[f.key] ?? f.default_value ?? ""}
                                       className={`${input} text-[13px]`}
                                     >
                                       <option value="">Selecione…</option>
@@ -636,7 +640,8 @@ export default async function ClaimPage({
                                       id={`field-${f.key}`}
                                       name={`field_${f.key}`}
                                       rows={3}
-                                      defaultValue={customFields[f.key] ?? ""}
+                                      required={f.required}
+                                      defaultValue={customFields[f.key] ?? f.default_value ?? ""}
                                       className={`${input} text-[13px]`}
                                     />
                                   ) : f.field_type === "attachment" ? (
@@ -651,14 +656,21 @@ export default async function ClaimPage({
                                           Ver arquivo já enviado
                                         </a>
                                       )}
-                                      <input id={`field-${f.key}`} name={`field_${f.key}`} type="file" className={`${input} text-[13px]`} />
+                                      <input
+                                        id={`field-${f.key}`}
+                                        name={`field_${f.key}`}
+                                        type="file"
+                                        required={f.required && !customFields[f.key]}
+                                        className={`${input} text-[13px]`}
+                                      />
                                     </div>
                                   ) : (
                                     <input
                                       id={`field-${f.key}`}
                                       name={`field_${f.key}`}
                                       type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
-                                      defaultValue={customFields[f.key] ?? ""}
+                                      required={f.required}
+                                      defaultValue={customFields[f.key] ?? f.default_value ?? ""}
                                       className={`${input} text-[13px]`}
                                     />
                                   )}

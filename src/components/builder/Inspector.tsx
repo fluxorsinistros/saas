@@ -13,7 +13,7 @@ import {
   type NodeType,
   type WorkflowField,
 } from "@/lib/workflow/types";
-import type { FieldResult } from "@/app/(app)/fluxos/actions";
+import type { ActionResult, FieldResult } from "@/app/(app)/fluxos/actions";
 import type { FlowEdge, FlowEdgeData, FlowNode, FlowNodeData } from "./context";
 
 type Group = { id: string; name: string };
@@ -34,6 +34,7 @@ export function NodeInspector({
   fields = [],
   onCreateField,
   onUpdateField,
+  onDeleteField,
   readOnly,
   outgoing,
   autoFocusName,
@@ -49,6 +50,7 @@ export function NodeInspector({
   fields?: WorkflowField[];
   onCreateField?: (formData: FormData) => Promise<FieldResult>;
   onUpdateField?: (fieldId: string, formData: FormData) => Promise<FieldResult>;
+  onDeleteField?: (fieldId: string, key: string) => Promise<ActionResult>;
   readOnly: boolean;
   outgoing: FlowEdge[];
   autoFocusName?: boolean;
@@ -157,6 +159,7 @@ export function NodeInspector({
           readOnly={readOnly}
           onCreateField={onCreateField}
           onUpdateField={onUpdateField}
+          onDeleteField={onDeleteField}
           onToggle={(key, checked) => {
             const current = new Set(data.config.field_keys ?? []);
             if (checked) current.add(key);
@@ -419,6 +422,7 @@ function FieldsSection({
   onToggle,
   onCreateField,
   onUpdateField,
+  onDeleteField,
   onCreated,
 }: {
   fields: WorkflowField[];
@@ -427,6 +431,7 @@ function FieldsSection({
   onToggle: (key: string, checked: boolean) => void;
   onCreateField: (formData: FormData) => Promise<FieldResult>;
   onUpdateField?: (fieldId: string, formData: FormData) => Promise<FieldResult>;
+  onDeleteField?: (fieldId: string, key: string) => Promise<ActionResult>;
   onCreated: (field: { key: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -477,6 +482,8 @@ function FieldsSection({
                 />
                 <label htmlFor={`field-${f.id}`} className="flex-1 text-[13px] text-slate-800">
                   {f.label} <span className="text-slate-400">({FIELD_TYPE_LABEL[f.field_type as FieldType]})</span>
+                  {f.required && <span className="ml-1 text-[11px] font-medium text-rose-600">obrigatório</span>}
+                  {f.is_unique && <span className="ml-1 text-[11px] font-medium text-violet">único</span>}
                 </label>
                 {!readOnly && onUpdateField && (
                   <button
@@ -487,6 +494,21 @@ function FieldsSection({
                     title="Editar campo"
                   >
                     <Pencil className="size-3.5" />
+                  </button>
+                )}
+                {!readOnly && onDeleteField && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Excluir o campo "${f.label}"? Sinistros que já têm valor nele mantêm o dado, mas ele some do catálogo.`)) {
+                        void onDeleteField(f.id, f.key);
+                      }
+                    }}
+                    className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    aria-label={`Excluir campo ${f.label}`}
+                    title="Excluir campo"
+                  >
+                    <Trash2 className="size-3.5" />
                   </button>
                 )}
               </li>
@@ -529,6 +551,19 @@ function FieldsSection({
           </select>
           {fieldType === "select" && (
             <input name="options" required placeholder="Opções separadas por vírgula" className={`${input} bg-white`} />
+          )}
+          {fieldType !== "attachment" && (
+            <input name="default_value" placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
+          )}
+          <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+            <input type="checkbox" name="required" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
+            Obrigatório — bloqueia &quot;Concluir&quot; até preencher
+          </label>
+          {fieldType !== "boolean" && fieldType !== "attachment" && (
+            <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+              <input type="checkbox" name="is_unique" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
+              Não permitir duplicado entre sinistros
+            </label>
           )}
           {error && <p className="text-[11px] text-rose-600">{error}</p>}
           <div className="flex gap-2">
@@ -593,6 +628,29 @@ function EditFieldForm({
           placeholder="Opções separadas por vírgula"
           className={`${input} bg-white`}
         />
+      )}
+      {field.field_type !== "attachment" && (
+        <input name="default_value" defaultValue={field.default_value ?? ""} placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
+      )}
+      <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+        <input
+          type="checkbox"
+          name="required"
+          defaultChecked={field.required}
+          className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30"
+        />
+        Obrigatório — bloqueia &quot;Concluir&quot; até preencher
+      </label>
+      {field.field_type !== "boolean" && field.field_type !== "attachment" && (
+        <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+          <input
+            type="checkbox"
+            name="is_unique"
+            defaultChecked={field.is_unique}
+            className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30"
+          />
+          Não permitir duplicado entre sinistros
+        </label>
       )}
       {error && <p className="text-[11px] text-rose-600">{error}</p>}
       <div className="flex gap-2">

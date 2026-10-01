@@ -44,7 +44,11 @@ export default async function WorkflowPage({
       .order("order_index"),
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
     supabase.from("sla_calendars").select("id, name").eq("tenant_id", ctx.tenantId).order("name"),
-    supabase.from("workflow_fields").select("id, key, label, field_type, options").eq("workflow_id", workflowId).order("created_at"),
+    supabase
+      .from("workflow_fields")
+      .select("id, key, label, field_type, options, required, is_unique, default_value")
+      .eq("workflow_id", workflowId)
+      .order("created_at"),
   ]);
 
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
