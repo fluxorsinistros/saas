@@ -98,6 +98,20 @@ async function enterNode(
   const node = graph.nodes.find((n) => n.id === nodeId);
   if (!node) throw new Error("Elemento não encontrado no fluxo publicado.");
 
+  // Início não é uma etapa de verdade — é só o gate de campos da formalização (já coletados e
+  // validados antes de chegar aqui, ver formalizeClaim). Não vira stage_instance; passa direto pra
+  // etapa real conectada a ele.
+  if (node.type === "start") {
+    const edge = graph.edges.find((e) => e.source === nodeId);
+    if (!edge) {
+      await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
+      await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, { reason: `"${node.name}" (Início) sem saída.` });
+      return;
+    }
+    await enterNode(supabase, tenantId, cycleId, versionId, graph, edge.target, entryReason, branchInstanceId);
+    return;
+  }
+
   if (node.type === "parallel_split" && branchInstanceId) {
     // Paralelo dentro de outro Paralelo: o ramo externo nunca fecharia certo (só fecha ao chegar
     // numa Convergência), então bloqueia com motivo em vez de deixar o ciclo com um ramo pendurado.
@@ -597,12 +611,75 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   const { data: workflow } = await supabase.from("workflows").select("name").eq("id", workflowId).single();
   if (!workflow) throw new Error("Fluxo não encontrado.");
 
+  // Campos do elemento Início (Documento 1): validados ANTES de criar qualquer coisa, pra não
+  // deixar um sinistro pela metade se faltar um campo obrigatório. Início não é etapa de verdade
+  // (enterNode passa direto por ele) — os campos são só da formalização em si.
+  const { data: publishedVersion } = await supabase
+    .from("workflow_versions")
+    .select("id")
+    .eq("workflow_id", workflowId)
+    .eq("status", "published")
+    .maybeSingle();
+  const startFieldKeys: string[] = [];
+  if (publishedVersion) {
+    const graph = await loadGraph(supabase, publishedVersion.id);
+    const startNode = graph.nodes.find((n) => n.type === "start");
+    if (startNode) startFieldKeys.push(...(startNode.config.field_keys ?? []));
+  }
+
+  const { data: fieldDefs } = startFieldKeys.length
+    ? await supabase
+        .from("workflow_fields")
+        .select("key, label, field_type, required, is_unique")
+        .eq("workflow_id", workflowId)
+        .in("key", startFieldKeys)
+    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean }[] };
+  const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
+
+  const patch: Record<string, string> = {};
+  const attachments: { key: string; file: File }[] = [];
+  for (const [k, v] of formData.entries()) {
+    if (!k.startsWith("field_")) continue;
+    const key = k.slice("field_".length);
+    const def = defByKey.get(key);
+    if (!def) continue;
+    if (def.field_type === "attachment") {
+      if (v instanceof File && v.size > 0) attachments.push({ key, file: v });
+      continue;
+    }
+    const value = String(v);
+    if (value !== "") patch[key] = value;
+  }
+
+  for (const def of fieldDefs ?? []) {
+    const hasValue = def.field_type === "attachment" ? attachments.some((a) => a.key === def.key) : !!patch[def.key];
+    if (def.required && !hasValue) throw new Error(`O campo "${def.label}" é obrigatório.`);
+  }
+  for (const def of fieldDefs ?? []) {
+    if (!def.is_unique || !patch[def.key]) continue;
+    const { data: dupe } = await supabase
+      .from("claims")
+      .select("id")
+      .eq("tenant_id", ctx.tenantId)
+      .eq(`custom_fields->>${def.key}`, patch[def.key])
+      .limit(1)
+      .maybeSingle();
+    if (dupe) throw new Error(`O valor informado em "${def.label}" já está em uso em outro sinistro.`);
+  }
+
   const { claimId } = await createClaimAndCycle(supabase, ctx.tenantId, ctx.userId, {
     workflowName: workflow.name,
-    occurredAt: String(formData.get("occurred_at") ?? "").trim() || undefined,
-    location: String(formData.get("location") ?? "").trim() || undefined,
     externalReference: String(formData.get("external_reference") ?? "").trim() || undefined,
   });
+
+  for (const { key, file } of attachments) {
+    const path = `${ctx.tenantId}/custom-fields/${claimId}/${key}-${Date.now()}-${file.name}`;
+    const { error: upErr } = await supabase.storage.from("documents").upload(path, file, { contentType: file.type });
+    if (!upErr) patch[key] = path;
+  }
+  if (Object.keys(patch).length) {
+    await supabase.from("claims").update({ custom_fields: patch }).eq("id", claimId);
+  }
 
   revalidatePath("/sinistros");
   redirect(`/sinistros/${claimId}`);

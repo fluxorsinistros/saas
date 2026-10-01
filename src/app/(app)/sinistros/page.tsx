@@ -4,7 +4,6 @@ import { ChevronRight, FileWarning, Plus, SearchX } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
-import { formalizeClaim } from "./actions";
 
 export const metadata: Metadata = { title: "Sinistros" };
 
@@ -142,14 +141,14 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
             antes de abrir um sinistro.
           </div>
         ) : (
-          <form action={formalizeClaim} className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+          <form action="/sinistros/novo" className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
             <div className="min-w-[220px] flex-1">
               <label htmlFor="workflow_id" className="mb-1 block text-[12px] font-medium text-slate-600">
                 Fluxo publicado
               </label>
               <select
                 id="workflow_id"
-                name="workflow_id"
+                name="fluxo"
                 required
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
               >
@@ -160,28 +159,6 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="min-w-[160px]">
-              <label htmlFor="occurred_at" className="mb-1 block text-[12px] font-medium text-slate-600">
-                Data do evento
-              </label>
-              <input
-                id="occurred_at"
-                name="occurred_at"
-                type="date"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-              />
-            </div>
-            <div className="min-w-[200px] flex-1">
-              <label htmlFor="location" className="mb-1 block text-[12px] font-medium text-slate-600">
-                Local <span className="font-normal text-slate-400">(opcional)</span>
-              </label>
-              <input
-                id="location"
-                name="location"
-                placeholder="Ex.: São Paulo/SP"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-              />
             </div>
             <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
               <Plus className="size-4" /> Formalizar sinistro

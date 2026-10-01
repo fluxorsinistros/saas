@@ -1,7 +1,7 @@
 "use client";
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { CircleStop, Clock, GitFork, GitMerge, Hourglass, ListTodo, Repeat, Users, Workflow } from "lucide-react";
+import { CircleDot, CircleStop, Clock, GitFork, GitMerge, Hourglass, ListTodo, Repeat, Users, Workflow } from "lucide-react";
 import { formatSla, JOIN_RULE_LABEL, NODE_META } from "@/lib/workflow/types";
 import { useBuilder, type FlowNode } from "./context";
 
@@ -91,6 +91,28 @@ function CardNode({
           <Chips data={node.data} />
         </div>
       </div>
+      <Out />
+    </div>
+  );
+}
+
+export function StartNode(props: NodeProps<FlowNode>) {
+  const { nodeIssues } = useBuilder();
+  const issue = nodeIssues.get(props.id);
+  const fieldCount = props.data.config.field_keys?.length ?? 0;
+  return (
+    <div
+      className={`relative flex h-[44px] w-[180px] items-center justify-center gap-2 rounded-full bg-emerald-600 text-white shadow-md ${issueRing(
+        issue,
+        props.selected,
+      )}`}
+    >
+      <IssueDot issue={issue} />
+      <CircleDot className="size-4 text-emerald-200" />
+      <span className="truncate text-[12px] font-medium">{props.data.name || "Início"}</span>
+      {fieldCount > 0 && (
+        <span className="rounded-full bg-emerald-800/60 px-1.5 text-[10px] font-semibold">{fieldCount}</span>
+      )}
       <Out />
     </div>
   );
@@ -200,6 +222,7 @@ export function EndNode(props: NodeProps<FlowNode>) {
 }
 
 export const nodeTypes = {
+  start: StartNode,
   stage: StageNode,
   decision: DecisionNode,
   parallel_split: ParallelNode,

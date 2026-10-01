@@ -1,4 +1,4 @@
-export const NODE_TYPES = ["stage", "decision", "parallel_split", "join", "wait", "pending", "end"] as const;
+export const NODE_TYPES = ["start", "stage", "decision", "parallel_split", "join", "wait", "pending", "end"] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
 export type JoinRule = "all" | "all_required" | "any" | "min_count";
@@ -67,6 +67,11 @@ export type GraphEdge = {
 export type Graph = { nodes: GraphNode[]; edges: GraphEdge[] };
 
 export const NODE_META: Record<NodeType, { label: string; hint: string; help: string }> = {
+  start: {
+    label: "Início",
+    hint: "Campos da abertura do sinistro",
+    help: "Único por fluxo. Os campos marcados aqui aparecem na tela de formalizar um sinistro neste fluxo — antes de qualquer etapa começar.",
+  },
   stage: {
     label: "Etapa",
     hint: "Atividade executada por um grupo",

@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  CircleDot,
   CirclePlus,
   CircleStop,
   Clock3,
@@ -103,6 +104,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const PALETTE_ICON: Record<NodeType, React.ReactNode> = {
+  start: <CircleDot className="size-4 text-emerald-600" />,
   stage: <Workflow className="size-4 text-brand" />,
   decision: <Split className="size-4 text-violet" />,
   parallel_split: <GitFork className="size-4 text-cyan-700" />,
@@ -416,7 +418,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
         selected: true,
         ariaLabel: `${NODE_META[type].label}${connectFrom ? ` após ${nameOf.get(connectFrom.id)}` : ""}`,
         data: {
-          name: type === "end" ? "Encerramento" : type === "join" ? "Convergência" : "",
+          name: type === "end" ? "Encerramento" : type === "join" ? "Convergência" : type === "start" ? "Início" : "",
           groupId: null,
           config: type === "join" ? { join_rule: "all_required" } : {},
         },

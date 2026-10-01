@@ -49,6 +49,11 @@ export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new
     issues.push({ severity: "error", message: "Adicione ao menos um elemento de Fim." });
   }
 
+  const starts = relevant.filter((n) => n.type === "start");
+  if (starts.length > 1) {
+    issues.push({ severity: "error", message: "Só pode haver um elemento de Início.", nodeId: starts[1].id });
+  }
+
   for (const n of nodes) {
     const name = title(n.id);
     const outs = out(n.id);
@@ -82,7 +87,7 @@ export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new
     if (n.type === "parallel_split" && outs.length < 2) {
       issues.push({ severity: "error", message: `Paralelo "${name}" precisa de ao menos 2 ramos.`, nodeId: n.id });
     }
-    if (["stage", "wait", "pending"].includes(n.type) && out(n.id, forward).length > 1) {
+    if (["stage", "wait", "pending", "start"].includes(n.type) && out(n.id, forward).length > 1) {
       issues.push({
         severity: "error",
         message: `"${name}" tem mais de uma saída. Use uma Decisão ou um Paralelo para dividir o caminho.`,

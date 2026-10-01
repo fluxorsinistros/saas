@@ -25,7 +25,7 @@ const input =
 const GROUP_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
 const SLA_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
 const LOOP_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
-const FIELD_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
+const FIELD_TYPES: NodeType[] = ["start", "stage", "decision", "pending", "wait"];
 
 export function NodeInspector({
   node,
