@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { getPermissionCodes } from "@/lib/permissions";
+import { getPermissionCodes, type PermissionCode } from "@/lib/permissions";
 import { toggleGroup, updateGroup } from "../actions";
 
 export const metadata: Metadata = { title: "Editar grupo" };
@@ -13,6 +13,19 @@ const UUID = /^[0-9a-f-]{36}$/i;
 
 const input =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
+
+const PERMISSION_LABELS: Record<PermissionCode, string> = {
+  "claim.formalize": "Formalizar sinistro",
+  "claim.execute": "Avançar etapas do sinistro",
+  "claim.reopen": "Reabrir ciclo",
+  "claim.discard": "Descartar ciclo",
+  "document.validate": "Validar documentos",
+  "workflow.edit": "Editar fluxos",
+  "workflow.publish": "Publicar versão de fluxo",
+  "import.confirm": "Confirmar importação em massa",
+  "user.manage": "Gerenciar usuários e grupos",
+  "financial.manage": "Gerenciar financeiro do ciclo",
+};
 
 // Passo 3 do modelo (cadastrar → filtrar/listar → editar), igual a Usuários.
 export default async function EditGroupPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,6 +46,24 @@ export default async function EditGroupPage({ params }: { params: Promise<{ id: 
 
   const active = group.status === "active";
   const members = group.group_members?.[0]?.count ?? 0;
+
+  // Papel (Administrador/Operador) controla telas e ações — é escolhido por pessoa em /usuarios,
+  // não por grupo. Mostrar aqui é só pra deixar claro a diferença, sem misturar os dois conceitos.
+  const { data: roleRows } = await supabase
+    .from("roles")
+    .select("id, name, tenant_id, role_permissions(permissions(code))")
+    .or(`tenant_id.is.null,tenant_id.eq.${ctx.tenantId}`)
+    .in("name", ["Administrador", "Operador"]);
+  const roles = ["Administrador", "Operador"].flatMap((name) => {
+    const candidates = (roleRows ?? []).filter((r) => r.name === name);
+    const chosen = candidates.find((r) => r.tenant_id === ctx.tenantId) ?? candidates[0];
+    if (!chosen) return [];
+    const codes = (chosen.role_permissions ?? [])
+      .map((rp) => rp.permissions?.code)
+      .filter((c): c is PermissionCode => !!c)
+      .sort();
+    return [{ name, codes }];
+  });
 
   return (
     <div className="h-full overflow-y-auto">
@@ -65,6 +96,34 @@ export default async function EditGroupPage({ params }: { params: Promise<{ id: 
             Salvar alterações
           </button>
         </form>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Papéis e permissões</h2>
+          <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
+            Quais telas e ações cada pessoa vê é controlado pelo <strong>Papel</strong> dela, não pelo grupo — grupo só define em
+            quais etapas do fluxo ela pode atuar. O papel é escolhido por pessoa em{" "}
+            <Link href="/usuarios" className="text-brand hover:underline">
+              Usuários
+            </Link>
+            .
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {roles.map((r) => (
+              <div key={r.name} className="rounded-lg border border-slate-200 p-3">
+                <p className="mb-1.5 text-[13px] font-medium text-slate-900">{r.name}</p>
+                <ul className="space-y-0.5">
+                  {r.codes.map((c) => (
+                    <li key={c} className="text-[12px] text-slate-600">
+                      {PERMISSION_LABELS[c] ?? c}
+                    </li>
+                  ))}
+                  {r.codes.length === 0 && <li className="text-[12px] text-slate-400">Nenhuma permissão.</li>}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Situação</h2>
