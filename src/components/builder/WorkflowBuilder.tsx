@@ -58,6 +58,7 @@ import {
   getPublishDiff,
   publishVersion,
   saveDraft,
+  updateWorkflowField,
   type PublishDiff,
   type SavePayload,
 } from "@/app/(app)/fluxos/actions";
@@ -204,6 +205,17 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
     async (formData: FormData) => {
       const res = await createWorkflowField(workflow.id, formData);
       if (res.ok) setFields((fs) => [...fs, { ...res.field, field_type: res.field.field_type as WorkflowField["field_type"] }]);
+      return res;
+    },
+    [workflow.id],
+  );
+  const handleUpdateField = useCallback(
+    async (fieldId: string, formData: FormData) => {
+      const res = await updateWorkflowField(fieldId, workflow.id, formData);
+      if (res.ok) {
+        const updated = { ...res.field, field_type: res.field.field_type as WorkflowField["field_type"] };
+        setFields((fs) => fs.map((f) => (f.id === fieldId ? updated : f)));
+      }
       return res;
     },
     [workflow.id],
@@ -883,6 +895,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   calendars={calendars}
                   fields={fields}
                   onCreateField={handleCreateField}
+                  onUpdateField={handleUpdateField}
                   readOnly={readOnly}
                   autoFocusName={pendingIds.has(selectedNode.id)}
                   outgoing={edges.filter((e) => e.source === selectedNode.id)}

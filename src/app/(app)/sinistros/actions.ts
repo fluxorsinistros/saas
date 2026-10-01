@@ -635,15 +635,40 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
   }
 
   // Campos personalizados desta etapa (Documento 1, "estilo SHARP") caem na mesma ficha do
-  // sinistro — nunca sobrescrevem o que outra etapa já preencheu, só somam (merge raso).
+  // sinistro — nunca sobrescrevem o que outra etapa já preencheu, só somam (merge raso). Anexo é
+  // tratado à parte: o valor vira o caminho do arquivo no Storage, não o texto bruto.
   const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
   if (fieldEntries.length) {
-    const { data: claimRow } = await supabase.from("claims").select("custom_fields").eq("id", cycle.claim_id).single();
-    const current = (claimRow?.custom_fields ?? {}) as Record<string, string>;
-    const patch = Object.fromEntries(
-      fieldEntries.map(([k, v]) => [k.slice("field_".length), String(v)]).filter(([, v]) => v !== ""),
-    );
-    await supabase.from("claims").update({ custom_fields: { ...current, ...patch } }).eq("id", cycle.claim_id);
+    const { data: versionRow } = await supabase
+      .from("workflow_versions")
+      .select("workflow_id")
+      .eq("id", cycle.workflow_version_id)
+      .single();
+    const keys = fieldEntries.map(([k]) => k.slice("field_".length));
+    const { data: fieldDefs } = versionRow
+      ? await supabase.from("workflow_fields").select("key, field_type").eq("workflow_id", versionRow.workflow_id).in("key", keys)
+      : { data: [] as { key: string; field_type: string }[] };
+    const typeByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f.field_type]));
+
+    const patch: Record<string, string> = {};
+    for (const [k, v] of fieldEntries) {
+      const key = k.slice("field_".length);
+      if (typeByKey.get(key) === "attachment") {
+        if (!(v instanceof File) || v.size === 0) continue;
+        const path = `${ctx.tenantId}/custom-fields/${cycle.claim_id}/${key}-${Date.now()}-${v.name}`;
+        const { error: upErr } = await supabase.storage.from("documents").upload(path, v, { contentType: v.type });
+        if (!upErr) patch[key] = path;
+        continue;
+      }
+      const value = String(v);
+      if (value !== "") patch[key] = value;
+    }
+
+    if (Object.keys(patch).length) {
+      const { data: claimRow } = await supabase.from("claims").select("custom_fields").eq("id", cycle.claim_id).single();
+      const current = (claimRow?.custom_fields ?? {}) as Record<string, string>;
+      await supabase.from("claims").update({ custom_fields: { ...current, ...patch } }).eq("id", cycle.claim_id);
+    }
   }
 
   const now = new Date().toISOString();

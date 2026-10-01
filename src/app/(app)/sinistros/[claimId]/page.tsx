@@ -174,6 +174,34 @@ export default async function ClaimPage({
     .select("id, key, label, field_type, options")
     .eq("workflow_id", version!.workflow_id);
   const fieldByKey = new Map((workflowFields ?? []).map((f) => [f.key, f]));
+  const hasPersonField = (workflowFields ?? []).some((f) => f.field_type === "person");
+  const hasAttachmentField = (workflowFields ?? []).some((f) => f.field_type === "attachment");
+
+  // tenant_memberships e user_profiles não têm FK direta entre si (mesma situação de
+  // membership_roles/role_permissions) — busca em duas etapas.
+  let memberOptions: { id: string; name: string }[] = [];
+  if (hasPersonField) {
+    const { data: tenantMembers } = await supabase
+      .from("tenant_memberships")
+      .select("user_id")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("status", "active");
+    const memberIds = (tenantMembers ?? []).map((m) => m.user_id);
+    const { data: profiles } = memberIds.length
+      ? await supabase.from("user_profiles").select("id, full_name, email").in("id", memberIds)
+      : { data: [] as { id: string; full_name: string | null; email: string }[] };
+    memberOptions = (profiles ?? []).map((p) => ({ id: p.id, name: p.full_name || p.email || p.id }));
+  }
+
+  // Anexo (Documento 1): custom_fields guarda o caminho no Storage, não o arquivo — precisa de URL
+  // assinada pra exibir, igual ao GED.
+  const attachmentPaths = hasAttachmentField
+    ? Object.values((customFields ?? {}) as Record<string, string>).filter((v) => v.includes("/custom-fields/"))
+    : [];
+  const { data: signedAttachments } = attachmentPaths.length
+    ? await supabase.storage.from("documents").createSignedUrls(attachmentPaths, 300)
+    : { data: [] as { path: string | null; signedUrl: string }[] };
+  const attachmentUrlByPath = new Map((signedAttachments ?? []).filter((s) => s.path).map((s) => [s.path as string, s.signedUrl]));
 
   const graph = await loadGraph(supabase, cycle.workflow_version_id);
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -578,6 +606,53 @@ export default async function ClaimPage({
                                         </option>
                                       ))}
                                     </select>
+                                  ) : f.field_type === "boolean" ? (
+                                    <select
+                                      id={`field-${f.key}`}
+                                      name={`field_${f.key}`}
+                                      defaultValue={customFields[f.key] ?? ""}
+                                      className={`${input} text-[13px]`}
+                                    >
+                                      <option value="">Selecione…</option>
+                                      <option value="true">Sim</option>
+                                      <option value="false">Não</option>
+                                    </select>
+                                  ) : f.field_type === "person" ? (
+                                    <select
+                                      id={`field-${f.key}`}
+                                      name={`field_${f.key}`}
+                                      defaultValue={customFields[f.key] ?? ""}
+                                      className={`${input} text-[13px]`}
+                                    >
+                                      <option value="">Selecione…</option>
+                                      {memberOptions.map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                          {m.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : f.field_type === "textarea" ? (
+                                    <textarea
+                                      id={`field-${f.key}`}
+                                      name={`field_${f.key}`}
+                                      rows={3}
+                                      defaultValue={customFields[f.key] ?? ""}
+                                      className={`${input} text-[13px]`}
+                                    />
+                                  ) : f.field_type === "attachment" ? (
+                                    <div>
+                                      {customFields[f.key] && attachmentUrlByPath.get(customFields[f.key]) && (
+                                        <a
+                                          href={attachmentUrlByPath.get(customFields[f.key]) ?? undefined}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="mb-1 block text-[12px] text-brand hover:underline"
+                                        >
+                                          Ver arquivo já enviado
+                                        </a>
+                                      )}
+                                      <input id={`field-${f.key}`} name={`field_${f.key}`} type="file" className={`${input} text-[13px]`} />
+                                    </div>
                                   ) : (
                                     <input
                                       id={`field-${f.key}`}
@@ -611,12 +686,31 @@ export default async function ClaimPage({
                       <dl className="mt-2.5 grid gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-[12px] sm:grid-cols-2">
                         {stageFields
                           .filter((f) => customFields[f.key])
-                          .map((f) => (
-                            <div key={f.key} className="flex gap-1.5">
-                              <dt className="text-slate-500">{f.label}:</dt>
-                              <dd className="font-medium text-slate-800">{customFields[f.key]}</dd>
-                            </div>
-                          ))}
+                          .map((f) => {
+                            const raw = customFields[f.key];
+                            const display =
+                              f.field_type === "boolean"
+                                ? raw === "true"
+                                  ? "Sim"
+                                  : "Não"
+                                : f.field_type === "person"
+                                  ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
+                                  : raw;
+                            return (
+                              <div key={f.key} className="flex gap-1.5">
+                                <dt className="text-slate-500">{f.label}:</dt>
+                                <dd className="font-medium text-slate-800">
+                                  {f.field_type === "attachment" && attachmentUrlByPath.get(raw) ? (
+                                    <a href={attachmentUrlByPath.get(raw) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                                      Ver arquivo
+                                    </a>
+                                  ) : (
+                                    display
+                                  )}
+                                </dd>
+                              </div>
+                            );
+                          })}
                       </dl>
                     )}
                     </>

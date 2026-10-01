@@ -16,7 +16,7 @@ export type NodeConfig = {
   field_keys?: string[];
 };
 
-export type FieldType = "text" | "number" | "date" | "select";
+export type FieldType = "text" | "textarea" | "number" | "date" | "boolean" | "select" | "person" | "attachment";
 
 export type WorkflowField = {
   id: string;
@@ -25,6 +25,21 @@ export type WorkflowField = {
   field_type: FieldType;
   options: string[] | null;
 };
+
+export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
+  text: "Texto",
+  textarea: "Texto longo",
+  number: "Número",
+  date: "Data",
+  boolean: "Sim/Não",
+  select: "Lista de opções",
+  person: "Pessoa",
+  attachment: "Anexo (foto/vídeo/arquivo)",
+};
+
+// Tipos cujo valor em claims.custom_fields é o caminho de um arquivo no Storage (bucket
+// "documents"), não texto puro — precisam de upload e, pra exibir, de URL assinada.
+export const FILE_FIELD_TYPES: FieldType[] = ["attachment"];
 
 export type EdgeKind = "normal" | "return";
 

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import {
+  FIELD_TYPE_LABEL,
   JOIN_RULE_HELP,
   JOIN_RULE_LABEL,
   NODE_META,
@@ -32,6 +33,7 @@ export function NodeInspector({
   calendars = [],
   fields = [],
   onCreateField,
+  onUpdateField,
   readOnly,
   outgoing,
   autoFocusName,
@@ -46,6 +48,7 @@ export function NodeInspector({
   calendars?: { id: string; name: string }[];
   fields?: WorkflowField[];
   onCreateField?: (formData: FormData) => Promise<FieldResult>;
+  onUpdateField?: (fieldId: string, formData: FormData) => Promise<FieldResult>;
   readOnly: boolean;
   outgoing: FlowEdge[];
   autoFocusName?: boolean;
@@ -153,6 +156,7 @@ export function NodeInspector({
           fields={fields}
           readOnly={readOnly}
           onCreateField={onCreateField}
+          onUpdateField={onUpdateField}
           onToggle={(key, checked) => {
             const current = new Set(data.config.field_keys ?? []);
             if (checked) current.add(key);
@@ -405,8 +409,6 @@ function Toggle({
   );
 }
 
-const FIELD_TYPE_LABEL: Record<FieldType, string> = { text: "Texto", number: "Número", date: "Data", select: "Lista de opções" };
-
 // Campos personalizados "estilo SHARP" (Documento 1): o fluxo tem um catálogo de campos próprio,
 // criado conforme a necessidade, sem nunca precisar de migração — cada etapa só escolhe quais
 // desse catálogo ela pede pra preencher.
@@ -416,6 +418,7 @@ function FieldsSection({
   readOnly,
   onToggle,
   onCreateField,
+  onUpdateField,
   onCreated,
 }: {
   fields: WorkflowField[];
@@ -423,12 +426,14 @@ function FieldsSection({
   readOnly: boolean;
   onToggle: (key: string, checked: boolean) => void;
   onCreateField: (formData: FormData) => Promise<FieldResult>;
+  onUpdateField?: (fieldId: string, formData: FormData) => Promise<FieldResult>;
   onCreated: (field: { key: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [fieldType, setFieldType] = useState<FieldType>("text");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const selectedSet = new Set(selected);
 
   async function handleCreate(formData: FormData) {
@@ -455,21 +460,38 @@ function FieldsSection({
       )}
       {fields.length > 0 && (
         <ul className="mb-2 space-y-1.5">
-          {fields.map((f) => (
-            <li key={f.id} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id={`field-${f.id}`}
-                className="size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
-                checked={selectedSet.has(f.key)}
-                disabled={readOnly}
-                onChange={(e) => onToggle(f.key, e.target.checked)}
-              />
-              <label htmlFor={`field-${f.id}`} className="text-[13px] text-slate-800">
-                {f.label} <span className="text-slate-400">({FIELD_TYPE_LABEL[f.field_type as FieldType]})</span>
-              </label>
-            </li>
-          ))}
+          {fields.map((f) =>
+            editingId === f.id && onUpdateField ? (
+              <li key={f.id}>
+                <EditFieldForm field={f} onSave={(fd) => onUpdateField(f.id, fd)} onDone={() => setEditingId(null)} />
+              </li>
+            ) : (
+              <li key={f.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id={`field-${f.id}`}
+                  className="size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+                  checked={selectedSet.has(f.key)}
+                  disabled={readOnly}
+                  onChange={(e) => onToggle(f.key, e.target.checked)}
+                />
+                <label htmlFor={`field-${f.id}`} className="flex-1 text-[13px] text-slate-800">
+                  {f.label} <span className="text-slate-400">({FIELD_TYPE_LABEL[f.field_type as FieldType]})</span>
+                </label>
+                {!readOnly && onUpdateField && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(f.id)}
+                    className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-brand"
+                    aria-label={`Editar campo ${f.label}`}
+                    title="Editar campo"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
+              </li>
+            ),
+          )}
         </ul>
       )}
 
@@ -531,6 +553,61 @@ function FieldsSection({
         </form>
       )}
     </div>
+  );
+}
+
+// Só rótulo e opções (quando é lista) são editáveis — tipo e chave ficam travados porque
+// claims.custom_fields pode já ter valor gravado sob essa chave, no formato daquele tipo.
+function EditFieldForm({
+  field,
+  onSave,
+  onDone,
+}: {
+  field: WorkflowField;
+  onSave: (formData: FormData) => Promise<FieldResult>;
+  onDone: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave(formData: FormData) {
+    setSaving(true);
+    setError(null);
+    const res = await onSave(formData);
+    setSaving(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <form action={handleSave} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
+      <input name="label" required defaultValue={field.label} className={`${input} bg-white`} autoFocus />
+      {field.field_type === "select" && (
+        <input
+          name="options"
+          required
+          defaultValue={(field.options ?? []).join(", ")}
+          placeholder="Opções separadas por vírgula"
+          className={`${input} bg-white`}
+        />
+      )}
+      {error && <p className="text-[11px] text-rose-600">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-md bg-brand px-2.5 py-1 text-[12px] font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+        >
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+        <button type="button" onClick={onDone} className="rounded-md px-2.5 py-1 text-[12px] text-slate-600 hover:bg-slate-100">
+          Cancelar
+        </button>
+      </div>
+    </form>
   );
 }
 

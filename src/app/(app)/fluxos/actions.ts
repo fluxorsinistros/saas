@@ -47,7 +47,9 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   const label = String(formData.get("label") ?? "").trim();
   const fieldType = String(formData.get("field_type") ?? "text");
   if (!label) return { ok: false, error: "Nome do campo é obrigatório." };
-  if (!["text", "number", "date", "select"].includes(fieldType)) return { ok: false, error: "Tipo de campo inválido." };
+  if (!["text", "textarea", "number", "date", "boolean", "select", "person", "attachment"].includes(fieldType)) {
+    return { ok: false, error: "Tipo de campo inválido." };
+  }
 
   const key = label
     .toLowerCase()
@@ -77,6 +79,42 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   if (error || !data) {
     return { ok: false, error: error?.code === "23505" ? "Já existe um campo com esse nome neste fluxo." : (error?.message ?? "Falha ao criar campo.") };
   }
+  revalidatePath(`/fluxos/${workflowId}`);
+  return { ok: true, field: { ...data, options: data.options as string[] | null } };
+}
+
+// Só rótulo e opções são editáveis — tipo e chave ficam travados depois de criado, porque
+// claims.custom_fields já pode ter valores gravados sob essa chave, no formato daquele tipo.
+export async function updateWorkflowField(fieldId: string, workflowId: string, formData: FormData): Promise<FieldResult> {
+  const ctx = await getTenantContext();
+  if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
+
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { ok: false, error: "Nome do campo é obrigatório." };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("workflow_fields").select("field_type").eq("id", fieldId).single();
+  if (!existing) return { ok: false, error: "Campo não encontrado." };
+
+  const options =
+    existing.field_type === "select"
+      ? String(formData.get("options") ?? "")
+          .split(",")
+          .map((o) => o.trim())
+          .filter(Boolean)
+      : null;
+  if (existing.field_type === "select" && (!options || options.length === 0)) {
+    return { ok: false, error: "Lista de opções precisa de pelo menos um item (separado por vírgula)." };
+  }
+
+  const { data, error } = await supabase
+    .from("workflow_fields")
+    .update({ label, options })
+    .eq("id", fieldId)
+    .eq("tenant_id", ctx.tenantId)
+    .select("id, key, label, field_type, options")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Falha ao salvar campo." };
   revalidatePath(`/fluxos/${workflowId}`);
   return { ok: true, field: { ...data, options: data.options as string[] | null } };
 }
