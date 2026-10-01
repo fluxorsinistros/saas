@@ -122,6 +122,25 @@ export default async function ClaimPage({
       : `Máx. ${fileMaxMb} MB por arquivo${isAllowed(limits, "allow_file_overage") ? " (acima disso, com cobrança extra)" : ""}. Fotos são compactadas antes do envio.`;
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
+  // Etapa aponta pro grupo responsável, não pra pessoa (Documento 1 §5.3): ter claim.execute não
+  // basta, só quem é do grupo da etapa (ou Administrador, que nunca é travado por grupo) pode agir
+  // nela. completeActivity/chooseDecision já barram isso no servidor; aqui só escondemos o botão.
+  const { data: membership } = await supabase
+    .from("tenant_memberships")
+    .select("id, membership_roles(roles(name))")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("user_id", ctx.userId)
+    .eq("status", "active")
+    .maybeSingle();
+  const isAdmin = (membership?.membership_roles ?? []).some(
+    (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
+  );
+  const { data: myGroupRows } = membership
+    ? await supabase.from("group_members").select("group_id").eq("membership_id", membership.id)
+    : { data: [] as { group_id: string }[] };
+  const myGroupIds = new Set((myGroupRows ?? []).map((g) => g.group_id));
+  const canActOnGroup = (groupId: string | null) => isAdmin || !groupId || myGroupIds.has(groupId);
+
   const { data: claim } = await supabase
     .from("claims")
     .select("id, claim_number, status, occurred_at, created_at, declared_value, custom_fields")
@@ -583,7 +602,10 @@ export default async function ClaimPage({
                       <span className="text-[12px] text-slate-500">
                         Grupo: <span className="font-medium text-slate-700">{groupName.get(activity.group_id ?? "") ?? "—"}</span>
                       </span>
-                      {activity.status === "in_progress" && cycle.status !== "discarded" && perms.has("claim.execute") ? (
+                      {activity.status === "in_progress" &&
+                      cycle.status !== "discarded" &&
+                      perms.has("claim.execute") &&
+                      canActOnGroup(activity.group_id) ? (
                         <form action={completeActivity.bind(null, activity.id)} className="w-full space-y-2.5">
                           {stageFields.length > 0 && (
                             <div className="grid gap-2.5 sm:grid-cols-2">
@@ -808,7 +830,7 @@ export default async function ClaimPage({
                         </p>
                       ) : cycle.status === "discarded" ? (
                         <p className="mt-2 text-[12px] text-slate-400">Ciclo descartado</p>
-                      ) : !perms.has("claim.execute") ? (
+                      ) : !perms.has("claim.execute") || !canActOnGroup(node?.groupId ?? null) ? (
                         <p className="mt-2 text-[12px] text-slate-400">Sem permissão para decidir</p>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-2">

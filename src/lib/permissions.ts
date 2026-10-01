@@ -54,3 +54,36 @@ export async function requirePermission(ctx: TenantContext, code: PermissionCode
     throw new Error("Você não tem permissão para executar esta ação.");
   }
 }
+
+// Etapa aponta pro grupo responsável, não pra pessoa (Documento 1 §5.3) — ter a permissão
+// claim.execute não basta, Operador só pode agir nas etapas do(s) grupo(s) dele. Administrador
+// nunca é travado por grupo (mesma decisão já aplicada em telas, src/lib/screens.ts).
+export async function canActOnGroup(ctx: TenantContext, groupId: string | null): Promise<boolean> {
+  if (!groupId) return true;
+  const supabase = await createClient();
+  const { data: membership } = await supabase
+    .from("tenant_memberships")
+    .select("id, membership_roles(roles(name))")
+    .eq("user_id", ctx.userId)
+    .eq("tenant_id", ctx.tenantId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!membership) return false;
+  const isAdmin = (membership.membership_roles ?? []).some(
+    (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
+  );
+  if (isAdmin) return true;
+  const { data: gm } = await supabase
+    .from("group_members")
+    .select("group_id")
+    .eq("membership_id", membership.id)
+    .eq("group_id", groupId)
+    .maybeSingle();
+  return !!gm;
+}
+
+export async function requireGroupAccess(ctx: TenantContext, groupId: string | null): Promise<void> {
+  if (!(await canActOnGroup(ctx, groupId))) {
+    throw new Error("Você não pertence ao grupo responsável por esta etapa.");
+  }
+}

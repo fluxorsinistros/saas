@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { requirePermission } from "@/lib/permissions";
+import { requireGroupAccess, requirePermission } from "@/lib/permissions";
 import { addBusinessMinutes } from "@/lib/sla";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { resolveTransition, startNode } from "@/lib/workflow/engine";
@@ -611,11 +611,12 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
 
   const { data: activity, error: aErr } = await supabase
     .from("activity_instances")
-    .select("id, status, stage_instance_id")
+    .select("id, status, stage_instance_id, group_id")
     .eq("id", activityInstanceId)
     .single();
   if (aErr || !activity) throw new Error("Atividade não encontrada.");
   if (activity.status === "completed") return;
+  await requireGroupAccess(ctx, activity.group_id);
 
   const { data: stage, error: sErr } = await supabase
     .from("stage_instances")
@@ -723,6 +724,9 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
   if (dErr || !decision) throw new Error("Decisão não encontrada.");
   if (decision.selected_option) return;
   if (!decision.node_id) throw new Error("Decisão sem elemento de origem.");
+
+  const { data: decisionNode } = await supabase.from("workflow_nodes").select("group_id").eq("id", decision.node_id).single();
+  await requireGroupAccess(ctx, decisionNode?.group_id ?? null);
 
   let branchInstanceId: string | null = null;
   if (decision.stage_instance_id) {
