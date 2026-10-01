@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { requirePermission } from "@/lib/permissions";
 import { assertCountLimit } from "@/lib/limits";
+import { SCREENS } from "@/lib/screens";
 
 // Grupos entram no mesmo guard de Usuários (não têm código de permissão próprio no catálogo —
 // quem administra pessoas administra as unidades operacionais que elas pertencem).
@@ -41,7 +42,24 @@ export async function updateGroup(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath("/grupos");
   revalidatePath(`/grupos/${id}`);
-  redirect("/grupos");
+  redirect(`/grupos/${id}`);
+}
+
+// Telas que membros Operador deste grupo veem no menu — Administrador nunca é afetado (ver
+// getHiddenScreensForMember). O form manda os checkboxes marcados = visíveis; o que falta vira
+// hidden_screens.
+export async function updateGroupScreens(formData: FormData) {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "user.manage");
+  const id = String(formData.get("id"));
+  const visible = new Set(formData.getAll("visible").map(String));
+  const hidden = SCREENS.map((s) => s.key).filter((key) => !visible.has(key));
+  const supabase = await createClient();
+  const { error } = await supabase.from("groups").update({ hidden_screens: hidden }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/grupos");
+  revalidatePath(`/grupos/${id}`);
+  redirect(`/grupos/${id}?aba=telas`);
 }
 
 // Grupo nunca é excluído: etapas e histórico apontam para ele (Documento 1 §2.3).

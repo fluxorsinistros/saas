@@ -27,13 +27,18 @@ export function NavLinks({
   collapsed = false,
   isPlatformAdmin = false,
   platformOnly = false,
+  hiddenScreens = [],
 }: {
   collapsed?: boolean;
   isPlatformAdmin?: boolean;
   platformOnly?: boolean;
+  // Chaves de groups.hidden_screens do grupo da pessoa — Administração nunca entra aqui, é
+  // exclusiva de platform admin e não depende de grupo nenhum.
+  hiddenScreens?: string[];
 }) {
   const pathname = usePathname();
-  const links = platformOnly ? PLATFORM_LINKS : isPlatformAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
+  const base = platformOnly ? PLATFORM_LINKS : isPlatformAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
+  const links = base.filter((l) => l === ADMIN_LINK || !hiddenScreens.includes(l.href.slice(1)));
   return (
     <ul className="space-y-0.5">
       {links.map(({ href, label, icon: Icon }) => {

@@ -1135,6 +1135,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          hidden_screens: string[]
           id: string
           name: string
           status: string
@@ -1144,6 +1145,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          hidden_screens?: string[]
           id?: string
           name: string
           status?: string
@@ -1153,6 +1155,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          hidden_screens?: string[]
           id?: string
           name?: string
           status?: string

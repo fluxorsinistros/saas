@@ -2,6 +2,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { darkenHex, getPlatformBrand, getTenantBrand } from "@/lib/branding";
 import { createClient } from "@/lib/supabase/server";
+import { getHiddenScreensForMember } from "@/lib/screens";
 import { AppSidebar } from "./AppSidebar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const themeVars = own?.color
     ? ({ "--color-brand": own.color, "--color-brand-600": darkenHex(own.color) } as React.CSSProperties)
     : undefined;
+  // Administrador nunca fica preso ao menu reduzido do grupo — hidden_screens só vale pra quem é
+  // Operador. Sem isso, esconder uma tela pro grupo trancaria o próprio Administrador fora dela.
+  const hiddenScreens = await getHiddenScreensForMember(ctx.userId, ctx.tenantId);
   return (
     <div className="flex h-full" style={themeVars}>
       <AppSidebar
@@ -43,6 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         tenants={ctx.tenants}
         email={ctx.email}
         isPlatformAdmin={false}
+        hiddenScreens={hiddenScreens}
         brand={own?.brand ?? brand}
       />
       <main className="min-w-0 flex-1 overflow-hidden">{children}</main>

@@ -14,6 +14,7 @@ type Props = {
   tenants: { id: string; name: string }[];
   email: string;
   isPlatformAdmin: boolean;
+  hiddenScreens?: string[];
   brand: Brand;
   /** Administrador geral da plataforma: sem empresa, só a área de Administração. */
   platformMode?: boolean;
@@ -56,7 +57,7 @@ function useCollapsed() {
   return { collapsed, toggle: () => writePref(collapsed ? "expanded" : "collapsed") };
 }
 
-export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin, brand, platformMode = false }: Props) {
+export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin, hiddenScreens = [], brand, platformMode = false }: Props) {
   const { collapsed, toggle } = useCollapsed();
 
   return (
@@ -115,7 +116,7 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
       )}
 
       <nav className={`mt-5 flex-1 ${collapsed ? "px-2" : "px-3"}`} aria-label="Principal">
-        <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} platformOnly={platformMode} />
+        <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} platformOnly={platformMode} hiddenScreens={hiddenScreens} />
       </nav>
 
       <div className={`border-t border-navy-700 py-3 ${collapsed ? "px-2" : "px-3"}`}>
