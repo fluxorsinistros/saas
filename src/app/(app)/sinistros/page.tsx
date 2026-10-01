@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, FileWarning, Plus } from "lucide-react";
+import { ChevronRight, FileWarning, Plus, SearchX } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -27,7 +27,7 @@ const CYCLE_STATUS_STYLE: Record<string, string> = {
   in_progress: "bg-sky-50 text-sky-700 ring-sky-200",
 };
 
-export default async function SinistrosPage({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
+export default async function SinistrosPage({ searchParams }: { searchParams: Promise<{ grupo?: string; searched?: string }> }) {
   const ctx = await getTenantContext();
   const supabase = await createClient();
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
@@ -70,46 +70,57 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       : (groupOptions.find((g) => g.id === requestedGroup)?.id ?? null)
     : (groupOptions.find((g) => g.id === requestedGroup)?.id ?? groupOptions[0]?.id ?? null);
 
-  const [{ data: claims }, { data: publishedWorkflows }] = await Promise.all([
-    supabase
+  // A listagem só consulta o banco depois de clicar "Filtrar" (campo oculto "searched") — abrir a
+  // tela não carrega todos os sinistros + ciclos + atividades em aberto sozinha.
+  const searched = sp.searched === "1";
+
+  const { data: publishedWorkflows } = await supabase
+    .from("workflows")
+    .select("id, name, workflow_versions(status)")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("status", "active");
+
+  let claims: { id: string; claim_number: string; status: string; created_at: string; claim_cycles: { id: string; status: string; cycle_number: number }[] }[] = [];
+  let currentCycleByClaim = new Map<string, { id: string; status: string; cycle_number: number } | undefined>();
+  const groupsByCycle = new Map<string, Set<string>>();
+  let groupNameById = new Map<string, string>();
+  let visibleClaims: typeof claims = [];
+
+  if (searched) {
+    const { data: claimRows } = await supabase
       .from("claims")
       .select("id, claim_number, status, created_at, claim_cycles(id, status, cycle_number)")
       .eq("tenant_id", ctx.tenantId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("workflows")
-      .select("id, name, workflow_versions(status)")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("status", "active"),
-  ]);
+      .order("created_at", { ascending: false });
+    claims = claimRows ?? [];
 
-  // Grupo "responsável agora" = grupo da(s) atividade(s) em aberto do ciclo atual de cada sinistro
-  // (pode ter mais de um em paralelo) — é isso que responde "o que está na fila do meu grupo".
-  const currentCycleByClaim = new Map((claims ?? []).map((c) => [c.id, [...c.claim_cycles].sort((a, b) => b.cycle_number - a.cycle_number)[0]]));
-  const cycleIds = [...currentCycleByClaim.values()].filter(Boolean).map((c) => c!.id);
-  const { data: openStages } = cycleIds.length
-    ? await supabase.from("stage_instances").select("id, claim_cycle_id").in("claim_cycle_id", cycleIds).eq("status", "in_progress")
-    : { data: [] as { id: string; claim_cycle_id: string }[] };
-  const stageIds = (openStages ?? []).map((s) => s.id);
-  const { data: openActivities } = stageIds.length
-    ? await supabase.from("activity_instances").select("stage_instance_id, group_id").in("stage_instance_id", stageIds).in("status", ["not_started", "in_progress"])
-    : { data: [] as { stage_instance_id: string; group_id: string | null }[] };
-  const cycleOfStage = new Map((openStages ?? []).map((s) => [s.id, s.claim_cycle_id]));
-  const groupsByCycle = new Map<string, Set<string>>();
-  for (const a of openActivities ?? []) {
-    if (!a.group_id) continue;
-    const cycleId = cycleOfStage.get(a.stage_instance_id);
-    if (!cycleId) continue;
-    if (!groupsByCycle.has(cycleId)) groupsByCycle.set(cycleId, new Set());
-    groupsByCycle.get(cycleId)!.add(a.group_id);
+    // Grupo "responsável agora" = grupo da(s) atividade(s) em aberto do ciclo atual de cada
+    // sinistro (pode ter mais de um em paralelo) — é isso que responde "o que está na fila do meu grupo".
+    currentCycleByClaim = new Map(claims.map((c) => [c.id, [...c.claim_cycles].sort((a, b) => b.cycle_number - a.cycle_number)[0]]));
+    const cycleIds = [...currentCycleByClaim.values()].filter(Boolean).map((c) => c!.id);
+    const { data: openStages } = cycleIds.length
+      ? await supabase.from("stage_instances").select("id, claim_cycle_id").in("claim_cycle_id", cycleIds).eq("status", "in_progress")
+      : { data: [] as { id: string; claim_cycle_id: string }[] };
+    const stageIds = (openStages ?? []).map((s) => s.id);
+    const { data: openActivities } = stageIds.length
+      ? await supabase.from("activity_instances").select("stage_instance_id, group_id").in("stage_instance_id", stageIds).in("status", ["not_started", "in_progress"])
+      : { data: [] as { stage_instance_id: string; group_id: string | null }[] };
+    const cycleOfStage = new Map((openStages ?? []).map((s) => [s.id, s.claim_cycle_id]));
+    for (const a of openActivities ?? []) {
+      if (!a.group_id) continue;
+      const cycleId = cycleOfStage.get(a.stage_instance_id);
+      if (!cycleId) continue;
+      if (!groupsByCycle.has(cycleId)) groupsByCycle.set(cycleId, new Set());
+      groupsByCycle.get(cycleId)!.add(a.group_id);
+    }
+    groupNameById = new Map(groupOptions.map((g) => [g.id, g.name]));
+
+    visibleClaims = claims.filter((c) => {
+      if (!groupFilter) return true;
+      const cycle = currentCycleByClaim.get(c.id);
+      return !!cycle && (groupsByCycle.get(cycle.id)?.has(groupFilter) ?? false);
+    });
   }
-  const groupNameById = new Map(groupOptions.map((g) => [g.id, g.name]));
-
-  const visibleClaims = (claims ?? []).filter((c) => {
-    if (!groupFilter) return true;
-    const cycle = currentCycleByClaim.get(c.id);
-    return !!cycle && (groupsByCycle.get(cycle.id)?.has(groupFilter) ?? false);
-  });
 
   const options = (publishedWorkflows ?? []).filter((w) => w.workflow_versions.some((v) => v.status === "published"));
 
@@ -180,6 +191,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 
         {groupOptions.length > 0 && (
           <form method="get" className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <input type="hidden" name="searched" value="1" />
             <div className="min-w-[220px]">
               <label htmlFor="grupo" className="mb-1 block text-[12px] font-medium text-slate-600">
                 Grupo responsável agora
@@ -204,7 +216,13 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
           </form>
         )}
 
-        {!visibleClaims.length ? (
+        {!searched ? (
+          <div className="mt-6 flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+            <SearchX className="mx-auto size-8 text-slate-300" />
+            <p className="text-[15px] font-medium text-slate-800">Clique em Filtrar para ver os sinistros</p>
+            <p className="max-w-sm text-[13px] text-slate-500">A lista não carrega sozinha ao abrir a tela.</p>
+          </div>
+        ) : !visibleClaims.length ? (
           <div className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <FileWarning className="mx-auto size-8 text-slate-300" />
             <p className="mt-3 text-[15px] font-medium text-slate-800">

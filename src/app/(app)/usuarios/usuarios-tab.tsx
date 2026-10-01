@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Download, Pencil, Plus, Search } from "lucide-react";
+import { Download, Pencil, Plus, Search, SearchX } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantOrganizations } from "@/lib/tenant-organizations";
 import { InviteActions } from "./invite-actions";
@@ -51,6 +51,7 @@ export async function UsuariosTab({
     if (groupFilter) params.set("group", groupFilter);
     if (orgFilter) params.set("org", orgFilter);
     if (statusFilter) params.set("status", statusFilter);
+    params.set("searched", "1");
     return params;
   };
   const pageHref = (p: number) => {
@@ -61,22 +62,29 @@ export async function UsuariosTab({
     return `/usuarios${qs ? `?${qs}` : ""}`;
   };
   const exportHref = `/usuarios/exportar?${filterParams().toString()}`;
+  // A lista só consulta o banco depois de clicar "Pesquisar" (campo oculto "searched" no form) —
+  // abrir a tela não dispara a busca pesada sozinha, só os combos de filtro (grupos/organizações,
+  // que são baratos). Página pede isso pra não ficar lenta sem necessidade.
+  const searched = one("searched") === "1";
 
-  const [{ data: groups }, organizations, { data: rows, error }] = await Promise.all([
+  const [{ data: groups }, organizations, searchResult] = await Promise.all([
     supabase.from("groups").select("id, name").eq("tenant_id", tenantId).eq("status", "active").order("name"),
     getTenantOrganizations(supabase, tenantId),
-    supabase.rpc("tenant_search_users", {
-      p_tenant_id: tenantId,
-      p_q: q || undefined,
-      p_role_name: roleFilter || undefined,
-      p_status: statusFilter || undefined,
-      p_group_name: groupFilter || undefined,
-      p_organization_name: orgFilter || undefined,
-      p_limit: size,
-      p_offset: (page - 1) * size,
-    }),
+    searched
+      ? supabase.rpc("tenant_search_users", {
+          p_tenant_id: tenantId,
+          p_q: q || undefined,
+          p_role_name: roleFilter || undefined,
+          p_status: statusFilter || undefined,
+          p_group_name: groupFilter || undefined,
+          p_organization_name: orgFilter || undefined,
+          p_limit: size,
+          p_offset: (page - 1) * size,
+        })
+      : Promise.resolve({ data: null, error: null }),
   ]);
-  if ((error || !rows?.length) && page > 1) redirect(pageHref(1));
+  const { data: rows, error } = searchResult;
+  if (searched && (error || !rows?.length) && page > 1) redirect(pageHref(1));
 
   const total = Number(rows?.[0]?.total ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / size));
@@ -97,6 +105,7 @@ export async function UsuariosTab({
       <details open className="rounded-xl border border-slate-200 bg-white">
         <summary className="cursor-pointer list-none rounded-t-xl bg-navy px-4 py-2 text-[13px] font-semibold text-white">Filtro</summary>
         <form method="get" action="/usuarios" className="grid gap-x-5 gap-y-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <input type="hidden" name="searched" value="1" />
           <div>
             <label htmlFor="q" className="mb-1 block text-[12px] font-medium text-slate-600">
               Nome ou e-mail
@@ -180,6 +189,14 @@ export async function UsuariosTab({
         </form>
       </details>
 
+      {!searched ? (
+        <div className="mt-2 flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+          <SearchX className="size-8 text-slate-300" />
+          <p className="text-[15px] font-medium text-slate-800">Ajuste os filtros e clique em Pesquisar</p>
+          <p className="max-w-sm text-[13px] text-slate-500">A lista não carrega sozinha ao abrir a tela — isso mantém a página leve mesmo com muitos usuários.</p>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] text-slate-500">
           {total === 0
@@ -304,6 +321,8 @@ export async function UsuariosTab({
             Página {page} de {totalPages}
           </span>
         </nav>
+      )}
+        </>
       )}
     </div>
   );
