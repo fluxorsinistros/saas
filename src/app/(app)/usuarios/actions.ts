@@ -10,7 +10,7 @@ import { sendInviteMail, sendResetMail } from "@/lib/auth-mail";
 export type AccessState = { ok: boolean; message: string } | null;
 
 const INVITE_NOTE =
-  "Convite registrado. A pessoa cria a conta com este e-mail (tela de login → Criar conta) e confirma; no primeiro acesso ela entra na empresa com o tipo e o grupo definidos.";
+  "Convite registrado, sem e-mail. A pessoa cria a conta com este e-mail (tela de login → Criar conta); no primeiro acesso ela entra na empresa com o tipo e o grupo definidos.";
 
 async function activeUserCount(tenantId: string): Promise<number> {
   const supabase = await createClient();
@@ -61,7 +61,10 @@ export async function addUser(_prev: AccessState, formData: FormData): Promise<A
   const mailError = await sendInviteMail(email);
   return mailError
     ? { ok: true, message: `Convite registrado, mas o e-mail não foi enviado: ${mailError} Use "Reenviar convite" na lista.` }
-    : { ok: true, message: `Convite registrado e e-mail enviado para ${email}. A pessoa define a senha pelo link.` };
+    : {
+        ok: true,
+        message: `Convite registrado e e-mail enviado para ${email}. A pessoa digita o código de 6 dígitos recebido em /confirmar-convite para criar a senha.`,
+      };
 }
 
 // Tipo, grupo e situação de um membro, por um Administrador da conta. As regras ficam no banco

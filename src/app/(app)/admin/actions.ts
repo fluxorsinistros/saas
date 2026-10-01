@@ -210,7 +210,10 @@ export async function addTenantUser(_prev: ActionState, formData: FormData): Pro
   const mailError = await sendInviteMail(email);
   return mailError
     ? { ok: true, message: `Convite registrado, mas o e-mail não foi enviado: ${mailError} Use "Reenviar convite" depois.` }
-    : { ok: true, message: `Convite registrado e e-mail enviado para ${email}. A pessoa define a senha pelo link.` };
+    : {
+        ok: true,
+        message: `Convite registrado e e-mail enviado para ${email}. A pessoa digita o código de 6 dígitos recebido em /confirmar-convite para criar a senha.`,
+      };
 }
 
 export async function sendInviteEmail(_prev: ActionState, formData: FormData): Promise<ActionState> {
