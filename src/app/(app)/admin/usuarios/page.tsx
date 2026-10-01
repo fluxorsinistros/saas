@@ -36,6 +36,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const tenantFilter = UUID.test(one("tenant")) ? one("tenant") : "";
   const roleParam = one("role").trim();
   const groupFilter = one("group").trim();
+  const orgFilter = one("org").trim();
   const statusFilter = STATUS_FILTERS.some((f) => f.value === one("status")) ? one("status") : "";
   const size = PAGE_SIZES.find((n) => n === Number(one("size"))) ?? PAGE_SIZES[0];
   const page = Math.max(1, parseInt(one("page"), 10) || 1);
@@ -50,6 +51,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     if (tenantFilter) params.set("tenant", tenantFilter);
     if (roleFilter) params.set("role", roleFilter);
     if (groupFilter) params.set("group", groupFilter);
+    if (orgFilter) params.set("org", orgFilter);
     if (statusFilter) params.set("status", statusFilter);
     return params;
   };
@@ -62,15 +64,17 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   };
   const exportHref = `/admin/usuarios/exportar?${filterParams().toString()}`;
 
-  const [{ data: tenants }, { data: groupNames }, { data: rows, error }] = await Promise.all([
+  const [{ data: tenants }, { data: groupNames }, { data: allOrgs }, { data: rows, error }] = await Promise.all([
     supabase.from("tenants").select("id, name").order("name"),
     supabase.rpc("admin_group_names"),
+    supabase.rpc("admin_all_organizations"),
     supabase.rpc("admin_search_users", {
       p_q: q || undefined,
       p_tenant_id: tenantFilter || undefined,
       p_role_name: roleFilter || undefined,
       p_status: statusFilter || undefined,
       p_group_name: groupFilter || undefined,
+      p_organization_name: orgFilter || undefined,
       p_limit: size,
       p_offset: (page - 1) * size,
     }),
@@ -81,7 +85,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const totalPages = Math.max(1, Math.ceil(total / size));
   const firstShown = total === 0 ? 0 : (page - 1) * size + 1;
   const lastShown = Math.min(page * size, total);
-  const filtering = !!(q || tenantFilter || roleFilter || groupFilter || statusFilter);
+  const filtering = !!(q || tenantFilter || roleFilter || groupFilter || orgFilter || statusFilter);
+  const orgNames = [...new Set((allOrgs ?? []).filter((o) => !tenantFilter || o.tenant_id === tenantFilter).map((o) => o.name))].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -150,6 +155,19 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 ))}
               </select>
             </div>
+            <div>
+              <label htmlFor="org" className="mb-1 block text-[12px] font-medium text-slate-600">
+                Organização
+              </label>
+              <select id="org" name="org" defaultValue={orgFilter} className={input}>
+                <option value="">Todas</option>
+                {orgNames.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
             <fieldset>
               <legend className="mb-1 block text-[12px] font-medium text-slate-600">Situação</legend>
               <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
@@ -205,7 +223,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full min-w-[760px] text-left text-[13px]">
+          <table className="w-full min-w-[860px] text-left text-[13px]">
             <thead className="bg-navy text-[12px] font-semibold text-white">
               <tr>
                 <th className="w-12 px-3 py-2.5" aria-label="Editar" />
@@ -213,6 +231,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 <th className="px-3 py-2.5">E-mail</th>
                 <th className="px-3 py-2.5">Empresa</th>
                 <th className="px-3 py-2.5">Tipo</th>
+                <th className="px-3 py-2.5">Organização</th>
                 <th className="px-3 py-2.5">Grupo</th>
                 <th className="px-3 py-2.5">Situação</th>
               </tr>
@@ -255,6 +274,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                   <td className="px-3 py-2.5 text-slate-600">{u.email}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.tenant_name}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "—"}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2.5">
                     {u.pending ? (

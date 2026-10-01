@@ -3106,7 +3106,41 @@ export type Database = {
       }
       create_tenant: { Args: { p_name: string }; Returns: string }
       tenant_add_user: {
-        Args: { p_tenant_id: string; p_email: string; p_role_id: string; p_group_id?: string | null }
+        Args: {
+          p_tenant_id: string
+          p_email: string
+          p_role_id: string
+          p_group_id?: string | null
+          p_full_name?: string | null
+          p_phone?: string | null
+          p_cpf?: string | null
+        }
+        Returns: string
+      }
+      create_user_with_password: {
+        Args: {
+          p_tenant_id: string
+          p_email: string
+          p_password: string
+          p_role_id: string
+          p_group_id?: string | null
+          p_full_name?: string | null
+          p_phone?: string | null
+          p_cpf?: string | null
+        }
+        Returns: string
+      }
+      admin_set_user_password: { Args: { p_user_id: string; p_password: string }; Returns: undefined }
+      admin_add_person: {
+        Args: {
+          p_tenant_id: string
+          p_email: string
+          p_role_id: string
+          p_group_id?: string | null
+          p_full_name?: string | null
+          p_phone?: string | null
+          p_cpf?: string | null
+        }
         Returns: string
       }
       tenant_cancel_invite: { Args: { p_invite_id: string }; Returns: undefined }
@@ -3119,8 +3153,10 @@ export type Database = {
           p_group_name?: string
           p_limit?: number
           p_offset?: number
+          p_organization_name?: string
         }
         Returns: {
+          organization_name: string | null
           total: number
           membership_id: string | null
           invite_id: string | null
@@ -3164,8 +3200,10 @@ export type Database = {
           p_group_name?: string
           p_limit?: number
           p_offset?: number
+          p_organization_name?: string
         }
         Returns: {
+          organization_name: string | null
           total: number
           tenant_id: string | null
           tenant_name: string
@@ -3198,6 +3236,11 @@ export type Database = {
           group_id: string | null
         }[]
       }
+      admin_all_organizations: {
+        Args: Record<PropertyKey, never>
+        Returns: { id: string; tenant_id: string; name: string; is_owner: boolean }[]
+      }
+      set_person_organization: { Args: { p_tenant_id: string; p_email: string; p_organization_id: string }; Returns: undefined }
       admin_all_groups: { Args: Record<PropertyKey, never>; Returns: { id: string; tenant_id: string; name: string }[] }
       admin_save_person: {
         Args: {

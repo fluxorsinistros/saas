@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { sendInviteMail, sendResetMail } from "@/lib/auth-mail";
 import { createClient } from "@/lib/supabase/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
@@ -154,6 +153,18 @@ export async function createTenantAsAdmin(_prev: ActionState, formData: FormData
 }
 
 // Adiciona um usuário à empresa com o tipo (papel) escolhido; sem conta ainda = convite (e, se marcado, e-mail).
+const PW_MESSAGES: Record<string, string> = {
+  created: "Usuário criado com a senha informada. Já pode entrar com o e-mail e essa senha.",
+  password_reset: "Usuário adicionado e a senha definida. Já pode entrar com o e-mail e essa senha.",
+  added_keep_password: "Usuário adicionado. Esta pessoa já tinha conta em outra empresa, então a senha dela não foi alterada.",
+};
+
+// Todo usuário pertence a uma organização da empresa; sem escolha, vale a própria empresa (padrão do banco).
+async function applyOrganization(supabase: Awaited<ReturnType<typeof createClient>>, tenantId: string, email: string, formData: FormData) {
+  const orgId = String(formData.get("organization_id") ?? "");
+  if (orgId) await supabase.rpc("set_person_organization", { p_tenant_id: tenantId, p_email: email, p_organization_id: orgId });
+}
+
 export async function addTenantUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requirePlatformAdmin();
   const supabase = await createClient();
@@ -163,8 +174,35 @@ export async function addTenantUser(_prev: ActionState, formData: FormData): Pro
   const sendMail = formData.get("send_invite") === "on";
   if (!tenantId || !roleId || !email) return { ok: false, message: "Informe empresa, tipo e e-mail." };
 
-  const { data, error } = await supabase.rpc("admin_add_tenant_user", { p_tenant_id: tenantId, p_email: email, p_role_id: roleId });
+  const password = String(formData.get("password") ?? "");
+  if (password) {
+    const { data: r, error: e } = await supabase.rpc("create_user_with_password", {
+      p_tenant_id: tenantId,
+      p_email: email,
+      p_password: password,
+      p_role_id: roleId,
+      p_group_id: String(formData.get("group_id") ?? "") || null,
+      p_full_name: String(formData.get("full_name") ?? "").trim() || null,
+      p_phone: String(formData.get("phone") ?? "").trim() || null,
+      p_cpf: String(formData.get("cpf") ?? "").trim() || null,
+    });
+    if (e) return { ok: false, message: e.message };
+    await applyOrganization(supabase, tenantId, email, formData);
+    revalidatePath("/admin", "layout");
+    return { ok: true, message: PW_MESSAGES[r as string] ?? "Usuário adicionado." };
+  }
+
+  const { data, error } = await supabase.rpc("admin_add_person", {
+    p_tenant_id: tenantId,
+    p_email: email,
+    p_role_id: roleId,
+    p_group_id: String(formData.get("group_id") ?? "") || null,
+    p_full_name: String(formData.get("full_name") ?? "").trim() || null,
+    p_phone: String(formData.get("phone") ?? "").trim() || null,
+    p_cpf: String(formData.get("cpf") ?? "").trim() || null,
+  });
   if (error) return { ok: false, message: error.message };
+  await applyOrganization(supabase, tenantId, email, formData);
   revalidatePath("/admin", "layout");
 
   if (data === "added") return { ok: true, message: "Usuário adicionado. Ele já pode entrar na empresa." };
@@ -200,20 +238,7 @@ export async function setUserPassword(_prev: ActionState, formData: FormData): P
   if (!userId) return { ok: false, message: "Usuário não informado." };
   if (password.length < 8) return { ok: false, message: "A senha precisa ter pelo menos 8 caracteres." };
 
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
-    return {
-      ok: false,
-      message: "Para definir senha diretamente é preciso configurar SUPABASE_SERVICE_ROLE_KEY no servidor (.env.local e Vercel). Enquanto isso, use \"Enviar redefinição\".",
-    };
-  }
-  const { data: allowed } = await supabase.rpc("admin_can_manage_user", { p_user_id: userId });
-  if (!allowed) return { ok: false, message: "Esta tela não altera a senha de outro Gestor da plataforma." };
-
-  const admin = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  const { error } = await supabase.rpc("admin_set_user_password", { p_user_id: userId, p_password: password });
   if (error) return { ok: false, message: error.message };
 
   await writeAudit(supabase, null, "user.password_set_by_platform", "user", userId);
@@ -440,6 +465,12 @@ export async function saveUserEdit(_prev: ActionState, formData: FormData): Prom
     p_group_id: String(formData.get("group_id") ?? "") || null,
   });
   if (error || !newId) return { ok: false, message: error?.message ?? "Não foi possível salvar." };
+  const orgId = String(formData.get("organization_id") ?? "");
+  const email = String(formData.get("email") ?? "");
+  if (!isGestor && orgId && email) {
+    const { error: orgError } = await supabase.rpc("set_person_organization", { p_tenant_id: tenantId, p_email: email, p_organization_id: orgId });
+    if (orgError) return { ok: false, message: orgError.message };
+  }
   revalidatePath("/admin", "layout");
   // Mudou de empresa ou de nível: o endereço antigo pode nem existir mais, então o redirecionamento sai do servidor
   if (newId !== id) redirect(`/admin/usuarios/${newId}`);

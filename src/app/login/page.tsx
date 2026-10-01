@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LoginForm } from "./LoginForm";
+import { HashRedirect } from "./HashRedirect";
 import { PlatformBrandMark } from "@/components/PlatformBrandMark";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -7,6 +8,7 @@ export const metadata: Metadata = { title: "Entrar" };
 export default function LoginPage() {
   return (
     <main className="grid min-h-full lg:grid-cols-[1.05fr_1fr]">
+      <HashRedirect />
       <section className="relative hidden overflow-hidden bg-navy p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <FlowBackdrop />
         <PlatformBrandMark tone="dark" />

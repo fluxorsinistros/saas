@@ -10,7 +10,17 @@ const input =
 type Option = { id: string; name: string };
 
 // Mesmo formulário do Gestor, só que dentro da própria empresa: e-mail, tipo e (para Operador) o grupo.
-export function NewUserForm({ roles, groups }: { roles: Option[]; groups: Option[] }) {
+export function NewUserForm({
+  roles,
+  groups,
+  tenantName,
+  organizations,
+}: {
+  roles: Option[];
+  groups: Option[];
+  tenantName: string;
+  organizations: Option[];
+}) {
   const [state, action, pending] = useActionState(addUser, null);
   const operator = roles.find((r) => r.name === "Operador");
   const [role, setRole] = useState(operator?.id ?? roles[0]?.id ?? "");
@@ -20,10 +30,34 @@ export function NewUserForm({ roles, groups }: { roles: Option[]; groups: Option
     <form action={action} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
       <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
         <div>
+          <label htmlFor="full_name" className="mb-1 block text-[12px] font-medium text-slate-600">
+            Nome
+          </label>
+          <input id="full_name" name="full_name" className={input} />
+        </div>
+        <div>
           <label htmlFor="email" className="mb-1 block text-[12px] font-medium text-slate-600">
-            *E-mail
+            *E-mail (login)
           </label>
           <input id="email" name="email" type="email" required placeholder="pessoa@empresa.com.br" className={input} />
+        </div>
+        <div>
+          <label htmlFor="cpf" className="mb-1 block text-[12px] font-medium text-slate-600">
+            CPF
+          </label>
+          <input id="cpf" name="cpf" className={input} />
+        </div>
+        <div>
+          <label htmlFor="phone" className="mb-1 block text-[12px] font-medium text-slate-600">
+            Telefone
+          </label>
+          <input id="phone" name="phone" className={input} />
+        </div>
+        <div>
+          <label htmlFor="tenant" className="mb-1 block text-[12px] font-medium text-slate-600">
+            Empresa
+          </label>
+          <input id="tenant" value={tenantName} disabled readOnly className={`${input} disabled:bg-slate-50 disabled:text-slate-500`} />
         </div>
         <div>
           <label htmlFor="role_id" className="mb-1 block text-[12px] font-medium text-slate-600">
@@ -33,6 +67,18 @@ export function NewUserForm({ roles, groups }: { roles: Option[]; groups: Option
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="organization_id" className="mb-1 block text-[12px] font-medium text-slate-600">
+            *Organização
+          </label>
+          <select id="organization_id" name="organization_id" required defaultValue={organizations[0]?.id} className={input}>
+            {organizations.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
               </option>
             ))}
           </select>

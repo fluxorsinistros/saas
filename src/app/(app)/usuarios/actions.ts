@@ -44,8 +44,16 @@ export async function addUser(_prev: AccessState, formData: FormData): Promise<A
     p_email: email,
     p_role_id: roleId,
     p_group_id: String(formData.get("group_id") ?? "") || null,
+    p_full_name: String(formData.get("full_name") ?? "").trim() || null,
+    p_phone: String(formData.get("phone") ?? "").trim() || null,
+    p_cpf: String(formData.get("cpf") ?? "").trim() || null,
   });
   if (error) return { ok: false, message: error.message };
+  const orgId = String(formData.get("organization_id") ?? "");
+  if (orgId) {
+    const { error: orgError } = await supabase.rpc("set_person_organization", { p_tenant_id: ctx.tenantId, p_email: email, p_organization_id: orgId });
+    if (orgError) return { ok: false, message: orgError.message };
+  }
   revalidatePath("/usuarios");
 
   if (data === "added") return { ok: true, message: "Usuário adicionado. Ele já pode entrar na empresa." };
@@ -84,6 +92,15 @@ export async function updateMemberAccess(_prev: AccessState, formData: FormData)
     p_active: active,
   });
   if (error) return { ok: false, message: error.message };
+  const orgId = String(formData.get("organization_id") ?? "");
+  if (orgId) {
+    const { data: who } = await supabase.from("tenant_memberships").select("user_profiles(email)").eq("id", membershipId).maybeSingle();
+    const email = (who as unknown as { user_profiles: { email: string } | null } | null)?.user_profiles?.email;
+    if (email) {
+      const { error: orgError } = await supabase.rpc("set_person_organization", { p_tenant_id: ctx.tenantId, p_email: email, p_organization_id: orgId });
+      if (orgError) return { ok: false, message: orgError.message };
+    }
+  }
   revalidatePath("/usuarios");
   return { ok: true, message: "Usuário salvo." };
 }

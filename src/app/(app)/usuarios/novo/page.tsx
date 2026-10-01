@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
 import { getRoleOptions } from "@/lib/tenant-roles";
+import { getTenantOrganizations } from "@/lib/tenant-organizations";
 import { NewUserForm } from "./new-user-form";
 
 export const metadata: Metadata = { title: "Novo usuário" };
@@ -16,9 +17,10 @@ export default async function NewTenantUserPage() {
   if (!perms.has("user.manage")) redirect("/usuarios");
 
   const supabase = await createClient();
-  const [roles, { data: groups }] = await Promise.all([
+  const [roles, { data: groups }, organizations] = await Promise.all([
     getRoleOptions(supabase, ctx.tenantId),
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
+    getTenantOrganizations(supabase, ctx.tenantId),
   ]);
 
   return (
@@ -34,7 +36,7 @@ export default async function NewTenantUserPage() {
             Operador, o grupo.
           </p>
         </div>
-        <NewUserForm roles={roles} groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name }))} />
+        <NewUserForm organizations={organizations} tenantName={ctx.tenantName} roles={roles} groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name }))} />
       </div>
     </div>
   );

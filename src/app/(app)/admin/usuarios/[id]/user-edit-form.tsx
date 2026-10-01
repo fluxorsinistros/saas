@@ -27,6 +27,8 @@ export function UserEditForm({
   tenants,
   roles,
   groups,
+  organizations,
+  organizationId,
   isSelf,
 }: {
   id: string;
@@ -41,6 +43,8 @@ export function UserEditForm({
   tenants: Tenant[];
   roles: string[];
   groups: Group[];
+  organizations: Group[];
+  organizationId: string;
   isSelf: boolean;
 }) {
   const [state, action, pending] = useActionState(saveUserEdit, null);
@@ -52,12 +56,15 @@ export function UserEditForm({
   const isAdmin = tipo === "Administrador";
   const moving = !wasGestor && !isGestor && tenant !== tenantId;
   const tenantGroups = groups.filter((g) => g.tenant_id === tenant);
+  const tenantOrgs = organizations.filter((o) => o.tenant_id === tenant);
+  const currentOrg = tenantOrgs.some((o) => o.id === organizationId) ? organizationId : (tenantOrgs[0]?.id ?? "");
   const currentGroup = tenantGroups.some((g) => g.id === groupId) ? groupId : "";
   const tipoOptions = [{ value: "gestor", label: "Gestor da plataforma" }, ...roles.map((r) => ({ value: r, label: r }))];
 
   return (
     <form action={action} className="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
       <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="email" value={email} />
 
       <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
         <div>
@@ -125,6 +132,20 @@ export function UserEditForm({
             </select>
           )}
         </div>
+        {!isGestor && (
+          <div>
+            <label htmlFor="organization_id" className="mb-1 block text-[12px] font-medium text-slate-600">
+              *Organização
+            </label>
+            <select key={`${tenant}-${currentOrg}`} id="organization_id" name="organization_id" required defaultValue={currentOrg} className={input}>
+              {tenantOrgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {moving && (

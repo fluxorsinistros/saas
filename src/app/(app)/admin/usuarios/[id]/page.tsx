@@ -18,17 +18,21 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
   if (!UUID.test(id)) notFound();
 
   const supabase = await createClient();
-  const [{ data: rows }, { data: tenants }, { data: roles }, { data: groups }, { data: auth }] = await Promise.all([
+  const [{ data: rows }, { data: tenants }, { data: roles }, { data: groups }, { data: auth }, { data: organizations }] = await Promise.all([
     supabase.rpc("admin_get_person", { p_id: id }),
     supabase.from("tenants").select("id, name").order("name"),
     supabase.from("roles").select("name").is("tenant_id", null).order("name"),
     supabase.rpc("admin_all_groups"),
     supabase.auth.getUser(),
+    supabase.rpc("admin_all_organizations"),
   ]);
   const person = rows?.[0];
   if (!person) notFound();
 
   const isGestor = person.kind === "gestor";
+  const { data: memberOrg } = person.membership_id
+    ? await supabase.from("tenant_memberships").select("organization_id").eq("id", person.membership_id).maybeSingle()
+    : { data: null };
   const tenantName = (tenants ?? []).find((t) => t.id === person.tenant_id)?.name;
 
   return (
@@ -57,6 +61,8 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
           tenants={tenants ?? []}
           roles={(roles ?? []).map((r) => r.name)}
           groups={groups ?? []}
+          organizations={organizations ?? []}
+          organizationId={memberOrg?.organization_id ?? ""}
           isSelf={auth.user?.id === person.user_id}
         />
 

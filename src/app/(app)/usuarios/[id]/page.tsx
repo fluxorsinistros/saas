@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
 import { getRoleOptions } from "@/lib/tenant-roles";
+import { getTenantOrganizations } from "@/lib/tenant-organizations";
 import { MemberEditForm } from "./member-edit-form";
 import { ResetPasswordButton } from "./reset-button";
 
@@ -25,19 +26,20 @@ export default async function EditTenantUserPage({ params }: { params: Promise<{
   // as regras de acesso (RLS) já escondem Gestores e outras empresas: o que não aparece aqui dá 404
   const { data: membership } = await supabase
     .from("tenant_memberships")
-    .select("id, user_id, status, membership_roles(role_id)")
+    .select("id, user_id, status, organization_id, membership_roles(role_id)")
     .eq("id", id)
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
   if (!membership) notFound();
   if (membership.user_id === ctx.userId) redirect("/usuarios");
 
-  const [{ data: profile }, { data: memberGroup }, { data: groups }, roles, { data: roleRows }] = await Promise.all([
+  const [{ data: profile }, { data: memberGroup }, { data: groups }, roles, { data: roleRows }, organizations] = await Promise.all([
     supabase.from("user_profiles").select("full_name, email, phone, cpf").eq("id", membership.user_id).maybeSingle(),
     supabase.from("group_members").select("group_id").eq("membership_id", id).maybeSingle(),
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
     getRoleOptions(supabase, ctx.tenantId),
     supabase.from("roles").select("id, name").in("id", (membership.membership_roles ?? []).map((r) => r.role_id)),
+    getTenantOrganizations(supabase, ctx.tenantId),
   ]);
 
   // o seletor usa o papel da lista (o da empresa, se houver), mesmo que o usuário tenha o de sistema de mesmo nome
@@ -68,13 +70,15 @@ export default async function EditTenantUserPage({ params }: { params: Promise<{
           groupId={memberGroup?.group_id ?? ""}
           active={membership.status === "active"}
           roles={roles}
+          organizations={organizations}
+          organizationId={membership.organization_id ?? ""}
           groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name }))}
         />
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Acesso</h2>
           <p className="mb-3 text-[12px] text-slate-500">
-            A senha é sempre da própria pessoa: enviamos um link para ela criar uma nova. Você nunca vê nem define a senha de ninguém.
+            A senha é da própria pessoa: enviamos um link para ela criar uma nova. Definir a senha diretamente é uma função do Gestor da plataforma.
           </p>
           <ResetPasswordButton membershipId={id} />
         </section>

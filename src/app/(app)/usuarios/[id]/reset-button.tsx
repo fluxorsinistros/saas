@@ -20,3 +20,4 @@ export function ResetPasswordButton({ membershipId }: { membershipId: string }) 
     </form>
   );
 }
+

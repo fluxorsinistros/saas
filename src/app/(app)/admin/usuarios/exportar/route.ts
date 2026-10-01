@@ -25,14 +25,15 @@ export async function GET(request: NextRequest) {
     p_role_name: sp.get("role")?.trim() || undefined,
     p_status: ["active", "inactive", "pending"].includes(status) ? status : undefined,
     p_group_name: sp.get("group")?.trim() || undefined,
+    p_organization_name: sp.get("org")?.trim() || undefined,
     p_limit: 10000,
     p_offset: 0,
   });
   if (error) return new NextResponse(error.message, { status: 500 });
 
-  const header = ["Nome", "E-mail", "Empresa", "Tipo", "Grupos", "Situação"].map(cell).join(";");
+  const header = ["Nome", "E-mail", "Empresa", "Tipo", "Organização", "Grupos", "Situação"].map(cell).join(";");
   const lines = (rows ?? []).map((u) =>
-    [u.full_name ?? "", u.email, u.tenant_name, u.role_name ?? "", u.groups ?? "", STATUS_LABEL[u.status] ?? u.status].map(cell).join(";"),
+    [u.full_name ?? "", u.email, u.tenant_name, u.role_name ?? "", u.organization_name ?? "", u.groups ?? "", STATUS_LABEL[u.status] ?? u.status].map(cell).join(";"),
   );
   const body = "\uFEFF" + [header, ...lines].join("\r\n");
   const day = new Date().toISOString().slice(0, 10);

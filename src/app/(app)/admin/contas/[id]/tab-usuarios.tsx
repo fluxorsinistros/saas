@@ -5,9 +5,11 @@ import { AddUserForm, UserActions } from "../../usuarios/users-forms";
 // Usuários só desta conta: mesma lógica da tela global de Usuários, já filtrada.
 export async function TabUsuarios({ tenantId, tenantName }: { tenantId: string; tenantName: string }) {
   const supabase = await createClient();
-  const [{ data: roles }, { data: rows }] = await Promise.all([
+  const [{ data: roles }, { data: rows }, { data: groups }, { data: organizations }] = await Promise.all([
     supabase.from("roles").select("id, name").is("tenant_id", null).order("name"),
     supabase.rpc("admin_search_users", { p_tenant_id: tenantId, p_limit: 100, p_offset: 0 }),
+    supabase.rpc("admin_all_groups"),
+    supabase.rpc("admin_all_organizations"),
   ]);
   const total = Number(rows?.[0]?.total ?? 0);
 
@@ -15,7 +17,7 @@ export async function TabUsuarios({ tenantId, tenantName }: { tenantId: string; 
     <div className="space-y-6">
       <section>
         <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Adicionar usuário</h2>
-        <AddUserForm tenants={[{ id: tenantId, name: tenantName }]} roles={roles ?? []} defaultTenantId={tenantId} />
+        <AddUserForm tenants={[{ id: tenantId, name: tenantName }]} roles={roles ?? []} groups={groups ?? []} organizations={organizations ?? []} defaultTenantId={tenantId} />
       </section>
 
       <section>

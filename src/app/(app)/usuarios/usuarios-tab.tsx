@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Download, Pencil, Plus, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getTenantOrganizations } from "@/lib/tenant-organizations";
 import { InviteActions } from "./invite-actions";
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -38,6 +39,7 @@ export async function UsuariosTab({
   const q = one("q").trim();
   const roleFilter = (ROLE_NAMES as readonly string[]).includes(one("role")) ? one("role") : "";
   const groupFilter = one("group").trim();
+  const orgFilter = one("org").trim();
   const statusFilter = STATUS_FILTERS.some((f) => f.value === one("status")) ? one("status") : "";
   const size = PAGE_SIZES.find((n) => n === Number(one("size"))) ?? PAGE_SIZES[0];
   const page = Math.max(1, parseInt(one("page"), 10) || 1);
@@ -47,6 +49,7 @@ export async function UsuariosTab({
     if (q) params.set("q", q);
     if (roleFilter) params.set("role", roleFilter);
     if (groupFilter) params.set("group", groupFilter);
+    if (orgFilter) params.set("org", orgFilter);
     if (statusFilter) params.set("status", statusFilter);
     return params;
   };
@@ -59,14 +62,16 @@ export async function UsuariosTab({
   };
   const exportHref = `/usuarios/exportar?${filterParams().toString()}`;
 
-  const [{ data: groups }, { data: rows, error }] = await Promise.all([
+  const [{ data: groups }, organizations, { data: rows, error }] = await Promise.all([
     supabase.from("groups").select("id, name").eq("tenant_id", tenantId).eq("status", "active").order("name"),
+    getTenantOrganizations(supabase, tenantId),
     supabase.rpc("tenant_search_users", {
       p_tenant_id: tenantId,
       p_q: q || undefined,
       p_role_name: roleFilter || undefined,
       p_status: statusFilter || undefined,
       p_group_name: groupFilter || undefined,
+      p_organization_name: orgFilter || undefined,
       p_limit: size,
       p_offset: (page - 1) * size,
     }),
@@ -77,7 +82,7 @@ export async function UsuariosTab({
   const totalPages = Math.max(1, Math.ceil(total / size));
   const firstShown = total === 0 ? 0 : (page - 1) * size + 1;
   const lastShown = Math.min(page * size, total);
-  const filtering = !!(q || roleFilter || groupFilter || statusFilter);
+  const filtering = !!(q || roleFilter || groupFilter || orgFilter || statusFilter);
 
   return (
     <div className="space-y-5">
@@ -123,6 +128,19 @@ export async function UsuariosTab({
               {(groups ?? []).map((g) => (
                 <option key={g.id} value={g.name}>
                   {g.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="org" className="mb-1 block text-[12px] font-medium text-slate-600">
+              Organização
+            </label>
+            <select id="org" name="org" defaultValue={orgFilter} className={input}>
+              <option value="">Todas</option>
+              {organizations.map((o) => o.name).map((n) => (
+                <option key={n} value={n}>
+                  {n}
                 </option>
               ))}
             </select>
@@ -182,13 +200,14 @@ export async function UsuariosTab({
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[680px] text-left text-[13px]">
+        <table className="w-full min-w-[780px] text-left text-[13px]">
           <thead className="bg-navy text-[12px] font-semibold text-white">
             <tr>
               <th className="w-12 px-3 py-2.5" aria-label="Editar" />
               <th className="px-3 py-2.5">Nome</th>
               <th className="px-3 py-2.5">E-mail</th>
               <th className="px-3 py-2.5">Tipo</th>
+              <th className="px-3 py-2.5">Organização</th>
               <th className="px-3 py-2.5">Grupo</th>
               <th className="px-3 py-2.5">Situação</th>
             </tr>
@@ -229,6 +248,7 @@ export async function UsuariosTab({
                   </td>
                   <td className="px-3 py-2.5 text-slate-600">{u.email}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "—"}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2.5">
                     {u.pending ? (

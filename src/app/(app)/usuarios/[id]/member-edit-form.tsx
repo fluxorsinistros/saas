@@ -23,6 +23,8 @@ export function MemberEditForm({
   active,
   roles,
   groups,
+  organizations,
+  organizationId,
 }: {
   membershipId: string;
   fullName: string;
@@ -35,6 +37,8 @@ export function MemberEditForm({
   active: boolean;
   roles: Option[];
   groups: Option[];
+  organizations: Option[];
+  organizationId: string;
 }) {
   const [state, action, pending] = useActionState(updateMemberAccess, null);
   const [role, setRole] = useState(roleId);
@@ -83,6 +87,18 @@ export function MemberEditForm({
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="organization_id" className="mb-1 block text-[12px] font-medium text-slate-600">
+            *Organização
+          </label>
+          <select id="organization_id" name="organization_id" required defaultValue={organizationId} className={input}>
+            {organizations.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
               </option>
             ))}
           </select>
