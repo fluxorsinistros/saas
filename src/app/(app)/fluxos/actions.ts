@@ -33,6 +33,54 @@ export type SavePayload = {
 
 export type ActionResult = { ok: true } | { ok: false; error: string; issues?: Issue[] };
 
+export type FieldResult =
+  | { ok: true; field: { id: string; key: string; label: string; field_type: string; options: string[] | null } }
+  | { ok: false; error: string };
+
+// Campo personalizado "estilo SHARP" (Documento 1): o cliente cria quantos quiser, sem migração
+// nova — isso só grava uma linha de catálogo. A chave vira o identificador estável em
+// claims.custom_fields, então nunca muda depois de criada (só o rótulo pode).
+export async function createWorkflowField(workflowId: string, formData: FormData): Promise<FieldResult> {
+  const ctx = await getTenantContext();
+  if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
+
+  const label = String(formData.get("label") ?? "").trim();
+  const fieldType = String(formData.get("field_type") ?? "text");
+  if (!label) return { ok: false, error: "Nome do campo é obrigatório." };
+  if (!["text", "number", "date", "select"].includes(fieldType)) return { ok: false, error: "Tipo de campo inválido." };
+
+  const key = label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!key) return { ok: false, error: "Nome do campo precisa ter alguma letra ou número." };
+
+  const options =
+    fieldType === "select"
+      ? String(formData.get("options") ?? "")
+          .split(",")
+          .map((o) => o.trim())
+          .filter(Boolean)
+      : null;
+  if (fieldType === "select" && (!options || options.length === 0)) {
+    return { ok: false, error: "Lista de opções precisa de pelo menos um item (separado por vírgula)." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("workflow_fields")
+    .insert({ tenant_id: ctx.tenantId, workflow_id: workflowId, key, label, field_type: fieldType, options })
+    .select("id, key, label, field_type, options")
+    .single();
+  if (error || !data) {
+    return { ok: false, error: error?.code === "23505" ? "Já existe um campo com esse nome neste fluxo." : (error?.message ?? "Falha ao criar campo.") };
+  }
+  revalidatePath(`/fluxos/${workflowId}`);
+  return { ok: true, field: { ...data, options: data.options as string[] | null } };
+}
+
 export type PublishDiff = {
   hasPublishedBefore: boolean;
   nodesAdded: number;

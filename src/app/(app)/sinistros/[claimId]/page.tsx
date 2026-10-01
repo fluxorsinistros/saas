@@ -124,11 +124,12 @@ export default async function ClaimPage({
 
   const { data: claim } = await supabase
     .from("claims")
-    .select("id, claim_number, status, occurred_at, created_at, declared_value")
+    .select("id, claim_number, status, occurred_at, created_at, declared_value, custom_fields")
     .eq("id", claimId)
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
   if (!claim) notFound();
+  const customFields = (claim.custom_fields ?? {}) as Record<string, string>;
 
   // Duplicidade (Documento 2 §28): avisa, nunca bloqueia — mostra o `pending` mais recente (se houver)
   // com os candidatos e a evidência, pro usuário decidir. Roda só uma vez, na formalização.
@@ -165,6 +166,14 @@ export default async function ClaimPage({
     .eq("id", cycle.workflow_version_id)
     .single();
   const { data: workflow } = await supabase.from("workflows").select("name").eq("id", version!.workflow_id).single();
+
+  // Campos personalizados (Documento 1, "estilo SHARP"): cada etapa pede um subconjunto do
+  // catálogo do fluxo; os valores caem todos em claims.custom_fields, nunca por etapa.
+  const { data: workflowFields } = await supabase
+    .from("workflow_fields")
+    .select("id, key, label, field_type, options")
+    .eq("workflow_id", version!.workflow_id);
+  const fieldByKey = new Map((workflowFields ?? []).map((f) => [f.key, f]));
 
   const graph = await loadGraph(supabase, cycle.workflow_version_id);
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -536,16 +545,57 @@ export default async function ClaimPage({
                     </div>
                   )}
 
-                  {activity && type !== "end" && (
+                  {activity && type !== "end" && (() => {
+                    const stageFields = (node?.config.field_keys ?? [])
+                      .map((k) => fieldByKey.get(k))
+                      .filter((f): f is NonNullable<typeof f> => !!f);
+                    return (
+                    <>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                       <span className="text-[12px] text-slate-500">
                         Grupo: <span className="font-medium text-slate-700">{groupName.get(activity.group_id ?? "") ?? "—"}</span>
                       </span>
                       {activity.status === "in_progress" && cycle.status !== "discarded" && perms.has("claim.execute") ? (
-                        <form action={completeActivity.bind(null, activity.id)}>
-                          <button className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600">
-                            Concluir
-                          </button>
+                        <form action={completeActivity.bind(null, activity.id)} className="w-full space-y-2.5">
+                          {stageFields.length > 0 && (
+                            <div className="grid gap-2.5 sm:grid-cols-2">
+                              {stageFields.map((f) => (
+                                <div key={f.key}>
+                                  <label htmlFor={`field-${f.key}`} className="mb-1 block text-[12px] font-medium text-slate-600">
+                                    {f.label}
+                                  </label>
+                                  {f.field_type === "select" ? (
+                                    <select
+                                      id={`field-${f.key}`}
+                                      name={`field_${f.key}`}
+                                      defaultValue={customFields[f.key] ?? ""}
+                                      className={`${input} text-[13px]`}
+                                    >
+                                      <option value="">Selecione…</option>
+                                      {((f.options as string[] | null) ?? []).map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      id={`field-${f.key}`}
+                                      name={`field_${f.key}`}
+                                      type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
+                                      defaultValue={customFields[f.key] ?? ""}
+                                      className={`${input} text-[13px]`}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex justify-end">
+                            <button className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+                              Concluir
+                            </button>
+                          </div>
                         </form>
                       ) : activity.status === "in_progress" && cycle.status === "discarded" ? (
                         <span className="text-[12px] text-slate-400">Ciclo descartado</span>
@@ -557,7 +607,21 @@ export default async function ClaimPage({
                         </span>
                       )}
                     </div>
-                  )}
+                    {activity.status === "completed" && stageFields.some((f) => customFields[f.key]) && (
+                      <dl className="mt-2.5 grid gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-[12px] sm:grid-cols-2">
+                        {stageFields
+                          .filter((f) => customFields[f.key])
+                          .map((f) => (
+                            <div key={f.key} className="flex gap-1.5">
+                              <dt className="text-slate-500">{f.label}:</dt>
+                              <dd className="font-medium text-slate-800">{customFields[f.key]}</dd>
+                            </div>
+                          ))}
+                      </dl>
+                    )}
+                    </>
+                    );
+                  })()}
 
                   {activity && (pendingByActivity.get(activity.id)?.length ?? 0) > 0 && (
                     <ul className="mt-2.5 space-y-1.5 border-t border-slate-100 pt-2.5">

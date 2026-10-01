@@ -1,8 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Trash2 } from "lucide-react";
-import { JOIN_RULE_HELP, JOIN_RULE_LABEL, NODE_META, type JoinRule, type NodeConfig, type NodeType } from "@/lib/workflow/types";
+import { Copy, Plus, Trash2 } from "lucide-react";
+import {
+  JOIN_RULE_HELP,
+  JOIN_RULE_LABEL,
+  NODE_META,
+  type FieldType,
+  type JoinRule,
+  type NodeConfig,
+  type NodeType,
+  type WorkflowField,
+} from "@/lib/workflow/types";
+import type { FieldResult } from "@/app/(app)/fluxos/actions";
 import type { FlowEdge, FlowEdgeData, FlowNode, FlowNodeData } from "./context";
 
 type Group = { id: string; name: string };
@@ -14,11 +24,14 @@ const input =
 const GROUP_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
 const SLA_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
 const LOOP_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
+const FIELD_TYPES: NodeType[] = ["stage", "decision", "pending", "wait"];
 
 export function NodeInspector({
   node,
   groups,
   calendars = [],
+  fields = [],
+  onCreateField,
   readOnly,
   outgoing,
   autoFocusName,
@@ -31,6 +44,8 @@ export function NodeInspector({
   node: FlowNode;
   groups: Group[];
   calendars?: { id: string; name: string }[];
+  fields?: WorkflowField[];
+  onCreateField?: (formData: FormData) => Promise<FieldResult>;
   readOnly: boolean;
   outgoing: FlowEdge[];
   autoFocusName?: boolean;
@@ -130,6 +145,22 @@ export function NodeInspector({
             onChange={(e) => setConfig({ description: e.target.value || undefined })}
           />
         </div>
+      )}
+
+      {FIELD_TYPES.includes(type) && onCreateField && (
+        <FieldsSection
+          selected={data.config.field_keys ?? []}
+          fields={fields}
+          readOnly={readOnly}
+          onCreateField={onCreateField}
+          onToggle={(key, checked) => {
+            const current = new Set(data.config.field_keys ?? []);
+            if (checked) current.add(key);
+            else current.delete(key);
+            setConfig({ field_keys: [...current] });
+          }}
+          onCreated={(field) => setConfig({ field_keys: [...(data.config.field_keys ?? []), field.key] })}
+        />
       )}
 
       {(type === "decision" || type === "parallel_split") && (
@@ -371,6 +402,135 @@ function Toggle({
         <span className="block text-[11px] text-slate-500">{hint}</span>
       </span>
     </label>
+  );
+}
+
+const FIELD_TYPE_LABEL: Record<FieldType, string> = { text: "Texto", number: "Número", date: "Data", select: "Lista de opções" };
+
+// Campos personalizados "estilo SHARP" (Documento 1): o fluxo tem um catálogo de campos próprio,
+// criado conforme a necessidade, sem nunca precisar de migração — cada etapa só escolhe quais
+// desse catálogo ela pede pra preencher.
+function FieldsSection({
+  fields,
+  selected,
+  readOnly,
+  onToggle,
+  onCreateField,
+  onCreated,
+}: {
+  fields: WorkflowField[];
+  selected: string[];
+  readOnly: boolean;
+  onToggle: (key: string, checked: boolean) => void;
+  onCreateField: (formData: FormData) => Promise<FieldResult>;
+  onCreated: (field: { key: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [fieldType, setFieldType] = useState<FieldType>("text");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const selectedSet = new Set(selected);
+
+  async function handleCreate(formData: FormData) {
+    setSaving(true);
+    setError(null);
+    const res = await onCreateField(formData);
+    setSaving(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onCreated(res.field);
+    setOpen(false);
+    setFieldType("text");
+  }
+
+  return (
+    <div>
+      <div className={label}>Campos desta etapa</div>
+      {fields.length === 0 && !open && (
+        <p className="mb-2 rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+          Nenhum campo criado neste fluxo ainda.
+        </p>
+      )}
+      {fields.length > 0 && (
+        <ul className="mb-2 space-y-1.5">
+          {fields.map((f) => (
+            <li key={f.id} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id={`field-${f.id}`}
+                className="size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+                checked={selectedSet.has(f.key)}
+                disabled={readOnly}
+                onChange={(e) => onToggle(f.key, e.target.checked)}
+              />
+              <label htmlFor={`field-${f.id}`} className="text-[13px] text-slate-800">
+                {f.label} <span className="text-slate-400">({FIELD_TYPE_LABEL[f.field_type as FieldType]})</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {readOnly ? null : !open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:underline"
+        >
+          <Plus className="size-3.5" /> Novo campo
+        </button>
+      ) : (
+        <form
+          action={handleCreate}
+          className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5"
+        >
+          <input
+            name="label"
+            required
+            placeholder="Nome do campo"
+            className={`${input} bg-white`}
+            autoFocus
+          />
+          <select
+            name="field_type"
+            className={`${input} bg-white`}
+            value={fieldType}
+            onChange={(e) => setFieldType(e.target.value as FieldType)}
+          >
+            {(Object.keys(FIELD_TYPE_LABEL) as FieldType[]).map((t) => (
+              <option key={t} value={t}>
+                {FIELD_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
+          {fieldType === "select" && (
+            <input name="options" required placeholder="Opções separadas por vírgula" className={`${input} bg-white`} />
+          )}
+          {error && <p className="text-[11px] text-rose-600">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-md bg-brand px-2.5 py-1 text-[12px] font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              {saving ? "Criando…" : "Criar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setError(null);
+              }}
+              className="rounded-md px-2.5 py-1 text-[12px] text-slate-600 hover:bg-slate-100"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 

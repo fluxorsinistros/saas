@@ -49,11 +49,12 @@ import { BuilderContext, type FlowEdge, type FlowEdgeData, type FlowNode, type F
 import { nodeTypes } from "./nodes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EdgeInspector, NodeInspector } from "./Inspector";
-import { NODE_META, NODE_TYPES, toDbEdgeType, type Graph, type NodeConfig, type NodeType } from "@/lib/workflow/types";
+import { NODE_META, NODE_TYPES, toDbEdgeType, type Graph, type NodeConfig, type NodeType, type WorkflowField } from "@/lib/workflow/types";
 import { validateGraph, type Issue } from "@/lib/workflow/validator";
 import { TEMPLATES, type WorkflowTemplate } from "@/lib/workflow/templates";
 import {
   createNewVersion,
+  createWorkflowField,
   getPublishDiff,
   publishVersion,
   saveDraft,
@@ -87,6 +88,7 @@ type Props = {
   initialEdges: DbEdge[];
   groups: { id: string; name: string }[];
   calendars?: { id: string; name: string }[];
+  initialFields?: WorkflowField[];
   canEdit: boolean;
   canPublish: boolean;
 };
@@ -189,7 +191,7 @@ export function WorkflowBuilder(props: Props) {
   );
 }
 
-function Builder({ workflow, version, versions, initialNodes, initialEdges, groups, calendars = [], canEdit, canPublish }: Props) {
+function Builder({ workflow, version, versions, initialNodes, initialEdges, groups, calendars = [], initialFields = [], canEdit, canPublish }: Props) {
   const router = useRouter();
   const { screenToFlowPosition, setCenter, fitView, zoomIn, zoomOut, deleteElements, getViewport } = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -197,6 +199,15 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(toFlowNodes(initialNodes));
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(toFlowEdges(initialEdges));
+  const [fields, setFields] = useState<WorkflowField[]>(initialFields);
+  const handleCreateField = useCallback(
+    async (formData: FormData) => {
+      const res = await createWorkflowField(workflow.id, formData);
+      if (res.ok) setFields((fs) => [...fs, { ...res.field, field_type: res.field.field_type as WorkflowField["field_type"] }]);
+      return res;
+    },
+    [workflow.id],
+  );
   const [selection, setSelection] = useState<{ node?: string; edge?: string }>({});
   const [savedJson, setSavedJson] = useState(() =>
     JSON.stringify(toPayload(toFlowNodes(initialNodes), toFlowEdges(initialEdges))),
@@ -870,6 +881,8 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   node={selectedNode}
                   groups={groups}
                   calendars={calendars}
+                  fields={fields}
+                  onCreateField={handleCreateField}
                   readOnly={readOnly}
                   autoFocusName={pendingIds.has(selectedNode.id)}
                   outgoing={edges.filter((e) => e.source === selectedNode.id)}

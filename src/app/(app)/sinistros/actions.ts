@@ -604,7 +604,7 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   redirect(`/sinistros/${claimId}`);
 }
 
-export async function completeActivity(activityInstanceId: string): Promise<void> {
+export async function completeActivity(activityInstanceId: string, formData?: FormData): Promise<void> {
   const ctx = await getTenantContext();
   await requirePermission(ctx, "claim.execute");
   const supabase = await createClient();
@@ -632,6 +632,18 @@ export async function completeActivity(activityInstanceId: string): Promise<void
   if (cErr || !cycle) throw new Error("Ciclo não encontrado.");
   if (cycle.status === "completed" || cycle.status === "blocked" || cycle.status === "discarded") {
     throw new Error(`Este ciclo não pode mais avançar (status atual: ${cycle.status}).`);
+  }
+
+  // Campos personalizados desta etapa (Documento 1, "estilo SHARP") caem na mesma ficha do
+  // sinistro — nunca sobrescrevem o que outra etapa já preencheu, só somam (merge raso).
+  const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
+  if (fieldEntries.length) {
+    const { data: claimRow } = await supabase.from("claims").select("custom_fields").eq("id", cycle.claim_id).single();
+    const current = (claimRow?.custom_fields ?? {}) as Record<string, string>;
+    const patch = Object.fromEntries(
+      fieldEntries.map(([k, v]) => [k.slice("field_".length), String(v)]).filter(([, v]) => v !== ""),
+    );
+    await supabase.from("claims").update({ custom_fields: { ...current, ...patch } }).eq("id", cycle.claim_id);
   }
 
   const now = new Date().toISOString();

@@ -11,6 +11,19 @@ export type NodeConfig = {
   loop_max?: number;
   join_rule?: JoinRule;
   min_count?: number;
+  // Chaves de workflow_fields que esta etapa pede pra preencher — valores entram em
+  // claims.custom_fields na conclusão (ficha única do sinistro, nunca fragmentada por etapa).
+  field_keys?: string[];
+};
+
+export type FieldType = "text" | "number" | "date" | "select";
+
+export type WorkflowField = {
+  id: string;
+  key: string;
+  label: string;
+  field_type: FieldType;
+  options: string[] | null;
 };
 
 export type EdgeKind = "normal" | "return";
