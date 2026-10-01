@@ -1,33 +1,24 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { signIn, signUp, type AuthState } from "./actions";
+import { useActionState } from "react";
+import Link from "next/link";
+import { signIn, type AuthState } from "./actions";
 
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/15";
 
+// Sem autocadastro aqui: toda empresa nova entra pela Administração da plataforma (Documento 1
+// §56) — quem já faz parte de uma empresa só pode chegar aqui por convite. "Criar conta" existia
+// antes como autocadastro público, mas isso deixava qualquer e-mail criar uma empresa nova sozinho.
 export function LoginForm() {
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [state, action, pending] = useActionState<AuthState, FormData>(mode === "in" ? signIn : signUp, undefined);
+  const [state, action, pending] = useActionState<AuthState, FormData>(signIn, undefined);
 
   return (
     <div className="w-full max-w-sm">
-      <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
-        {mode === "in" ? "Entrar" : "Criar conta"}
-      </h1>
-      <p className="mt-1 text-[14px] text-slate-500">
-        {mode === "in" ? "Acesse sua conta para continuar." : "Leva menos de um minuto."}
-      </p>
+      <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Entrar</h1>
+      <p className="mt-1 text-[14px] text-slate-500">Acesse sua conta para continuar.</p>
 
-      <form action={action} className="mt-6 space-y-4" key={mode}>
-        {mode === "up" && (
-          <div>
-            <label htmlFor="full_name" className="mb-1 block text-[13px] font-medium text-slate-700">
-              Nome
-            </label>
-            <input id="full_name" name="full_name" required autoComplete="name" className={input} />
-          </div>
-        )}
+      <form action={action} className="mt-6 space-y-4">
         <div>
           <label htmlFor="email" className="mb-1 block text-[13px] font-medium text-slate-700">
             E-mail
@@ -35,18 +26,15 @@ export function LoginForm() {
           <input id="email" name="email" type="email" required autoComplete="email" className={input} />
         </div>
         <div>
-          <label htmlFor="password" className="mb-1 block text-[13px] font-medium text-slate-700">
-            Senha
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={6}
-            autoComplete={mode === "in" ? "current-password" : "new-password"}
-            className={input}
-          />
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="mb-1 block text-[13px] font-medium text-slate-700">
+              Senha
+            </label>
+            <Link href="/esqueci-senha" className="mb-1 text-[12px] font-medium text-brand hover:underline">
+              Esqueci minha senha
+            </Link>
+          </div>
+          <input id="password" name="password" type="password" required minLength={6} autoComplete="current-password" className={input} />
         </div>
 
         {state?.error && (
@@ -65,16 +53,9 @@ export function LoginForm() {
           disabled={pending}
           className="w-full rounded-lg bg-brand px-4 py-2.5 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600 disabled:opacity-60"
         >
-          {pending ? "Aguarde…" : mode === "in" ? "Entrar" : "Criar conta"}
+          {pending ? "Aguarde…" : "Entrar"}
         </button>
       </form>
-
-      <p className="mt-6 text-center text-[13px] text-slate-500">
-        {mode === "in" ? "Ainda não tem conta?" : "Já tem conta?"}{" "}
-        <button type="button" onClick={() => setMode(mode === "in" ? "up" : "in")} className="font-medium text-brand hover:underline">
-          {mode === "in" ? "Criar conta" : "Entrar"}
-        </button>
-      </p>
     </div>
   );
 }
