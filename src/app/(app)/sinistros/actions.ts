@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { requireGroupAccess, requirePermission } from "@/lib/permissions";
+import { isActionAllowedForMember } from "@/lib/group-actions";
 import { addBusinessMinutes } from "@/lib/sla";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { resolveTransition, startNode } from "@/lib/workflow/engine";
@@ -586,6 +587,9 @@ export async function createClaimAndCycle(
 export async function formalizeClaim(formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
   await requirePermission(ctx, "claim.formalize");
+  if (!(await isActionAllowedForMember(ctx.userId, ctx.tenantId, "claim.formalize"))) {
+    throw new Error("Seu grupo não está liberado para lançar sinistros.");
+  }
   const supabase = await createClient();
 
   const workflowId = String(formData.get("workflow_id") ?? "");

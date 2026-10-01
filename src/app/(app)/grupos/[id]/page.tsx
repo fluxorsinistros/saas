@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes, type PermissionCode } from "@/lib/permissions";
 import { SCREENS } from "@/lib/screens";
-import { toggleGroup, updateGroup, updateGroupScreens } from "../actions";
+import { GROUP_ACTIONS } from "@/lib/group-actions";
+import { toggleGroup, updateGroup, updateGroupActions, updateGroupScreens } from "../actions";
 
 export const metadata: Metadata = { title: "Editar grupo" };
 
@@ -31,6 +32,7 @@ const PERMISSION_LABELS: Record<PermissionCode, string> = {
 const TABS = [
   { key: "geral", label: "Geral" },
   { key: "telas", label: "Telas" },
+  { key: "acoes", label: "Ações" },
 ] as const;
 
 // Passo 3 do modelo (cadastrar → filtrar/listar → editar), igual a Usuários. Abas aqui porque mais
@@ -54,7 +56,7 @@ export default async function EditGroupPage({
   const supabase = await createClient();
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, description, status, hidden_screens, group_members(count)")
+    .select("id, name, description, status, hidden_screens, disabled_actions, group_members(count)")
     .eq("id", id)
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
@@ -63,6 +65,7 @@ export default async function EditGroupPage({
   const active = group.status === "active";
   const members = group.group_members?.[0]?.count ?? 0;
   const hiddenScreens = new Set(group.hidden_screens ?? []);
+  const disabledActions = new Set(group.disabled_actions ?? []);
 
   // Papel (Administrador/Operador) controla telas e ações — é escolhido por pessoa em /usuarios,
   // não por grupo. Mostrar aqui é só pra deixar claro a diferença, sem misturar os dois conceitos.
@@ -214,6 +217,41 @@ export default async function EditGroupPage({
             </ul>
             <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
               Salvar telas
+            </button>
+          </form>
+        )}
+
+        {aba === "acoes" && (
+          <form action={updateGroupActions} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+            <input type="hidden" name="id" value={group.id} />
+            <div>
+              <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Ações permitidas</h2>
+              <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
+                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
+                Vale só para quem é <strong>Operador</strong> e está neste grupo — Administrador sempre pode fazer tudo,
+                independentemente do grupo. É uma restrição a mais sobre o que o Papel já libera, não substitui permissão.
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {GROUP_ACTIONS.map((a) => (
+                <li key={a.key} className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id={`action-${a.key}`}
+                    name="allowed"
+                    value={a.key}
+                    defaultChecked={!disabledActions.has(a.key)}
+                    className="mt-0.5 size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+                  />
+                  <label htmlFor={`action-${a.key}`}>
+                    <span className="block text-[14px] text-slate-800">{a.label}</span>
+                    <span className="block text-[12px] text-slate-500">{a.hint}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+              Salvar ações
             </button>
           </form>
         )}

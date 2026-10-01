@@ -7,6 +7,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { requirePermission } from "@/lib/permissions";
 import { assertCountLimit } from "@/lib/limits";
 import { SCREENS } from "@/lib/screens";
+import { GROUP_ACTIONS } from "@/lib/group-actions";
 
 // Grupos entram no mesmo guard de Usuários (não têm código de permissão próprio no catálogo —
 // quem administra pessoas administra as unidades operacionais que elas pertencem).
@@ -60,6 +61,24 @@ export async function updateGroupScreens(formData: FormData) {
   revalidatePath("/grupos");
   revalidatePath(`/grupos/${id}`);
   redirect(`/grupos/${id}?aba=telas`);
+}
+
+// Ações que membros Operador deste grupo podem executar (ex.: lançar sinistro) — Administrador
+// nunca é afetado (ver isActionAllowedForMember). Mesmo padrão de updateGroupScreens: o form manda
+// os checkboxes marcados = permitidos, o que falta vira disabled_actions.
+export async function updateGroupActions(formData: FormData) {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "user.manage");
+  const id = String(formData.get("id"));
+  const allowed = new Set(formData.getAll("allowed").map(String));
+  const disabled = GROUP_ACTIONS.map((a) => a.key).filter((key) => !allowed.has(key));
+  const supabase = await createClient();
+  const { error } = await supabase.from("groups").update({ disabled_actions: disabled }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/grupos");
+  revalidatePath(`/grupos/${id}`);
+  revalidatePath("/sinistros");
+  redirect(`/grupos/${id}?aba=acoes`);
 }
 
 // Grupo nunca é excluído: etapas e histórico apontam para ele (Documento 1 §2.3).

@@ -1138,6 +1138,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          disabled_actions: string[]
           hidden_screens: string[]
           id: string
           name: string
@@ -1148,6 +1149,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          disabled_actions?: string[]
           hidden_screens?: string[]
           id?: string
           name: string
@@ -1158,6 +1160,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          disabled_actions?: string[]
           hidden_screens?: string[]
           id?: string
           name?: string

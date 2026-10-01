@@ -46,9 +46,15 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
   );
   const { data: myGroupRows } = membership
-    ? await supabase.from("group_members").select("groups(id, name)").eq("membership_id", membership.id)
-    : { data: [] as { groups: { id: string; name: string } | null }[] };
-  const myGroups = (myGroupRows ?? []).map((g) => g.groups).filter((g): g is { id: string; name: string } => !!g);
+    ? await supabase.from("group_members").select("groups(id, name, disabled_actions)").eq("membership_id", membership.id)
+    : { data: [] as { groups: { id: string; name: string; disabled_actions: string[] } | null }[] };
+  const myGroupsFull = (myGroupRows ?? [])
+    .map((g) => g.groups)
+    .filter((g): g is { id: string; name: string; disabled_actions: string[] } => !!g);
+  const myGroups = myGroupsFull.map((g) => ({ id: g.id, name: g.name }));
+  // Restrição adicional do grupo sobre claim.formalize (Documento 1 §32 + aba "Ações" do grupo):
+  // Administrador nunca é afetado; Operador precisa de pelo menos um grupo que libere a ação.
+  const canFormalize = isAdmin || myGroupsFull.some((g) => !g.disabled_actions.includes("claim.formalize"));
 
   const { data: allGroups } = isAdmin
     ? await supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name")
@@ -116,7 +122,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
           afetam ciclos já abertos.
         </p>
 
-        {!perms.has("claim.formalize") ? null : options.length === 0 ? (
+        {!perms.has("claim.formalize") || !canFormalize ? null : options.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-4 text-[13px] text-slate-500">
             Nenhum fluxo publicado ainda.{" "}
             <Link href="/fluxos" className="font-medium text-brand hover:underline">
