@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { sendInviteMail, sendResetMail } from "@/lib/auth-mail";
 import { createClient } from "@/lib/supabase/server";
-import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { isPlatformAdmin, requirePlatformAdmin } from "@/lib/platform-admin";
+import { isTenantAdmin } from "@/lib/permissions";
 import { writeAudit } from "@/app/(app)/sinistros/actions";
 import type { Json } from "@/lib/supabase/database.types";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
@@ -396,17 +397,31 @@ export async function renameTenant(formData: FormData): Promise<void> {
 
 // Marca própria da conta (white-label): nome, subtítulo, cor e logo. Só vale se o white-label estiver liberado no contrato.
 export async function saveTenantBranding(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  await requirePlatformAdmin();
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Não autenticado." };
+
   const tenantId = String(formData.get("tenant_id") ?? "");
+  if (!tenantId) return { ok: false, message: "Conta não informada." };
+
+  const [isPlatform, isCompanyAdmin] = await Promise.all([
+    isPlatformAdmin(),
+    isTenantAdmin(user.id, tenantId),
+  ]);
+
+  if (!isPlatform && !isCompanyAdmin) {
+    return { ok: false, message: "Você não tem permissão para gerenciar a marca desta conta." };
+  }
+
   const name = String(formData.get("brand_name") ?? "").trim();
   const tagline = String(formData.get("brand_tagline") ?? "").trim();
   const color = String(formData.get("brand_color") ?? "").trim();
-  if (!tenantId) return { ok: false, message: "Conta não informada." };
   if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, message: "A cor precisa estar no formato #RRGGBB." };
 
   const { data: contract } = await supabase.from("tenant_contracts").select("white_label_enabled").eq("tenant_id", tenantId).maybeSingle();
-  if (!contract?.white_label_enabled) return { ok: false, message: "O white-label não está liberado para esta conta (aba Plano e cobrança)." };
+  if (!contract?.white_label_enabled) return { ok: false, message: "O white-label não está liberado para esta conta (módulo White-label necessário)." };
 
   const { data: tenant } = await supabase.from("tenants").select("settings").eq("id", tenantId).single();
   const settings = ((tenant?.settings ?? {}) as Record<string, Json>) ?? {};
@@ -437,7 +452,54 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
   if (error) return { ok: false, message: error.message };
   await writeAudit(supabase, null, "tenant.branding_updated", "tenant", tenantId, { next: { name: name || null, color: color || null, logo: !!logoPath } });
   revalidatePath("/admin", "layout");
-  return { ok: true, message: name ? "Marca da conta salva." : "Marca removida: a conta usa a marca da plataforma." };
+  return { ok: true, message: name ? "Marca da conta salva com sucesso!" : "Marca removida: a conta volta a usar a marca padrão da plataforma." };
+}
+
+// Salva os parâmetros gerais de SLA da empresa (calendário padrão e limiares de alerta)
+export async function saveTenantSlaSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Não autenticado." };
+
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  if (!tenantId) return { ok: false, message: "Conta não informada." };
+
+  const [isPlatform, isCompanyAdmin] = await Promise.all([
+    isPlatformAdmin(),
+    isTenantAdmin(user.id, tenantId),
+  ]);
+
+  if (!isPlatform && !isCompanyAdmin) {
+    return { ok: false, message: "Você não tem permissão para alterar as configurações de SLA desta conta." };
+  }
+
+  const defaultCalendarId = String(formData.get("default_calendar_id") ?? "").trim() || null;
+  const warningPct = Number(formData.get("warning_threshold_pct") ?? 75);
+  const criticalPct = Number(formData.get("critical_threshold_pct") ?? 90);
+
+  const { data: tenant } = await supabase.from("tenants").select("settings").eq("id", tenantId).single();
+  const settings = ((tenant?.settings ?? {}) as Record<string, Json>) ?? {};
+
+  const next: Record<string, Json> = {
+    ...settings,
+    sla: {
+      default_calendar_id: defaultCalendarId,
+      warning_threshold_pct: isNaN(warningPct) ? 75 : Math.max(10, Math.min(99, warningPct)),
+      critical_threshold_pct: isNaN(criticalPct) ? 90 : Math.max(10, Math.min(100, criticalPct)),
+    } as Json,
+  };
+
+  const { error } = await supabase.from("tenants").update({ settings: next as Json }).eq("id", tenantId);
+  if (error) return { ok: false, message: error.message };
+
+  await writeAudit(supabase, null, "tenant.sla_updated", "tenant", tenantId, {
+    next: { default_calendar_id: defaultCalendarId, warning_threshold_pct: warningPct, critical_threshold_pct: criticalPct },
+  });
+
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: "Configurações de SLA da empresa salvas com sucesso!" };
 }
 
 // Salva a pessoa inteira (dados, tipo, empresa, situação e grupo) de uma vez. Trocar a empresa move o usuário;

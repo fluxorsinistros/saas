@@ -1,5 +1,6 @@
 import { getTenantContext } from "@/lib/tenant";
 import { isPlatformAdmin } from "@/lib/platform-admin";
+import { isTenantAdmin } from "@/lib/permissions";
 import { darkenHex, getPlatformBrand, getTenantBrand } from "@/lib/branding";
 import { createClient } from "@/lib/supabase/server";
 import { getHiddenScreensForMember } from "@/lib/screens";
@@ -23,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           tenants={[]}
           email={user?.email ?? ""}
           isPlatformAdmin
+          isAdmin
           brand={brand}
         />
         <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
@@ -31,14 +33,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const ctx = await getTenantContext();
-  // White-label: a conta com marca própria liberada vê o próprio nome, logo e cor principal
-  const own = await getTenantBrand(ctx.tenantId);
+  const [own, hiddenScreens, tenantAdmin] = await Promise.all([
+    getTenantBrand(ctx.tenantId),
+    getHiddenScreensForMember(ctx.userId, ctx.tenantId),
+    isTenantAdmin(ctx.userId, ctx.tenantId),
+  ]);
   const themeVars = own?.color
     ? ({ "--color-brand": own.color, "--color-brand-600": darkenHex(own.color) } as React.CSSProperties)
     : undefined;
-  // Administrador nunca fica preso ao menu reduzido do grupo — hidden_screens só vale pra quem é
-  // Operador. Sem isso, esconder uma tela pro grupo trancaria o próprio Administrador fora dela.
-  const hiddenScreens = await getHiddenScreensForMember(ctx.userId, ctx.tenantId);
+
   return (
     <div className="flex h-full" style={themeVars}>
       <AppSidebar
@@ -47,6 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         tenants={ctx.tenants}
         email={ctx.email}
         isPlatformAdmin={false}
+        isAdmin={tenantAdmin}
         hiddenScreens={hiddenScreens}
         brand={own?.brand ?? brand}
       />

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, FileWarning, Plus, SearchX } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, Plus, SearchX, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -25,6 +25,116 @@ const CYCLE_STATUS_STYLE: Record<string, string> = {
   open: "bg-sky-50 text-sky-700 ring-sky-200",
   in_progress: "bg-sky-50 text-sky-700 ring-sky-200",
 };
+
+function formatRelativeDuration(isoString: string | null | undefined): string {
+  if (!isoString) return "";
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  if (diffMs < 0) return "agora";
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return "menos de 1 min";
+  if (diffMin < 60) return `${diffMin} min`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) {
+    return `${diffHours} ${diffHours === 1 ? "hora" : "horas"}`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) {
+    return `${diffDays} ${diffDays === 1 ? "dia" : "dias"}`;
+  }
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths} ${diffMonths === 1 ? "mês" : "meses"}`;
+}
+
+function formatDuration(minutes: number): string {
+  if (minutes < 1) return "menos de 1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h < 24) {
+    return m > 0 ? `${h}h ${m}min` : `${h}h`;
+  }
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
+}
+
+function formatDurationBetween(startIso: string | null | undefined, endIso: string | null | undefined): string {
+  if (!startIso) return "";
+  const start = new Date(startIso).getTime();
+  const end = endIso ? new Date(endIso).getTime() : Date.now();
+  const diffMs = Math.max(0, end - start);
+  const diffMin = Math.floor(diffMs / 60_000);
+  return formatDuration(diffMin);
+}
+
+function computeSla(startedAtIso: string | null | undefined, slaMinutes: number | undefined) {
+  if (!startedAtIso || !slaMinutes || slaMinutes <= 0) return null;
+  const now = Date.now();
+  const start = new Date(startedAtIso).getTime();
+  const slaMs = slaMinutes * 60_000;
+  const elapsedMs = Math.max(0, now - start);
+  const remainingMs = slaMs - elapsedMs;
+  const pct = Math.round((elapsedMs / slaMs) * 100);
+  const isBreached = remainingMs <= 0;
+  const diffMinutes = Math.round(Math.abs(remainingMs) / 60_000);
+  const formattedRemaining = isBreached
+    ? `estourado há ${formatDuration(diffMinutes)}`
+    : `restam ${formatDuration(diffMinutes)}`;
+
+  return {
+    pct,
+    isBreached,
+    isAtRisk: !isBreached && pct >= 75,
+    formattedRemaining,
+    formattedLimit: formatDuration(slaMinutes),
+  };
+}
+
+function computeProcessProgress(
+  isCompleted: boolean,
+  workflowVersionId: string | undefined,
+  completedNodeIds: Set<string> | undefined,
+  stepsByVersion: Map<string, { id: string; name: string; sla_minutes: number }[]>,
+) {
+  const steps = workflowVersionId ? stepsByVersion.get(workflowVersionId) ?? [] : [];
+  const totalCount = steps.length || 1;
+
+  if (isCompleted) {
+    return {
+      pct: 100,
+      completedCount: totalCount,
+      totalCount,
+      subtext: `${totalCount} de ${totalCount} etapas concluídas`,
+    };
+  }
+
+  if (steps.length === 0) return null;
+
+  const totalMinutes = steps.reduce((sum, s) => sum + s.sla_minutes, 0);
+  const doneIds = completedNodeIds ?? new Set<string>();
+
+  let completedMinutes = 0;
+  let completedCount = 0;
+
+  for (const step of steps) {
+    if (doneIds.has(step.id)) {
+      completedMinutes += step.sla_minutes;
+      completedCount++;
+    }
+  }
+
+  const pct = totalMinutes > 0 ? Math.min(100, Math.round((completedMinutes / totalMinutes) * 100)) : 0;
+  const subtext = `${completedCount} de ${totalCount} etapas concluídas`;
+
+  return {
+    pct,
+    completedCount,
+    totalCount,
+    completedMinutes,
+    totalMinutes,
+    subtext,
+  };
+}
 
 export default async function SinistrosPage({ searchParams }: { searchParams: Promise<{ grupo?: string; searched?: string }> }) {
   const ctx = await getTenantContext();
@@ -79,16 +189,44 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     .eq("tenant_id", ctx.tenantId)
     .eq("status", "active");
 
-  let claims: { id: string; claim_number: string; status: string; created_at: string; claim_cycles: { id: string; status: string; cycle_number: number }[] }[] = [];
-  let currentCycleByClaim = new Map<string, { id: string; status: string; cycle_number: number } | undefined>();
+  let claims: {
+    id: string;
+    claim_number: string;
+    status: string;
+    created_at: string;
+    claim_cycles: {
+      id: string;
+      status: string;
+      cycle_number: number;
+      formalized_at: string | null;
+      completed_at: string | null;
+      workflow_version_id: string;
+    }[];
+  }[] = [];
+  let currentCycleByClaim = new Map<
+    string,
+    | {
+        id: string;
+        status: string;
+        cycle_number: number;
+        formalized_at: string | null;
+        completed_at: string | null;
+        workflow_version_id: string;
+      }
+    | undefined
+  >();
   const groupsByCycle = new Map<string, Set<string>>();
+  const stagesByCycle = new Map<string, { id: string; name: string; entered_at: string; sla_minutes?: number }[]>();
+  const completedStagesByCycle = new Map<string, Set<string>>();
+  const stepsByVersion = new Map<string, { id: string; name: string; sla_minutes: number }[]>();
+  const totalSlaByVersion = new Map<string, number>();
   let groupNameById = new Map<string, string>();
   let visibleClaims: typeof claims = [];
 
   if (searched) {
     const { data: claimRows } = await supabase
       .from("claims")
-      .select("id, claim_number, status, created_at, claim_cycles(id, status, cycle_number)")
+      .select("id, claim_number, status, created_at, claim_cycles(id, status, cycle_number, formalized_at, completed_at, workflow_version_id)")
       .eq("tenant_id", ctx.tenantId)
       .order("created_at", { ascending: false });
     claims = claimRows ?? [];
@@ -97,14 +235,86 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     // sinistro (pode ter mais de um em paralelo) — é isso que responde "o que está na fila do meu grupo".
     currentCycleByClaim = new Map(claims.map((c) => [c.id, [...c.claim_cycles].sort((a, b) => b.cycle_number - a.cycle_number)[0]]));
     const cycleIds = [...currentCycleByClaim.values()].filter(Boolean).map((c) => c!.id);
-    const { data: openStages } = cycleIds.length
-      ? await supabase.from("stage_instances").select("id, claim_cycle_id").in("claim_cycle_id", cycleIds).eq("status", "in_progress")
-      : { data: [] as { id: string; claim_cycle_id: string }[] };
-    const stageIds = (openStages ?? []).map((s) => s.id);
+    
+    // Versões de workflow utilizadas pelos ciclos
+    const versionIds = [
+      ...new Set(
+        [...currentCycleByClaim.values()]
+          .filter(Boolean)
+          .map((c) => c!.workflow_version_id)
+          .filter(Boolean),
+      ),
+    ];
+
+    // Carrega todos os nós das versões para obter nomes, tipo e SLA de cada etapa
+    const { data: allVersionNodes } = versionIds.length
+      ? await supabase
+          .from("workflow_nodes")
+          .select("id, workflow_version_id, node_type, name, config")
+          .in("workflow_version_id", versionIds)
+      : { data: [] as { id: string; workflow_version_id: string; node_type: string; name: string; config: unknown }[] };
+
+    const nodeById = new Map<string, { id: string; name: string; node_type: string; sla_minutes?: number }>();
+    const STEP_NODE_TYPES = new Set(["stage", "wait", "decision"]);
+
+    for (const n of allVersionNodes ?? []) {
+      const cfg = (n.config ?? {}) as { sla_minutes?: number };
+      const slaMin = typeof cfg.sla_minutes === "number" && cfg.sla_minutes > 0 ? cfg.sla_minutes : undefined;
+      nodeById.set(n.id, { id: n.id, name: n.name, node_type: n.node_type, sla_minutes: slaMin });
+
+      if (STEP_NODE_TYPES.has(n.node_type)) {
+        if (!stepsByVersion.has(n.workflow_version_id)) {
+          stepsByVersion.set(n.workflow_version_id, []);
+        }
+        stepsByVersion.get(n.workflow_version_id)!.push({
+          id: n.id,
+          name: n.name,
+          sla_minutes: slaMin ?? 60, // peso padrão caso a etapa não tenha sla_minutes
+        });
+      }
+
+      if (slaMin) {
+        totalSlaByVersion.set(n.workflow_version_id, (totalSlaByVersion.get(n.workflow_version_id) ?? 0) + slaMin);
+      }
+    }
+
+    // Carrega todas as etapas dos ciclos para saber quais foram concluídas e quais estão em andamento
+    const { data: allCycleStages } = cycleIds.length
+      ? await supabase
+          .from("stage_instances")
+          .select("id, claim_cycle_id, node_id, status, entered_at")
+          .in("claim_cycle_id", cycleIds)
+      : { data: [] as { id: string; claim_cycle_id: string; node_id: string; status: string; entered_at: string }[] };
+
+    const openStages = (allCycleStages ?? []).filter((s) => s.status === "in_progress");
+
+    for (const s of allCycleStages ?? []) {
+      if (s.status === "completed") {
+        if (!completedStagesByCycle.has(s.claim_cycle_id)) {
+          completedStagesByCycle.set(s.claim_cycle_id, new Set());
+        }
+        completedStagesByCycle.get(s.claim_cycle_id)!.add(s.node_id);
+      }
+    }
+
+    for (const s of openStages) {
+      if (!stagesByCycle.has(s.claim_cycle_id)) {
+        stagesByCycle.set(s.claim_cycle_id, []);
+      }
+      const node = nodeById.get(s.node_id);
+      stagesByCycle.get(s.claim_cycle_id)!.push({
+        id: s.id,
+        name: node?.name || "Etapa",
+        entered_at: s.entered_at,
+        sla_minutes: node?.sla_minutes,
+      });
+    }
+
+    const stageIds = openStages.map((s) => s.id);
     const { data: openActivities } = stageIds.length
       ? await supabase.from("activity_instances").select("stage_instance_id, group_id").in("stage_instance_id", stageIds).in("status", ["not_started", "in_progress"])
       : { data: [] as { stage_instance_id: string; group_id: string | null }[] };
-    const cycleOfStage = new Map((openStages ?? []).map((s) => [s.id, s.claim_cycle_id]));
+    const cycleOfStage = new Map(openStages.map((s) => [s.id, s.claim_cycle_id]));
     for (const a of openActivities ?? []) {
       if (!a.group_id) continue;
       const cycleId = cycleOfStage.get(a.stage_instance_id);
@@ -207,36 +417,226 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
             </p>
           </div>
         ) : (
-          <ul className="mt-6 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="mt-6 flex flex-col gap-4">
             {visibleClaims.map((c) => {
               const cycle = currentCycleByClaim.get(c.id);
               const status = cycle?.status ?? c.status;
+              const isCompleted = status === "completed";
+              const isBlocked = status === "blocked";
               const activeGroups = cycle ? [...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id)).filter(Boolean) : [];
+              const activeStages = cycle ? (stagesByCycle.get(cycle.id) ?? []) : [];
+              const totalFlowSlaMinutes = cycle ? totalSlaByVersion.get(cycle.workflow_version_id) : undefined;
+              const totalFlowSla = !isCompleted && cycle ? computeSla(cycle.formalized_at || c.created_at, totalFlowSlaMinutes) : null;
+              const completedNodeIds = cycle ? completedStagesByCycle.get(cycle.id) : undefined;
+              const progressStats = computeProcessProgress(
+                isCompleted,
+                cycle?.workflow_version_id,
+                completedNodeIds,
+                stepsByVersion,
+              );
+              const executionDuration = isCompleted ? formatDurationBetween(cycle?.formalized_at || c.created_at, cycle?.completed_at) : "";
+
               return (
-                <li key={c.id}>
-                  <Link href={`/sinistros/${c.id}`} className="group flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50">
-                    <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand">
-                      <FileWarning className="size-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14px] font-medium text-slate-900">{c.claim_number}</div>
-                      {activeGroups.length > 0 && (
-                        <div className="truncate text-[12px] text-slate-500">Aguardando: {activeGroups.join(", ")}</div>
-                      )}
-                    </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
-                        CYCLE_STATUS_STYLE[status] ?? "bg-slate-100 text-slate-600 ring-slate-200"
+                <div
+                  key={c.id}
+                  className={`group rounded-xl border bg-white shadow-xs transition-all hover:shadow-md hover:border-slate-300 overflow-hidden ${
+                    isCompleted
+                      ? "border-slate-200 border-l-4 border-l-emerald-500"
+                      : isBlocked
+                        ? "border-rose-200 border-l-4 border-l-rose-500"
+                        : "border-slate-200 border-l-4 border-l-sky-500"
+                  }`}
+                >
+                  <Link href={`/sinistros/${c.id}`} className="block">
+                    {/* CABEÇALHO DO CARD */}
+                    <div
+                      className={`px-5 py-3 border-b flex flex-wrap sm:flex-nowrap items-center justify-between gap-4 ${
+                        isCompleted
+                          ? "bg-emerald-50/40 border-emerald-100/60"
+                          : isBlocked
+                            ? "bg-rose-50/40 border-rose-100/60"
+                            : "bg-slate-50/80 border-slate-100"
                       }`}
                     >
-                      {CYCLE_STATUS_LABEL[status] ?? status}
-                    </span>
-                    <ChevronRight className="size-4 shrink-0 text-slate-300 transition group-hover:text-slate-500" />
+                      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                        <div
+                          className={`grid size-7 place-items-center rounded-md ${
+                            isCompleted
+                              ? "bg-emerald-100 text-emerald-700"
+                              : isBlocked
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-brand/10 text-brand"
+                          }`}
+                        >
+                          <FileWarning className="size-4" />
+                        </div>
+                        <span className="text-[15px] font-bold text-slate-900 group-hover:text-brand transition-colors">
+                          {c.claim_number}
+                        </span>
+                        {isCompleted ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                            <Clock3 className="size-3 text-emerald-700" />
+                            Duração total: {executionDuration}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[12px] text-slate-500">
+                            <Clock3 className="size-3 text-slate-400" />
+                            Criado há {formatRelativeDuration(c.created_at)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* GRÁFICO DE BARRA DE PROGRESSO DO PROCESSO */}
+                      {progressStats ? (
+                        <div className="flex flex-col gap-1 min-w-[150px] max-w-[240px] flex-1 px-2">
+                          <div className="flex items-center justify-between text-[11px] font-medium leading-none">
+                            <span className="text-slate-500">Progresso</span>
+                            <span
+                              className={`font-bold ${
+                                progressStats.pct === 100 ? "text-emerald-700" : "text-brand"
+                              }`}
+                            >
+                              {progressStats.pct}%
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden relative border border-slate-300/40">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                progressStats.pct === 100 ? "bg-emerald-500" : "bg-brand"
+                              }`}
+                              style={{ width: `${progressStats.pct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-400 leading-none">
+                            {progressStats.subtext}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                            CYCLE_STATUS_STYLE[status] ?? "bg-slate-100 text-slate-600 ring-slate-200"
+                          }`}
+                        >
+                          {CYCLE_STATUS_LABEL[status] ?? status}
+                        </span>
+                        <ChevronRight className="size-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-600" />
+                      </div>
+                    </div>
+
+                    {/* CORPO DO CARD */}
+                    <div className="p-4 space-y-3">
+                      {isCompleted ? (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-600">
+                          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+                            <CheckCircle2 className="size-4 text-emerald-600" />
+                            Ciclo finalizado com sucesso
+                          </span>
+                          {totalFlowSlaMinutes ? (
+                            <span className="text-slate-500">
+                              • SLA previsto no fluxo:{" "}
+                              <strong className="font-semibold text-slate-800">
+                                {formatDuration(totalFlowSlaMinutes)}
+                              </strong>
+                            </span>
+                          ) : null}
+                          {cycle?.completed_at && (
+                            <span className="text-slate-400">
+                              • Encerrado há {formatRelativeDuration(cycle.completed_at)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          {/* BLOCO DA ETAPA ATUAL */}
+                          {activeStages.length > 0 && (
+                            <div className="rounded-lg border border-slate-200/80 bg-slate-50/60 p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                    Etapa Atual
+                                  </span>
+                                  {activeStages.map((st) => (
+                                    <div key={st.id} className="flex flex-wrap items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-900">
+                                        <Layers className="size-3.5 text-brand" />
+                                        {st.name}
+                                      </span>
+                                      <span className="text-[12px] text-slate-500 font-normal">
+                                        (parado há {formatRelativeDuration(st.entered_at)})
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* BADGE DO SLA DA ETAPA */}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {activeStages.map((st) => {
+                                    const stageSla = computeSla(st.entered_at, st.sla_minutes);
+                                    if (!stageSla) return null;
+                                    return (
+                                      <span
+                                        key={st.id}
+                                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold border ${
+                                          stageSla.isBreached
+                                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                                            : stageSla.isAtRisk
+                                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        }`}
+                                      >
+                                        <Clock3 className="size-3.5" />
+                                        SLA da Etapa: {stageSla.pct}% ({stageSla.formattedRemaining})
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* SLA TOTAL DO FLUXO E GRUPO RESPONSÁVEL */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5 text-[12px]">
+                            {totalFlowSla ? (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-slate-500">SLA Total do Fluxo:</span>
+                                <span
+                                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold border ${
+                                    totalFlowSla.isBreached
+                                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                                      : totalFlowSla.isAtRisk
+                                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                                        : "bg-sky-50 text-sky-700 border-sky-200"
+                                  }`}
+                                >
+                                  <Clock3 className="size-3" />
+                                  {totalFlowSla.pct}% consumido • {totalFlowSla.formattedRemaining} (limite:{" "}
+                                  {totalFlowSla.formattedLimit})
+                                </span>
+                              </div>
+                            ) : (
+                              <div />
+                            )}
+
+                            {activeGroups.length > 0 && (
+                              <div className="flex items-center gap-1.5 text-slate-500">
+                                <Users className="size-3.5 text-slate-400" />
+                                <span>Aguardando:</span>
+                                <span className="font-semibold text-slate-800 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded text-[11px]">
+                                  {activeGroups.join(", ")}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </Link>
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </div>
         )}
       </div>
     </div>

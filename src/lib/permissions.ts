@@ -87,3 +87,18 @@ export async function requireGroupAccess(ctx: TenantContext, groupId: string | n
     throw new Error("Você não pertence ao grupo responsável por esta etapa.");
   }
 }
+
+export async function isTenantAdmin(userId: string, tenantId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: membership } = await supabase
+    .from("tenant_memberships")
+    .select("id, membership_roles(roles(name))")
+    .eq("user_id", userId)
+    .eq("tenant_id", tenantId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!membership) return false;
+  return (membership.membership_roles ?? []).some(
+    (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
+  );
+}

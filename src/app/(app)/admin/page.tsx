@@ -1,23 +1,43 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { redirect } from "next/navigation";
+import { isPlatformAdmin } from "@/lib/platform-admin";
+import { isTenantAdmin } from "@/lib/permissions";
+import { getTenantContext } from "@/lib/tenant";
 import { ContasTab, type SearchParams } from "./contas-tab";
 import { PlanosTab } from "./planos-tab";
 import { MarcaTab } from "./marca-tab";
+import { TenantAdminView } from "./tenant-admin-view";
 
 export const metadata: Metadata = { title: "Administração" };
 
-const TABS = [
+const PLATFORM_TABS = [
   { key: "contas", label: "Contas" },
   { key: "planos", label: "Planos" },
   { key: "marca", label: "Marca do produto" },
 ] as const;
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requirePlatformAdmin();
+  const isPlatform = await isPlatformAdmin();
+
+  if (!isPlatform) {
+    const ctx = await getTenantContext();
+    const isCompanyAdmin = await isTenantAdmin(ctx.userId, ctx.tenantId);
+    if (!isCompanyAdmin) {
+      redirect("/dashboard");
+    }
+    return (
+      <TenantAdminView
+        tenantId={ctx.tenantId}
+        tenantName={ctx.tenantName}
+        searchParams={searchParams}
+      />
+    );
+  }
+
   const sp = await searchParams;
   const raw = Array.isArray(sp.aba) ? sp.aba[0] : sp.aba;
-  const aba = TABS.find((t) => t.key === raw)?.key ?? "contas";
+  const aba = PLATFORM_TABS.find((t) => t.key === raw)?.key ?? "contas";
 
   return (
     <div className="h-full overflow-y-auto">
@@ -28,7 +48,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </p>
 
         <nav className="mt-5 flex flex-wrap gap-1 border-b border-slate-200" aria-label="Abas da administração">
-          {TABS.map((t) => (
+          {PLATFORM_TABS.map((t) => (
             <Link
               key={t.key}
               href={t.key === "contas" ? "/admin" : `/admin?aba=${t.key}`}
