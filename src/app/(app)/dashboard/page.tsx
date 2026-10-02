@@ -23,7 +23,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-8 py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Dashboard</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
           Visão geral. Para agir agora, use a{" "}
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
 function Card({ label, value, accent }: { label: string; value: number | string; accent?: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <dt className="text-[11px] text-slate-500">{label}</dt>
+      <dt className="text-xs text-slate-500">{label}</dt>
       <dd className={`text-[22px] font-semibold ${accent ?? "text-slate-900"}`}>{value}</dd>
     </div>
   );

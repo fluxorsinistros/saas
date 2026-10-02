@@ -15,7 +15,7 @@ import {
 const input =
   "w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
 const smallBtn =
-  "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60";
+  "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60";
 
 function Message({ state }: { state: ActionState }) {
   if (!state) return null;
@@ -127,7 +127,7 @@ export function AddUserForm({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-[11px] text-slate-400">O usuário pertence a um único grupo, e é o grupo que define o acesso dele.</p>
+          <p className="mt-1 text-xs text-slate-500">O usuário pertence a um único grupo, e é o grupo que define o acesso dele.</p>
         </div>
       ) : (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
@@ -140,7 +140,7 @@ export function AddUserForm({
           Senha inicial
         </label>
         <input id="add_password" name="password" type="password" minLength={8} autoComplete="new-password" className={input} />
-        <p className="mt-1 text-[11px] text-slate-400">
+        <p className="mt-1 text-xs text-slate-500">
           Opcional. Preenchida, a pessoa já entra com esta senha, sem depender de e-mail. Vazia, enviamos o convite por e-mail.
         </p>
       </div>

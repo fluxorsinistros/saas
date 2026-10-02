@@ -33,17 +33,17 @@ function Chips({ data }: { data: FlowNode["data"] }) {
   return (
     <div className="flex flex-wrap gap-1">
       {group && (
-        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">
+        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">
           <Users className="size-3" /> {group}
         </span>
       )}
       {sla && (
-        <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-800">
+        <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800">
           <Clock className="size-3" /> SLA {sla}
         </span>
       )}
       {data.config.loop_max ? (
-        <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] text-violet-800">
+        <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-xs text-violet-800">
           <Repeat className="size-3" /> até {data.config.loop_max}x
         </span>
       ) : null}
@@ -80,7 +80,7 @@ function CardNode({
       <In />
       <IssueDot issue={issue} />
       <div className="px-3 pb-2.5 pt-2">
-        <div className={`mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${accent}`}>
+        <div className={`mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] ${accent}`}>
           {icon}
           {NODE_META[node.type].label}
         </div>
@@ -111,7 +111,7 @@ export function StartNode(props: NodeProps<FlowNode>) {
       <CircleDot className="size-4 text-emerald-200" />
       <span className="truncate text-[12px] font-medium">{props.data.name || "Início"}</span>
       {fieldCount > 0 && (
-        <span className="rounded-full bg-emerald-800/60 px-1.5 text-[10px] font-semibold">{fieldCount}</span>
+        <span className="rounded-full bg-emerald-800/60 px-1.5 text-xs font-semibold">{fieldCount}</span>
       )}
       <Out />
     </div>
@@ -152,7 +152,7 @@ export function DecisionNode(props: NodeProps<FlowNode>) {
         <span className="line-clamp-2 text-[12px] font-medium leading-tight text-slate-900">
           {props.data.name || <span className="text-slate-500">Sem nome</span>}
         </span>
-        {group && <span className="mt-0.5 truncate text-[10px] text-slate-500">{group}</span>}
+        {group && <span className="mt-0.5 truncate text-xs text-slate-500">{group}</span>}
       </div>
       <IssueDot issue={issue} className="right-7 top-5" />
       <Out />
@@ -182,7 +182,7 @@ function BarNode({ node, kind }: { node: NodeProps<FlowNode>; kind: "split" | "j
         <div className="truncate text-[12px] font-medium text-slate-900">
           {node.data.name || NODE_META[node.type].label}
         </div>
-        <div className="truncate text-[10px] text-cyan-800">
+        <div className="truncate text-xs text-cyan-800">
           {kind === "split"
             ? "Ramos em paralelo"
             : rule === "min_count"

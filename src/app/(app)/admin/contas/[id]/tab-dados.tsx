@@ -59,7 +59,7 @@ export function TabDados({ tenant }: { tenant: Tenant }) {
                 <SaveButton className="rounded-lg bg-rose-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-rose-700">
                   Confirmar suspensão
                 </SaveButton>
-                <p className="w-full text-[11px] text-slate-500">
+                <p className="w-full text-xs text-slate-500">
                   Os usuários perdem o acesso na hora. Os dados ficam guardados e voltam ao reativar.
                 </p>
               </form>

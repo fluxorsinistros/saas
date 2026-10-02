@@ -5,7 +5,7 @@ import { Mail, X } from "lucide-react";
 import { cancelInvite, resendInvite, type AccessState } from "./actions";
 
 const smallBtn =
-  "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60";
+  "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60";
 
 function Message({ state }: { state: AccessState }) {
   if (!state) return null;

@@ -56,7 +56,7 @@ export default async function AccountPage({ params, searchParams }: Props) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-8 py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <Link href="/admin" className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-800">
           <ArrowLeft className="size-3.5" /> Administração · Contas
         </Link>
@@ -64,13 +64,13 @@ export default async function AccountPage({ params, searchParams }: Props) {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">{tenant.name}</h1>
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
               tenant.status === "active" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200"
             }`}
           >
             {TENANT_STATUS_LABEL[tenant.status] ?? tenant.status}
           </span>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
             {plan ? plan.name : "Sem contrato"}
           </span>
         </div>

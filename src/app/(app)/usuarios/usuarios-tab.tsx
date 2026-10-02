@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Download, Pencil, Plus, Search, SearchX } from "lucide-react";
+import { Download, Pencil, Plus, RotateCcw, Search, SearchX } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantOrganizations } from "@/lib/tenant-organizations";
 import { InviteActions } from "./invite-actions";
@@ -177,14 +177,16 @@ export async function UsuariosTab({
             </select>
           </div>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-3">
-            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600">
+            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600 cursor-pointer">
               <Search className="size-4" /> Pesquisar
             </button>
-            {filtering && (
-              <Link href="/usuarios" className="text-[12px] font-medium text-slate-500 hover:text-slate-800">
-                Limpar filtros
-              </Link>
-            )}
+            <Link
+              href="/usuarios"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-medium text-slate-600 shadow-xs transition hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+            >
+              <RotateCcw className="size-3.5 text-slate-400" />
+              Limpar filtros
+            </Link>
           </div>
         </form>
       </details>
@@ -245,7 +247,7 @@ export async function UsuariosTab({
                         </div>
                       </details>
                     ) : isSelf ? (
-                      <span title="Você não edita o próprio acesso" className="flex size-8 items-center justify-center text-[11px] text-slate-400">
+                      <span title="Você não edita o próprio acesso" className="flex size-8 items-center justify-center text-xs text-slate-400">
                         —
                       </span>
                     ) : (
@@ -261,7 +263,7 @@ export async function UsuariosTab({
                   </td>
                   <td className="px-3 py-2.5 font-medium text-slate-900">
                     {u.full_name || <span className="font-normal text-slate-400">—</span>}
-                    {isSelf && <span className="ml-2 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Você</span>}
+                    {isSelf && <span className="ml-2 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">Você</span>}
                   </td>
                   <td className="px-3 py-2.5 text-slate-600">{u.email}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "—"}</td>
@@ -269,11 +271,11 @@ export async function UsuariosTab({
                   <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2.5">
                     {u.pending ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">convite pendente</span>
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">convite pendente</span>
                     ) : u.status !== "active" ? (
-                      <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-inset ring-rose-200">Inativo</span>
+                      <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200">Inativo</span>
                     ) : (
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">Ativo</span>
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">Ativo</span>
                     )}
                   </td>
                 </tr>

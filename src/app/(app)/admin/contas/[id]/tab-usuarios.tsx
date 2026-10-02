@@ -22,7 +22,7 @@ export async function TabUsuarios({ tenantId, tenantName }: { tenantId: string; 
 
       <section>
         <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-          Usuários da conta {total > 0 && <span className="font-normal normal-case tracking-normal text-slate-400">({total})</span>}
+          Usuários da conta {total > 0 && <span className="font-normal normal-case tracking-normal text-slate-500">({total})</span>}
         </h2>
         {total === 0 ? (
           <p className="rounded-xl border border-slate-200 bg-white p-4 text-[13px] text-slate-500">Ninguém nesta conta ainda — adicione alguém acima.</p>
@@ -36,15 +36,15 @@ export async function TabUsuarios({ tenantId, tenantName }: { tenantId: string; 
                     {u.full_name && <p className="truncate text-[12px] text-slate-500">{u.email}</p>}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-medium text-violet">{u.role_name ?? "Sem tipo"}</span>
+                    <span className="rounded-full bg-violet/10 px-2 py-0.5 text-xs font-medium text-violet">{u.role_name ?? "Sem tipo"}</span>
                     {u.pending ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
                         aguardando criar conta
                       </span>
                     ) : u.status !== "active" ? (
-                      <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-inset ring-rose-200">Inativo</span>
+                      <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200">Inativo</span>
                     ) : (
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">Ativo</span>
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">Ativo</span>
                     )}
                   </div>
                 </div>

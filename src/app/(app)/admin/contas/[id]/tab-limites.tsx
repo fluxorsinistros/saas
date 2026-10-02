@@ -42,7 +42,7 @@ export async function TabLimites({ contract, plan }: { contract: Contract | null
             return (
               <li
                 key={def.key}
-                className={`rounded-md px-2 py-0.5 text-[11px] ${
+                className={`rounded-md px-2 py-0.5 text-xs ${
                   overridden ? "bg-violet/10 text-violet ring-1 ring-inset ring-violet/30" : "bg-slate-100 text-slate-600"
                 }`}
                 title={overridden ? `Padrão do plano: ${showValue(def, planValueOf(def.key))}` : undefined}
@@ -55,7 +55,7 @@ export async function TabLimites({ contract, plan }: { contract: Contract | null
           {overrideKeys
             .filter((k) => !PLAN_LIMIT_KEYS.has(k))
             .map((k) => (
-              <li key={k} className="rounded-md bg-violet/10 px-2 py-0.5 text-[11px] text-violet ring-1 ring-inset ring-violet/30">
+              <li key={k} className="rounded-md bg-violet/10 px-2 py-0.5 text-xs text-violet ring-1 ring-inset ring-violet/30">
                 {limitLabel(k)}: {String(overrides[k])} (personalizado, fora do catálogo)
               </li>
             ))}
@@ -75,7 +75,7 @@ export async function TabLimites({ contract, plan }: { contract: Contract | null
               return (
                 <div key={def.key}>
                   <label className="mb-0.5 block text-[12px] text-slate-600">
-                    {def.label} <span className="text-slate-400">({def.unit})</span>
+                    {def.label} <span className="text-slate-500">({def.unit})</span>
                   </label>
                   {def.kind === "toggle" ? (
                     <select name={`limit_${def.key}`} defaultValue={ov === undefined ? "" : String(Number(ov))} className={input}>

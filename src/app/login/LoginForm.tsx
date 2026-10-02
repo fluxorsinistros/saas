@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { signIn, type AuthState } from "./actions";
 
 const input =
@@ -12,6 +13,7 @@ const input =
 // antes como autocadastro público, mas isso deixava qualquer e-mail criar uma empresa nova sozinho.
 export function LoginForm() {
   const [state, action, pending] = useActionState<AuthState, FormData>(signIn, undefined);
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="w-full max-w-sm">
@@ -34,7 +36,29 @@ export function LoginForm() {
               Esqueci minha senha
             </Link>
           </div>
-          <input id="password" name="password" type="password" required minLength={6} autoComplete="current-password" className={input} />
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              required
+              minLength={6}
+              autoComplete="current-password"
+              className={`${input} pr-10`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:text-slate-600 focus:outline-none"
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
 
         {state?.error && (

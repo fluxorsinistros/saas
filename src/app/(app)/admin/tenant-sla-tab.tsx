@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState, useEffect, useActionState } from "react";
 import Link from "next/link";
 import { Clock, CalendarClock, AlertTriangle, ArrowRight, CheckCircle2, ShieldAlert } from "lucide-react";
 import { saveTenantSlaSettings, type ActionState } from "./actions";
@@ -32,9 +32,25 @@ const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(saveTenantSlaSettings, null);
 
-  const defaultCalId = currentSlaSettings.default_calendar_id ?? "";
-  const warningPct = currentSlaSettings.warning_threshold_pct ?? 75;
-  const criticalPct = currentSlaSettings.critical_threshold_pct ?? 90;
+  const [selectedCalId, setSelectedCalId] = useState(currentSlaSettings.default_calendar_id ?? "");
+  const [warningPct, setWarningPct] = useState(currentSlaSettings.warning_threshold_pct ?? 75);
+  const [criticalPct, setCriticalPct] = useState(currentSlaSettings.critical_threshold_pct ?? 90);
+
+  useEffect(() => {
+    if (currentSlaSettings.default_calendar_id !== undefined) {
+      setSelectedCalId(currentSlaSettings.default_calendar_id ?? "");
+    }
+    if (currentSlaSettings.warning_threshold_pct !== undefined) {
+      setWarningPct(currentSlaSettings.warning_threshold_pct);
+    }
+    if (currentSlaSettings.critical_threshold_pct !== undefined) {
+      setCriticalPct(currentSlaSettings.critical_threshold_pct);
+    }
+  }, [currentSlaSettings.default_calendar_id, currentSlaSettings.warning_threshold_pct, currentSlaSettings.critical_threshold_pct]);
+
+  // Posiciona a opção ativa/selecionada sempre em primeiro lugar no combobox
+  const activeCalendar = calendars.find((c) => c.id === selectedCalId);
+  const otherCalendars = calendars.filter((c) => c.id !== selectedCalId);
 
   return (
     <div className="space-y-6">
@@ -62,17 +78,36 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
               <select
                 id="default_calendar_id"
                 name="default_calendar_id"
-                defaultValue={defaultCalId}
+                value={selectedCalId}
+                onChange={(e) => setSelectedCalId(e.target.value)}
                 className={inputClass}
               >
-                <option value="">Nenhum (Contagem corrida 24 horas por dia, 7 dias por semana)</option>
-                {calendars.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.business_start?.slice(0, 5) ?? "00:00"} às {c.business_end?.slice(0, 5) ?? "23:59"})
-                  </option>
-                ))}
+                {activeCalendar ? (
+                  <>
+                    <option value={activeCalendar.id}>
+                      ★ {activeCalendar.name} ({activeCalendar.business_start?.slice(0, 5) ?? "00:00"} às {activeCalendar.business_end?.slice(0, 5) ?? "23:59"}) — Ativo / Padrão
+                    </option>
+                    {otherCalendars.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.business_start?.slice(0, 5) ?? "00:00"} às {c.business_end?.slice(0, 5) ?? "23:59"})
+                      </option>
+                    ))}
+                    <option value="">Nenhum (Contagem corrida 24 horas por dia, 7 dias por semana)</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="">
+                      Nenhum (Contagem corrida 24 horas por dia, 7 dias por semana) — Ativo / Padrão
+                    </option>
+                    {calendars.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.business_start?.slice(0, 5) ?? "00:00"} às {c.business_end?.slice(0, 5) ?? "23:59"})
+                      </option>
+                    ))}
+                  </>
+                )}
               </select>
-              <span className="mt-1 block text-[11px] text-slate-400">
+              <span className="mt-1 block text-xs text-slate-500">
                 Usado automaticamente em novos fluxos e etapas quando nenhum calendário específico for definido.
               </span>
             </div>
@@ -90,20 +125,21 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
                 <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3.5">
                   <div className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-800">
                     <AlertTriangle className="size-4 text-amber-600" />
-                    <span>Aviso de Atenção ("Em Risco")</span>
+                    <span>Aviso de Atenção (&quot;Em Risco&quot;)</span>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <input
                       type="number"
                       name="warning_threshold_pct"
-                      defaultValue={warningPct}
+                      value={warningPct}
+                      onChange={(e) => setWarningPct(Number(e.target.value))}
                       min={10}
                       max={95}
                       className={`${inputClass} w-24`}
                     />
                     <span className="text-[13px] font-medium text-slate-600">% do tempo previsto consumido</span>
                   </div>
-                  <span className="mt-1 block text-[11px] text-amber-700">
+                  <span className="mt-1 block text-xs text-amber-700">
                     Padrão recomendado: 75%
                   </span>
                 </div>
@@ -117,14 +153,15 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
                     <input
                       type="number"
                       name="critical_threshold_pct"
-                      defaultValue={criticalPct}
+                      value={criticalPct}
+                      onChange={(e) => setCriticalPct(Number(e.target.value))}
                       min={15}
                       max={100}
                       className={`${inputClass} w-24`}
                     />
                     <span className="text-[13px] font-medium text-slate-600">% do tempo previsto consumido</span>
                   </div>
-                  <span className="mt-1 block text-[11px] text-rose-700">
+                  <span className="mt-1 block text-xs text-rose-700">
                     Padrão recomendado: 90%
                   </span>
                 </div>
@@ -163,14 +200,14 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
                 <CalendarClock className="size-4 text-brand" />
                 <h3 className="text-[13px] font-semibold text-slate-900">Calendários Ativos</h3>
               </div>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                 {calendars.length}
               </span>
             </div>
 
             <div className="mt-3 divide-y divide-slate-100">
               {calendars.length === 0 ? (
-                <div className="py-4 text-center text-[12px] text-slate-400">
+                <div className="py-4 text-center text-[12px] text-slate-500">
                   Nenhum calendário personalizado criado ainda.
                 </div>
               ) : (
@@ -178,13 +215,13 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
                   <div key={c.id} className="py-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[13px] font-medium text-slate-800">{c.name}</span>
-                      {c.id === defaultCalId && (
-                        <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand">
+                      {c.id === selectedCalId && (
+                        <span className="rounded bg-brand/10 px-1.5 py-0.5 text-xs font-semibold text-brand">
                           PADRÃO
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 text-[11px] text-slate-500">
+                    <div className="mt-1 text-xs text-slate-500">
                       Horário: {c.business_start?.slice(0, 5) ?? "00:00"} às {c.business_end?.slice(0, 5) ?? "23:59"}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1">

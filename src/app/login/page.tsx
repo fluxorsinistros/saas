@@ -17,7 +17,7 @@ export default function LoginPage() {
             Do evento à resolução, <span className="text-cyan">cada etapa rastreada.</span>
           </p>
           <p className="mt-4 text-[15px] leading-relaxed text-slate-300">
-            Fluxos configuráveis com decisões, ramos paralelos, convergências e SLAs — com histórico completo de quem fez o quê
+            Fluxos configuráveis com decisões, ramos paralelos, convergências e SLAs com histórico completo de quem fez o quê
             e quando.
           </p>
         </div>

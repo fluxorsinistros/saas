@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Pencil, Plus, Search, SearchX } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Search, SearchX } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -74,7 +74,7 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl space-y-5 px-8 py-8">
+      <div className="mx-auto page-wide space-y-5 px-4 py-6 md:px-8 md:py-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Grupos</h1>
           <p className="mt-1 max-w-xl text-[14px] text-slate-500">
@@ -127,14 +127,16 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
               </select>
             </div>
             <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-3">
-              <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600">
+              <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-sm transition hover:bg-brand-600 cursor-pointer">
                 <Search className="size-4" /> Pesquisar
               </button>
-              {filtering && (
-                <Link href="/grupos" className="text-[12px] font-medium text-slate-500 hover:text-slate-800">
-                  Limpar filtros
-                </Link>
-              )}
+              <Link
+                href="/grupos"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-medium text-slate-600 shadow-xs transition hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+              >
+                <RotateCcw className="size-3.5 text-slate-400" />
+                Limpar filtros
+              </Link>
             </div>
           </form>
         </details>
@@ -183,7 +185,7 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
                           <Pencil className="size-3.5" />
                         </Link>
                       ) : (
-                        <span className="flex size-8 items-center justify-center text-[11px] text-slate-400">—</span>
+                        <span className="flex size-8 items-center justify-center text-xs text-slate-400">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 font-medium text-slate-900">{g.name}</td>
@@ -193,9 +195,9 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
                     </td>
                     <td className="px-3 py-2.5">
                       {active ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">Ativo</span>
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">Ativo</span>
                       ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200">Inativo</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200">Inativo</span>
                       )}
                     </td>
                   </tr>

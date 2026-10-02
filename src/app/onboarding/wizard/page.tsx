@@ -165,7 +165,7 @@ export default async function OnboardingWizardPage() {
               <div>
                 <form action={skipToStep.bind(null, 4)}>
                   <button
-                    className="text-[13px] font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
+                    className="text-[13px] font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:text-slate-500"
                     disabled={(publishedWorkflows ?? []).length === 0}
                     title={(publishedWorkflows ?? []).length === 0 ? "Publique ao menos um fluxo para continuar" : undefined}
                   >

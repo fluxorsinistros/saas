@@ -78,7 +78,7 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Minhas tarefas</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
           Atividades em aberto nos grupos aos quais você pertence, de todos os sinistros.
@@ -98,7 +98,7 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
           <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {rows.map(({ activity, claim, node }) => (
               <li key={activity.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   {NODE_META[node.node_type as NodeType]?.label ?? node.node_type}
                 </span>
                 <Link href={`/sinistros/${claim.id}`} className="min-w-0 flex-1">
@@ -114,7 +114,7 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
                     </button>
                   </form>
                 ) : (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">Não iniciada</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Não iniciada</span>
                 )}
               </li>
             ))}

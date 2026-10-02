@@ -67,6 +67,14 @@ export async function TenantAdminView({
     ? supabase.storage.from("branding").getPublicUrl(branding.logo_path).data.publicUrl
     : null;
 
+  const companyIconUrl =
+    (settings.company_icon_url as string | null) ??
+    (settings.company_icon_path
+      ? supabase.storage.from("branding").getPublicUrl(settings.company_icon_path as string).data.publicUrl
+      : branding.logo_path
+        ? supabase.storage.from("branding").getPublicUrl(branding.logo_path).data.publicUrl
+        : null);
+
   const slaSettings = (settings.sla ?? {}) as {
     default_calendar_id?: string | null;
     warning_threshold_pct?: number;
@@ -79,7 +87,7 @@ export async function TenantAdminView({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl px-8 py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
@@ -114,7 +122,7 @@ export async function TenantAdminView({
                     : "border-transparent text-slate-500 hover:text-slate-800"
                 }`}
               >
-                <Icon className={`size-4 ${active ? "text-brand" : "text-slate-400"}`} />
+                <Icon className={`size-4 ${active ? "text-brand" : "text-slate-500"}`} />
                 {t.label}
               </Link>
             );
@@ -154,6 +162,7 @@ export async function TenantAdminView({
                 started_at: contract?.started_at ?? tenant.created_at,
               }}
               membersCount={membersCount ?? 0}
+              companyIconUrl={companyIconUrl}
             />
           )}
         </div>

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { sendInviteMail, sendResetMail } from "@/lib/auth-mail";
 import { createClient } from "@/lib/supabase/server";
 import { isPlatformAdmin, requirePlatformAdmin } from "@/lib/platform-admin";
@@ -443,16 +444,32 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
     logoPath = null;
   }
 
-  // Sem nome = a conta volta a usar a marca da plataforma
+  const resetAll = formData.get("reset_branding") === "on";
+  const isDefaultColor = !color || color.toLowerCase() === "#2563eb";
+  const hasCustomization = !resetAll && Boolean(name || tagline || logoPath || !isDefaultColor);
+
   const next: Record<string, Json> = { ...settings };
-  if (name) next.branding = { name, tagline, primary_color: color || null, logo_path: logoPath };
-  else delete next.branding;
+  if (hasCustomization) {
+    next.branding = {
+      name: name || null,
+      tagline: tagline || null,
+      primary_color: color || null,
+      logo_path: logoPath,
+    };
+  } else {
+    delete next.branding;
+    if (logoPath) {
+      await supabase.storage.from("branding").remove([logoPath]);
+      logoPath = null;
+    }
+  }
 
   const { error } = await supabase.from("tenants").update({ settings: next as Json }).eq("id", tenantId);
   if (error) return { ok: false, message: error.message };
   await writeAudit(supabase, null, "tenant.branding_updated", "tenant", tenantId, { next: { name: name || null, color: color || null, logo: !!logoPath } });
   revalidatePath("/admin", "layout");
-  return { ok: true, message: name ? "Marca da conta salva com sucesso!" : "Marca removida: a conta volta a usar a marca padrão da plataforma." };
+  revalidatePath("/", "layout");
+  return { ok: true, message: hasCustomization ? "Configurações de marca salvas com sucesso!" : "Marca removida: a conta volta a usar a marca padrão da plataforma." };
 }
 
 // Salva os parâmetros gerais de SLA da empresa (calendário padrão e limiares de alerta)
@@ -499,6 +516,7 @@ export async function saveTenantSlaSettings(_prev: ActionState, formData: FormDa
   });
 
   revalidatePath("/admin", "layout");
+  revalidatePath("/", "layout");
   return { ok: true, message: "Configurações de SLA da empresa salvas com sucesso!" };
 }
 
@@ -541,3 +559,170 @@ export async function saveUserEdit(_prev: ActionState, formData: FormData): Prom
   if (newId !== id) redirect(`/admin/usuarios/${newId}`);
   return { ok: true, message: "Usuário salvo." };
 }
+
+// Salva o ícone / logotipo exclusivo da empresa cliente (exibido na sidebar e nas identificações da conta).
+export async function saveCompanyIcon(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Não autenticado." };
+
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  if (!tenantId) return { ok: false, message: "Empresa não informada." };
+
+  const [isPlatform, isCompanyAdmin] = await Promise.all([
+    isPlatformAdmin(),
+    isTenantAdmin(user.id, tenantId),
+  ]);
+
+  if (!isPlatform && !isCompanyAdmin) {
+    return { ok: false, message: "Você não tem permissão para alterar as configurações desta empresa." };
+  }
+
+  const { data: tenant } = await supabase.from("tenants").select("settings").eq("id", tenantId).single();
+  const settings = ((tenant?.settings ?? {}) as Record<string, Json>) ?? {};
+  let iconPath = (settings.company_icon_path as string | null) ?? null;
+  let iconUrl = (settings.company_icon_url as string | null) ?? null;
+
+  const file = formData.get("company_icon");
+  const removeIcon = formData.get("remove_icon") === "on";
+
+  if (file instanceof File && file.size > 0) {
+    const ext = LOGO_TYPES[file.type] || "webp";
+    if (file.size > LOGO_MAX_BYTES) {
+      return { ok: false, message: "Ícone grande demais: limite máximo de 1 MB." };
+    }
+
+    const path = `tenants/${tenantId}/company-icon-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("branding").upload(path, file, {
+      contentType: file.type,
+      upsert: true,
+    });
+
+    if (!uploadError) {
+      if (iconPath) {
+        try {
+          await supabase.storage.from("branding").remove([iconPath]);
+        } catch {}
+      }
+      iconPath = path;
+      iconUrl = null;
+    } else {
+      // Fallback robusto caso o Storage tenha política restritiva de RLS para o bucket 'branding':
+      // Como o arquivo já foi pré-compactado em WebP no navegador (~20KB),
+      // salvamos diretamente o Data URL otimizado no jsonb do tenant.
+      const buffer = Buffer.from(await file.arrayBuffer());
+      iconUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
+      iconPath = null;
+    }
+  } else if (removeIcon) {
+    if (iconPath) {
+      try {
+        await supabase.storage.from("branding").remove([iconPath]);
+      } catch {}
+    }
+    iconPath = null;
+    iconUrl = null;
+  }
+
+  const next: Record<string, Json> = {
+    ...settings,
+    company_icon_path: iconPath,
+    company_icon_url: iconUrl,
+  };
+
+  const { error: updateError } = await supabase.from("tenants").update({ settings: next as Json }).eq("id", tenantId);
+  if (updateError) return { ok: false, message: updateError.message };
+
+  try {
+    await writeAudit(supabase, tenantId, "tenant.company_icon_updated", "tenant", tenantId, {
+      next: { company_icon_path: iconPath, company_icon_url: !!iconUrl },
+    });
+  } catch (auditErr) {
+    console.warn("Aviso ao registrar auditoria de ícone:", auditErr);
+  }
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/admin", "page");
+  revalidatePath("/", "layout");
+
+  const hasIcon = !!(iconPath || iconUrl);
+  return {
+    ok: true,
+    message: hasIcon ? "Ícone da empresa salvo com sucesso!" : "Ícone removido com sucesso.",
+  };
+}
+
+// Salva a preferência de tema da empresa (claro ou escuro) e atualiza o cookie de sessão
+export async function saveTenantTheme(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Não autenticado." };
+
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  const theme = String(formData.get("theme") ?? "light") as "light" | "dark";
+
+  if (!["light", "dark"].includes(theme)) {
+    return { ok: false, message: "Tema inválido selecionado." };
+  }
+
+  if (tenantId) {
+    const [isPlatform, isCompanyAdmin] = await Promise.all([
+      isPlatformAdmin(),
+      isTenantAdmin(user.id, tenantId),
+    ]);
+
+    if (!isPlatform && !isCompanyAdmin) {
+      return { ok: false, message: "Sem permissão para alterar as configurações desta conta." };
+    }
+
+    const { data: tenant } = await supabase.from("tenants").select("settings").eq("id", tenantId).single();
+    const settings = ((tenant?.settings ?? {}) as Record<string, Json>) ?? {};
+    const next: Record<string, Json> = {
+      ...settings,
+      theme,
+    };
+
+    const { error: updateError } = await supabase.from("tenants").update({ settings: next as Json }).eq("id", tenantId);
+    if (updateError) return { ok: false, message: updateError.message };
+
+    try {
+      await writeAudit(supabase, tenantId, "tenant.theme_updated", "tenant", tenantId, { next: { theme } });
+    } catch {}
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("app_theme", theme, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/", "layout");
+
+  return {
+    ok: true,
+    message: `Tema ${theme === "dark" ? "Escuro" : "Claro"} definido com sucesso!`,
+  };
+}
+
+// Ação rápida para alternar tema diretamente pela sidebar
+export async function toggleQuickTheme(currentTheme: "light" | "dark", tenantId?: string): Promise<void> {
+  const nextTheme: "light" | "dark" = currentTheme === "dark" ? "light" : "dark";
+  const cookieStore = await cookies();
+  cookieStore.set("app_theme", nextTheme, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+
+  if (tenantId) {
+    try {
+      const supabase = await createClient();
+      const { data: tenant } = await supabase.from("tenants").select("settings").eq("id", tenantId).single();
+      if (tenant) {
+        const settings = ((tenant?.settings ?? {}) as Record<string, Json>) ?? {};
+        await supabase.from("tenants").update({ settings: { ...settings, theme: nextTheme } as Json }).eq("id", tenantId);
+      }
+    } catch {}
+  }
+
+  revalidatePath("/", "layout");
+}
+

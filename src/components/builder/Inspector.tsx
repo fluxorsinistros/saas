@@ -194,7 +194,7 @@ export function NodeInspector({
                   />
                   <button
                     type="button"
-                    className="shrink-0 rounded-md px-2 py-1 text-[11px] text-brand hover:bg-brand/5"
+                    className="shrink-0 rounded-md px-2 py-1 text-xs text-brand hover:bg-brand/5"
                     onClick={() => onSelectEdge(e.id)}
                   >
                     Editar
@@ -225,7 +225,7 @@ export function NodeInspector({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-slate-500">{JOIN_RULE_HELP[data.config.join_rule ?? "all_required"]}</p>
+            <p className="mt-1 text-xs text-slate-500">{JOIN_RULE_HELP[data.config.join_rule ?? "all_required"]}</p>
           </div>
           {data.config.join_rule === "min_count" && (
             <div>
@@ -263,7 +263,7 @@ export function NodeInspector({
               placeholder="Ilimitado"
               onChange={(e) => setConfig({ loop_max: e.target.value ? Number(e.target.value) : undefined })}
             />
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-xs text-slate-500">
               Vale quando uma conexão de retorno (loop) trouxer o processo de volta para cá.
             </p>
           </div>
@@ -406,7 +406,7 @@ function Toggle({
       />
       <span>
         <span className="block text-[13px] font-medium text-slate-800">{title}</span>
-        <span className="block text-[11px] text-slate-500">{hint}</span>
+        <span className="block text-xs text-slate-500">{hint}</span>
       </span>
     </label>
   );
@@ -481,15 +481,15 @@ function FieldsSection({
                   onChange={(e) => onToggle(f.key, e.target.checked)}
                 />
                 <label htmlFor={`field-${f.id}`} className="flex-1 text-[13px] text-slate-800">
-                  {f.label} <span className="text-slate-400">({FIELD_TYPE_LABEL[f.field_type as FieldType]})</span>
-                  {f.required && <span className="ml-1 text-[11px] font-medium text-rose-600">obrigatório</span>}
-                  {f.is_unique && <span className="ml-1 text-[11px] font-medium text-violet">único</span>}
+                  {f.label} <span className="text-slate-500">({FIELD_TYPE_LABEL[f.field_type as FieldType]})</span>
+                  {f.required && <span className="ml-1 text-xs font-medium text-rose-600">obrigatório</span>}
+                  {f.is_unique && <span className="ml-1 text-xs font-medium text-violet">único</span>}
                 </label>
                 {!readOnly && onUpdateField && (
                   <button
                     type="button"
                     onClick={() => setEditingId(f.id)}
-                    className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-brand"
+                    className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-brand"
                     aria-label={`Editar campo ${f.label}`}
                     title="Editar campo"
                   >
@@ -504,7 +504,7 @@ function FieldsSection({
                         void onDeleteField(f.id, f.key);
                       }
                     }}
-                    className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                     aria-label={`Excluir campo ${f.label}`}
                     title="Excluir campo"
                   >
@@ -565,7 +565,7 @@ function FieldsSection({
               Não permitir duplicado entre sinistros
             </label>
           )}
-          {error && <p className="text-[11px] text-rose-600">{error}</p>}
+          {error && <p className="text-xs text-rose-600">{error}</p>}
           <div className="flex gap-2">
             <button
               type="submit"
@@ -652,7 +652,7 @@ function EditFieldForm({
           Não permitir duplicado entre sinistros
         </label>
       )}
-      {error && <p className="text-[11px] text-rose-600">{error}</p>}
+      {error && <p className="text-xs text-rose-600">{error}</p>}
       <div className="flex gap-2">
         <button
           type="submit"

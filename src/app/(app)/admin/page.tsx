@@ -41,7 +41,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-8 py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Administração</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
           Contas dos clientes, planos e a marca do produto. Os usuários de todas as contas ficam no menu Usuários.

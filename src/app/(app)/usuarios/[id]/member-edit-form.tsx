@@ -104,13 +104,13 @@ export function MemberEditForm({
           </select>
         </div>
       </div>
-      <p className="text-[11px] text-slate-400">
+      <p className="text-xs text-slate-500">
         Nome, CPF e telefone pertencem à pessoa e valem em todas as empresas dela; quem os altera é o Gestor da plataforma.
       </p>
 
       <label className="flex items-center gap-2 text-[13px] font-medium text-slate-700">
         <input key={String(active)} type="checkbox" name="active" defaultChecked={active} /> Ativo
-        <span className="font-normal text-slate-400">— desmarcado, o usuário perde o acesso à empresa na hora</span>
+        <span className="font-normal text-slate-500">— desmarcado, o usuário perde o acesso à empresa na hora</span>
       </label>
 
       {isAdmin ? (
@@ -131,7 +131,7 @@ export function MemberEditForm({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             O usuário pertence a um único grupo, e é o grupo que define o acesso dele.
             {groups.length === 0 && " A empresa ainda não tem grupos."}
           </p>

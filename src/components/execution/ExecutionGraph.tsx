@@ -12,6 +12,8 @@ export type ExecutionNode = {
   x: number;
   y: number;
   status: "pending" | "in_progress" | "completed" | "blocked";
+  claimCount?: number;
+  blockedCount?: number;
 };
 export type ExecutionEdge = { id: string; source: string; target: string; label?: string };
 
@@ -22,11 +24,42 @@ const STATUS_STYLE: Record<ExecutionNode["status"], string> = {
   blocked: "border-rose-400 bg-rose-50 text-rose-900",
 };
 
-function ExecutionNodeBox({ data }: NodeProps<Node<{ name: string; type: NodeType; status: ExecutionNode["status"] }>>) {
+function ExecutionNodeBox({
+  data,
+  selected,
+}: NodeProps<
+  Node<{
+    name: string;
+    type: NodeType;
+    status: ExecutionNode["status"];
+    claimCount?: number;
+    blockedCount?: number;
+  }>
+>) {
+  const count = data.claimCount ?? 0;
+  const blocked = data.blockedCount ?? 0;
+
   return (
-    <div className={`rounded-lg border-2 px-3 py-2 text-[12px] font-medium ${STATUS_STYLE[data.status]}`} style={{ minWidth: 140 }}>
+    <div
+      className={`relative rounded-lg border-2 px-3 py-2 text-[12px] font-medium transition cursor-pointer ${
+        selected ? "ring-2 ring-brand ring-offset-2 " : ""
+      }${STATUS_STYLE[data.status]}`}
+      style={{ minWidth: 140 }}
+    >
+      {count > 0 && (
+        <span
+          className={`absolute -top-2.5 -right-2.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white shadow-sm ring-2 ring-white ${
+            blocked > 0 ? "bg-rose-600 animate-pulse" : "bg-brand"
+          }`}
+          title={`${count} sinistro(s) nesta etapa${blocked > 0 ? ` (${blocked} bloqueado(s))` : ""}`}
+        >
+          {count}
+        </span>
+      )}
       <Handle type="target" position={Position.Top} className="!bg-slate-400" />
-      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] opacity-60">{NODE_META[data.type]?.label ?? data.type}</div>
+      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] opacity-60">
+        {NODE_META[data.type]?.label ?? data.type}
+      </div>
       <div>{data.name}</div>
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400" />
     </div>
@@ -39,7 +72,19 @@ const nodeTypes = { execNode: ExecutionNodeBox };
 // WorkflowBuilder inteiro (que carrega edição, histórico de undo, validação — tudo desnecessário e
 // pesado pra uma visão só-leitura), é um render mínimo do mesmo canvas ReactFlow, sem interação de
 // edição nenhuma.
-export function ExecutionGraph({ nodes, edges }: { nodes: ExecutionNode[]; edges: ExecutionEdge[] }) {
+export function ExecutionGraph({
+  nodes,
+  edges,
+  selectedNodeId,
+  onNodeClick,
+  height = 420,
+}: {
+  nodes: ExecutionNode[];
+  edges: ExecutionEdge[];
+  selectedNodeId?: string | null;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number | string;
+}) {
   const flowNodes = useMemo(
     () =>
       nodes.map(
@@ -47,12 +92,19 @@ export function ExecutionGraph({ nodes, edges }: { nodes: ExecutionNode[]; edges
           id: n.id,
           type: "execNode",
           position: { x: n.x, y: n.y },
-          data: { name: n.name, type: n.type, status: n.status },
+          selected: selectedNodeId === n.id,
+          data: {
+            name: n.name,
+            type: n.type,
+            status: n.status,
+            claimCount: n.claimCount,
+            blockedCount: n.blockedCount,
+          },
           draggable: false,
-          selectable: false,
+          selectable: Boolean(onNodeClick),
         }),
       ),
-    [nodes],
+    [nodes, selectedNodeId, onNodeClick],
   );
   const flowEdges = useMemo(
     () =>
@@ -67,16 +119,20 @@ export function ExecutionGraph({ nodes, edges }: { nodes: ExecutionNode[]; edges
   );
 
   return (
-    <div className="h-[420px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+    <div
+      className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+      style={{ height: typeof height === "number" ? `${height}px` : height }}
+    >
       <ReactFlowProvider>
         <ReactFlow
           nodes={flowNodes}
           edges={flowEdges}
           nodeTypes={nodeTypes}
+          onNodeClick={onNodeClick ? (_, node) => onNodeClick(node.id) : undefined}
           fitView
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
+          elementsSelectable={Boolean(onNodeClick)}
           panOnScroll
           zoomOnScroll
           proOptions={{ hideAttribution: true }}

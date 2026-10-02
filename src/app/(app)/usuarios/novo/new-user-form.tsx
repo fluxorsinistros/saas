@@ -102,7 +102,7 @@ export function NewUserForm({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-[11px] text-slate-400">O usuário pertence a um único grupo, e é o grupo que define o acesso dele.</p>
+          <p className="mt-1 text-xs text-slate-500">O usuário pertence a um único grupo, e é o grupo que define o acesso dele.</p>
         </div>
       )}
 

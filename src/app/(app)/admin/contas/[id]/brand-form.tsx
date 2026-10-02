@@ -27,7 +27,7 @@ export function TenantBrandForm({
           // eslint-disable-next-line @next/next/no-img-element -- logo do Storage
           <img src={logoUrl} alt="Logo atual da conta" className="size-10 object-contain" />
         ) : (
-          <span className="px-1 text-center text-[10px] leading-tight text-slate-400">sem logo</span>
+          <span className="px-1 text-center text-xs leading-tight text-slate-400">sem logo</span>
         )}
       </div>
       <div className="min-w-[200px] flex-1">

@@ -1,17 +1,19 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
+import { toggleQuickTheme } from "./admin/actions";
 import { NavLinks } from "./NavLinks";
 import { switchTenant } from "./tenant-actions";
 
 type Props = {
   tenantId: string;
   tenantName: string;
-  tenants: { id: string; name: string }[];
+  companyIconUrl?: string | null;
+  tenants: { id: string; name: string; iconUrl?: string | null }[];
   email: string;
   isPlatformAdmin: boolean;
   isAdmin?: boolean;
@@ -19,6 +21,7 @@ type Props = {
   brand: Brand;
   /** Administrador geral da plataforma: sem empresa, só a área de Administração. */
   platformMode?: boolean;
+  currentTheme?: "light" | "dark";
 };
 
 // O menu recolhe e expande pelo botão do topo e a escolha fica guardada no navegador. Sem escolha, dentro
@@ -58,34 +61,90 @@ function useCollapsed() {
   return { collapsed, toggle: () => writePref(collapsed ? "expanded" : "collapsed") };
 }
 
-export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdmin, isAdmin = false, hiddenScreens = [], brand, platformMode = false }: Props) {
-  const { collapsed, toggle } = useCollapsed();
+export function AppSidebar({
+  tenantId,
+  tenantName,
+  companyIconUrl,
+  tenants,
+  email,
+  isPlatformAdmin,
+  isAdmin = false,
+  hiddenScreens = [],
+  brand,
+  platformMode = false,
+  currentTheme = "light",
+}: Props) {
+  const { collapsed: desktopCollapsed, toggle } = useCollapsed();
+  // Abaixo de md o menu é uma gaveta: fechada some, aberta sempre expandida (a preferência de recolher é só do desktop).
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const collapsed = desktopCollapsed && !drawerOpen;
 
   return (
+    <>
+      <header className="fixed inset-x-0 top-0 z-30 flex h-12 items-center gap-3 border-b border-navy-700 bg-navy px-3 md:hidden">
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Abrir menu"
+          aria-expanded={drawerOpen}
+          className="flex size-10 items-center justify-center rounded-md text-slate-300 transition hover:bg-navy-700 hover:text-white"
+        >
+          <Menu className="size-5" />
+        </button>
+        <BrandMark tone="dark" compact brand={brand} />
+      </header>
+      {drawerOpen && <div className="fixed inset-0 z-40 bg-slate-950/60 md:hidden" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
     <aside
-      className={`flex shrink-0 flex-col bg-navy text-slate-300 transition-[width] duration-150 ${
-        collapsed ? "w-14" : "w-[232px]"
-      }`}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("a")) setDrawerOpen(false);
+      }}
+      className={`sidebar-scrollbar fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col bg-navy text-slate-300 transition-transform duration-200 select-none md:static md:z-auto md:translate-x-0 md:transition-[width] md:duration-150 ${
+        drawerOpen ? "translate-x-0" : "-translate-x-full"
+      } ${collapsed ? "md:w-14" : "md:w-[232px]"}`}
     >
       <div className={`pb-4 pt-5 ${collapsed ? "flex flex-col items-center gap-3 px-2" : "flex items-start justify-between gap-2 px-4"}`}>
         <BrandMark tone="dark" compact={collapsed} brand={brand} />
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(false)}
+          aria-label="Fechar menu"
+          className="flex size-10 items-center justify-center rounded-md text-slate-400 transition hover:bg-navy-700 hover:text-white md:hidden"
+        >
+          <X className="size-5" />
+        </button>
         <button
           type="button"
           onClick={toggle}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           aria-expanded={!collapsed}
-          className="rounded-md p-1.5 text-slate-400 transition hover:bg-navy-700 hover:text-white"
+          className="hidden rounded-md p-1.5 text-slate-400 transition hover:bg-navy-700 hover:text-white md:block"
         >
           {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
         </button>
       </div>
 
+      {collapsed && !platformMode && (
+        <div className="my-1 flex justify-center px-2">
+          <div
+            title={`Empresa: ${tenantName}`}
+            className="flex size-9 items-center justify-center overflow-hidden rounded-lg border border-navy-700 bg-navy-800 p-1 text-slate-300 transition hover:border-navy-600"
+          >
+            {companyIconUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={companyIconUrl} alt={tenantName} className="max-h-full max-w-full object-contain" />
+            ) : (
+              <Building2 className="size-4 text-slate-400" />
+            )}
+          </div>
+        </div>
+      )}
+
       {!collapsed && (
         <div className="px-3">
           {platformMode ? (
             <div className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-2">
-              <div className="text-[11px] text-slate-500">Acesso</div>
+              <div className="text-xs text-slate-500">Acesso</div>
               <div className="truncate text-[13px] font-medium text-white">Gestor da plataforma</div>
             </div>
           ) : tenants.length > 1 ? (
@@ -93,43 +152,88 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
               <label htmlFor="tenant" className="sr-only">
                 Empresa
               </label>
-              <select
-                id="tenant"
-                name="tenant_id"
-                defaultValue={tenantId}
-                className="w-full rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-1.5 text-[13px] text-white"
-              >
-                {tenants.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              <button className="mt-1 w-full text-left text-[11px] text-slate-400 hover:text-white">Trocar empresa</button>
+              <div className="rounded-lg border border-navy-700 bg-navy-800 p-2">
+                <div className="mb-1 text-xs text-slate-400">Empresa</div>
+                <div className="flex items-center gap-2">
+                  <div className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-navy-600 bg-navy-900/60 p-0.5">
+                    {companyIconUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={companyIconUrl} alt={tenantName} className="max-h-full max-w-full object-contain" />
+                    ) : (
+                      <Building2 className="size-4 text-slate-400" />
+                    )}
+                  </div>
+                  <select
+                    id="tenant"
+                    name="tenant_id"
+                    defaultValue={tenantId}
+                    className="w-full truncate bg-transparent text-[13px] font-medium text-white outline-none cursor-pointer"
+                  >
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id} className="bg-navy-800 text-white">
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button className="mt-1 w-full text-left text-xs text-slate-400 hover:text-white">Trocar empresa</button>
             </form>
           ) : (
-            <div className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-2">
-              <div className="text-[11px] text-slate-500">Empresa</div>
-              <div className="truncate text-[13px] font-medium text-white">{tenantName}</div>
+            <div className="rounded-lg border border-navy-700 bg-navy-800 p-2.5">
+              <div className="text-xs text-slate-400">Empresa</div>
+              <div className="mt-1.5 flex items-center gap-2.5">
+                <div className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-navy-600 bg-navy-900/60 p-0.5">
+                  {companyIconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={companyIconUrl} alt={tenantName} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <Building2 className="size-4 text-slate-400" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white" title={tenantName}>
+                  {tenantName}
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      <nav className={`mt-5 flex-1 ${collapsed ? "px-2" : "px-3"}`} aria-label="Principal">
+      <nav className={`sidebar-scrollbar mt-4 flex-1 overflow-y-auto overflow-x-hidden ${collapsed ? "px-2" : "px-3"}`} aria-label="Principal">
         <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} isAdmin={isAdmin} platformOnly={platformMode} hiddenScreens={hiddenScreens} />
       </nav>
 
-      <div className={`border-t border-navy-700 py-3 ${collapsed ? "px-2" : "px-3"}`}>
+      <div className={`shrink-0 border-t border-navy-700 bg-navy py-3 space-y-1 ${collapsed ? "px-2" : "px-3"}`}>
+        {/* Alternador Rápido de Tema (Claro / Escuro) */}
+        <form action={toggleQuickTheme.bind(null, currentTheme, tenantId)}>
+          <button
+            type="submit"
+            title={currentTheme === "dark" ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}
+            aria-label={currentTheme === "dark" ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}
+            className={`flex items-center gap-2 rounded-md py-1.5 text-[12px] font-medium text-slate-300 transition hover:bg-navy-700 hover:text-white ${
+              collapsed ? "w-full justify-center px-0" : "w-full px-2"
+            }`}
+          >
+            {currentTheme === "dark" ? (
+              <Sun className="size-4 shrink-0 text-amber-400" />
+            ) : (
+              <Moon className="size-4 shrink-0 text-cyan" />
+            )}
+            {!collapsed && (currentTheme === "dark" ? "Modo Claro" : "Modo Escuro")}
+          </button>
+        </form>
+
         {!collapsed && (
-          <div className="truncate px-2 text-[12px] text-slate-400" title={email}>
+          <div className="truncate px-2 pt-1 text-xs text-slate-400" title={email}>
             {email}
           </div>
         )}
         <form action={signOut}>
           <button
+            type="submit"
             title="Sair"
-            className={`mt-1 flex items-center gap-2 rounded-md py-1.5 text-[13px] text-slate-300 transition hover:bg-navy-700 hover:text-white ${
+            className={`flex items-center gap-2 rounded-md py-1.5 text-[13px] text-slate-300 transition hover:bg-navy-700 hover:text-white ${
               collapsed ? "w-full justify-center px-0" : "w-full px-2"
             }`}
           >
@@ -139,5 +243,6 @@ export function AppSidebar({ tenantId, tenantName, tenants, email, isPlatformAdm
         </form>
       </div>
     </aside>
+    </>
   );
 }

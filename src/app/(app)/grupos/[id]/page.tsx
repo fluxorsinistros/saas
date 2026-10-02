@@ -87,7 +87,7 @@ export default async function EditGroupPage({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-xl space-y-6 px-8 py-8">
+      <div className="mx-auto page-narrow space-y-6 px-4 py-6 md:px-8 md:py-8">
         <div>
           <Link href="/grupos" className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-800">
             <ArrowLeft className="size-3.5" /> Grupos
@@ -139,13 +139,13 @@ export default async function EditGroupPage({
             <section className="rounded-xl border border-slate-200 bg-white p-5">
               <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Papéis e permissões</h2>
               <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
-                Quais ações cada pessoa pode executar é controlado pelo <strong>Papel</strong> dela, não pelo grupo. O papel é
+                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
+<span>                Quais ações cada pessoa pode executar é controlado pelo <strong>Papel</strong> dela, não pelo grupo. O papel é
                 escolhido por pessoa em{" "}
                 <Link href="/usuarios" className="text-brand hover:underline">
                   Usuários
                 </Link>
-                .
+                .</span>
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {roles.map((r) => (
@@ -157,7 +157,7 @@ export default async function EditGroupPage({
                           {PERMISSION_LABELS[c] ?? c}
                         </li>
                       ))}
-                      {r.codes.length === 0 && <li className="text-[12px] text-slate-400">Nenhuma permissão.</li>}
+                      {r.codes.length === 0 && <li className="text-[12px] text-slate-500">Nenhuma permissão.</li>}
                     </ul>
                   </div>
                 ))}
@@ -193,9 +193,9 @@ export default async function EditGroupPage({
             <div>
               <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Telas visíveis no menu</h2>
               <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
-                Vale só para quem é <strong>Operador</strong> e está neste grupo — Administrador sempre vê o menu inteiro,
-                independentemente do grupo. Desmarcar uma tela não revoga nenhuma ação, só tira o item do menu lateral.
+                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
+<span>                Vale só para quem é <strong>Operador</strong> e está neste grupo — Administrador sempre vê o menu inteiro,
+                independentemente do grupo. Desmarcar uma tela não revoga nenhuma ação, só tira o item do menu lateral.</span>
               </p>
             </div>
             <ul className="space-y-2">
@@ -227,9 +227,9 @@ export default async function EditGroupPage({
             <div>
               <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Ações permitidas</h2>
               <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
-                Vale só para quem é <strong>Operador</strong> e está neste grupo — Administrador sempre pode fazer tudo,
-                independentemente do grupo. É uma restrição a mais sobre o que o Papel já libera, não substitui permissão.
+                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
+<span>                Vale só para quem é <strong>Operador</strong> e está neste grupo — Administrador sempre pode fazer tudo,
+                independentemente do grupo. É uma restrição a mais sobre o que o Papel já libera, não substitui permissão.</span>
               </p>
             </div>
             <ul className="space-y-2">

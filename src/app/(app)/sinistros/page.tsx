@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, Plus, SearchX, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, Plus, RotateCcw, SearchX, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
+import { formatDuration } from "@/lib/format";
+import { SinistrosFilterBar } from "./SinistrosFilterBar";
 
 export const metadata: Metadata = { title: "Sinistros" };
 
@@ -43,19 +45,6 @@ function formatRelativeDuration(isoString: string | null | undefined): string {
   }
   const diffMonths = Math.floor(diffDays / 30);
   return `${diffMonths} ${diffMonths === 1 ? "mês" : "meses"}`;
-}
-
-function formatDuration(minutes: number): string {
-  if (minutes < 1) return "menos de 1 min";
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h < 24) {
-    return m > 0 ? `${h}h ${m}min` : `${h}h`;
-  }
-  const d = Math.floor(h / 24);
-  const rh = h % 24;
-  return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
 }
 
 function formatDurationBetween(startIso: string | null | undefined, endIso: string | null | undefined): string {
@@ -136,7 +125,17 @@ function computeProcessProgress(
   };
 }
 
-export default async function SinistrosPage({ searchParams }: { searchParams: Promise<{ grupo?: string; searched?: string }> }) {
+type SearchParams = {
+  grupo?: string;
+  fluxo?: string;
+  etapa?: string;
+  sla_etapa?: string;
+  sla_total?: string;
+  situacao?: string;
+  searched?: string;
+};
+
+export default async function SinistrosPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const ctx = await getTenantContext();
   const supabase = await createClient();
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
@@ -172,28 +171,93 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 
   const sp = await searchParams;
   const requestedGroup = sp.grupo ?? "";
+  const requestedWorkflow = sp.fluxo ?? "";
+  const requestedStage = sp.etapa ?? "";
+  const requestedSlaEtapa = sp.sla_etapa ?? "";
+  const requestedSlaTotal = sp.sla_total ?? "";
+  const requestedSituacao = sp.situacao ?? "";
+
   // Operador sem grupo escolhido vê só o(s) próprio(s); "todos" só existe pra Administrador.
   const groupFilter = isAdmin
-    ? requestedGroup === "todos"
+    ? requestedGroup === "todos" || !requestedGroup
       ? null
       : (groupOptions.find((g) => g.id === requestedGroup)?.id ?? null)
     : (groupOptions.find((g) => g.id === requestedGroup)?.id ?? groupOptions[0]?.id ?? null);
 
-  // A listagem só consulta o banco depois de clicar "Filtrar" (campo oculto "searched") — abrir a
-  // tela não carrega todos os sinistros + ciclos + atividades em aberto sozinha.
-  const searched = sp.searched === "1";
+  const hasActiveFilters = Boolean(
+    requestedWorkflow ||
+      requestedStage ||
+      (requestedGroup && requestedGroup !== "todos") ||
+      requestedSlaEtapa ||
+      requestedSlaTotal ||
+      requestedSituacao
+  );
+  const searched = sp.searched === "1" || hasActiveFilters || sp.searched === undefined;
 
-  const { data: publishedWorkflows } = await supabase
-    .from("workflows")
-    .select("id, name, workflow_versions(status)")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("status", "active");
+  // Carrega fluxos, versões e etapas ativas para os filtros dinâmicos
+  const [
+    { data: allWorkflows },
+    { data: allVersions },
+    { data: allNodes },
+  ] = await Promise.all([
+    supabase
+      .from("workflows")
+      .select("id, name")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("workflow_versions")
+      .select("id, workflow_id, status")
+      .eq("tenant_id", ctx.tenantId),
+    supabase
+      .from("workflow_nodes")
+      .select("id, workflow_version_id, name, node_type")
+      .eq("tenant_id", ctx.tenantId)
+      .in("node_type", ["stage", "wait", "decision"]),
+  ]);
+
+  const versionToWorkflow = new Map<string, string>();
+  const workflowById = new Map<string, { id: string; name: string }>();
+  const stagesByWorkflowId = new Map<string, Set<string>>();
+  const allStageNamesSet = new Set<string>();
+
+  for (const w of allWorkflows ?? []) {
+    workflowById.set(w.id, { id: w.id, name: w.name });
+    stagesByWorkflowId.set(w.id, new Set());
+  }
+
+  for (const v of allVersions ?? []) {
+    versionToWorkflow.set(v.id, v.workflow_id);
+  }
+
+  for (const node of allNodes ?? []) {
+    const stageName = node.name?.trim();
+    if (!stageName) continue;
+    allStageNamesSet.add(stageName);
+
+    const wfId = versionToWorkflow.get(node.workflow_version_id);
+    if (wfId && stagesByWorkflowId.has(wfId)) {
+      stagesByWorkflowId.get(wfId)!.add(stageName);
+    }
+  }
+
+  const workflowStagesMap: Record<string, string[]> = {};
+  for (const [wfId, set] of stagesByWorkflowId.entries()) {
+    workflowStagesMap[wfId] = [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+  const allStageNames = [...allStageNamesSet].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  const options = (allWorkflows ?? []).filter((w) =>
+    (allVersions ?? []).some((v) => v.workflow_id === w.id && v.status === "published"),
+  );
 
   let claims: {
     id: string;
     claim_number: string;
     status: string;
     created_at: string;
+    custom_fields: unknown;
     claim_cycles: {
       id: string;
       status: string;
@@ -220,16 +284,26 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   const completedStagesByCycle = new Map<string, Set<string>>();
   const stepsByVersion = new Map<string, { id: string; name: string; sla_minutes: number }[]>();
   const totalSlaByVersion = new Map<string, number>();
+  const fieldLabelByWorkflowKey = new Map<string, string>();
   let groupNameById = new Map<string, string>();
   let visibleClaims: typeof claims = [];
 
   if (searched) {
     const { data: claimRows } = await supabase
       .from("claims")
-      .select("id, claim_number, status, created_at, claim_cycles(id, status, cycle_number, formalized_at, completed_at, workflow_version_id)")
+      .select("id, claim_number, status, created_at, custom_fields, claim_cycles(id, status, cycle_number, formalized_at, completed_at, workflow_version_id)")
       .eq("tenant_id", ctx.tenantId)
       .order("created_at", { ascending: false });
     claims = claimRows ?? [];
+
+    // Identidade do sinistro na lista: os primeiros valores dos campos de abertura (placa, segurado...)
+    // — sem isso o operador só tem o número e precisa abrir cada cartão.
+    const { data: fieldDefs } = await supabase
+      .from("workflow_fields")
+      .select("workflow_id, key, label")
+      .eq("tenant_id", ctx.tenantId)
+      .in("field_type", ["text", "number", "date", "select"]);
+    for (const f of fieldDefs ?? []) fieldLabelByWorkflowKey.set(`${f.workflow_id}:${f.key}`, f.label);
 
     // Grupo "responsável agora" = grupo da(s) atividade(s) em aberto do ciclo atual de cada
     // sinistro (pode ter mais de um em paralelo) — é isso que responde "o que está na fila do meu grupo".
@@ -325,17 +399,63 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     groupNameById = new Map(groupOptions.map((g) => [g.id, g.name]));
 
     visibleClaims = claims.filter((c) => {
-      if (!groupFilter) return true;
       const cycle = currentCycleByClaim.get(c.id);
-      return !!cycle && (groupsByCycle.get(cycle.id)?.has(groupFilter) ?? false);
+      const status = cycle?.status ?? c.status;
+      const isCompleted = status === "completed";
+      const cycleWfId = cycle ? versionToWorkflow.get(cycle.workflow_version_id) : undefined;
+      const activeStages = cycle ? (stagesByCycle.get(cycle.id) ?? []) : [];
+      const activeGroups = cycle ? (groupsByCycle.get(cycle.id) ?? new Set()) : new Set();
+      const totalFlowSlaMinutes = cycle ? totalSlaByVersion.get(cycle.workflow_version_id) : undefined;
+      const totalFlowSla = !isCompleted && cycle ? computeSla(cycle.formalized_at || c.created_at, totalFlowSlaMinutes) : null;
+
+      // 1. Filtro de Fluxo (independente da versão)
+      if (requestedWorkflow && cycleWfId !== requestedWorkflow) {
+        return false;
+      }
+
+      // 2. Filtro de Etapa Atual
+      if (requestedStage) {
+        const inStage = activeStages.some((st) => st.name.toLowerCase() === requestedStage.toLowerCase());
+        if (!inStage) return false;
+      }
+
+      // 3. Filtro de Grupo Responsável Agora
+      if (groupFilter && !activeGroups.has(groupFilter)) {
+        return false;
+      }
+
+      // 4. Filtro de SLA da Etapa
+      if (requestedSlaEtapa === "atrasado") {
+        const hasBreachedStage = activeStages.some((st) => computeSla(st.entered_at, st.sla_minutes)?.isBreached);
+        if (isCompleted || !hasBreachedStage) return false;
+      } else if (requestedSlaEtapa === "no_prazo") {
+        const hasBreachedStage = activeStages.some((st) => computeSla(st.entered_at, st.sla_minutes)?.isBreached);
+        if (isCompleted || activeStages.length === 0 || hasBreachedStage) return false;
+      }
+
+      // 5. Filtro de SLA Total Geral do Fluxo
+      if (requestedSlaTotal === "atrasado") {
+        if (isCompleted || !totalFlowSla?.isBreached) return false;
+      } else if (requestedSlaTotal === "no_prazo") {
+        if (isCompleted || !totalFlowSla || totalFlowSla.isBreached) return false;
+      }
+
+      // 6. Filtro de Situação / Status
+      if (requestedSituacao === "aberto") {
+        if (isCompleted || status === "cancelled" || status === "discarded" || status === "archived") return false;
+      } else if (requestedSituacao === "pausado") {
+        if (status !== "blocked" && status !== "waiting") return false;
+      } else if (requestedSituacao === "fechado") {
+        if (!["completed", "cancelled", "discarded", "archived"].includes(status)) return false;
+      }
+
+      return true;
     });
   }
 
-  const options = (publishedWorkflows ?? []).filter((w) => w.workflow_versions.some((v) => v.status === "published"));
-
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-8 py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Sinistros</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
           Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido — mudanças futuras no fluxo não
@@ -376,32 +496,24 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
           </form>
         )}
 
-        {groupOptions.length > 0 && (
-          <form method="get" className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-            <input type="hidden" name="searched" value="1" />
-            <div className="min-w-[220px]">
-              <label htmlFor="grupo" className="mb-1 block text-[12px] font-medium text-slate-600">
-                Grupo responsável agora
-              </label>
-              <select
-                id="grupo"
-                name="grupo"
-                defaultValue={isAdmin ? (groupFilter ?? "todos") : groupFilter ?? ""}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-              >
-                {isAdmin && <option value="todos">Todos</option>}
-                {groupOptions.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50">
-              Filtrar
-            </button>
-          </form>
-        )}
+        <div className="mt-6">
+          <SinistrosFilterBar
+            workflows={allWorkflows ?? []}
+            workflowStagesMap={workflowStagesMap}
+            allStages={allStageNames}
+            groups={groupOptions}
+            isAdmin={isAdmin}
+            currentFilters={{
+              fluxo: requestedWorkflow,
+              etapa: requestedStage,
+              grupo: requestedGroup,
+              sla_etapa: requestedSlaEtapa,
+              sla_total: requestedSlaTotal,
+              situacao: requestedSituacao,
+            }}
+            totalCount={visibleClaims.length}
+          />
+        </div>
 
         {!searched ? (
           <div className="mt-6 flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
@@ -410,11 +522,22 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
             <p className="max-w-sm text-[13px] text-slate-500">A lista não carrega sozinha ao abrir a tela.</p>
           </div>
         ) : !visibleClaims.length ? (
-          <div className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+          <div className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
             <FileWarning className="mx-auto size-8 text-slate-300" />
             <p className="mt-3 text-[15px] font-medium text-slate-800">
-              {claims?.length ? "Nenhum sinistro parado no grupo selecionado agora." : "Nenhum sinistro ainda"}
+              {claims?.length ? "Nenhum sinistro encontrado com os filtros selecionados." : "Nenhum sinistro cadastrado ainda."}
             </p>
+            {hasActiveFilters && (
+              <div className="mt-3">
+                <Link
+                  href="/sinistros?searched=1"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <RotateCcw className="size-3.5 text-slate-500" />
+                  Limpar todos os filtros
+                </Link>
+              </div>
+            )}
           </div>
         ) : (
           <div className="mt-6 flex flex-col gap-4">
@@ -474,13 +597,13 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                           {c.claim_number}
                         </span>
                         {isCompleted ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
                             <Clock3 className="size-3 text-emerald-700" />
                             Duração total: {executionDuration}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[12px] text-slate-500">
-                            <Clock3 className="size-3 text-slate-400" />
+                            <Clock3 className="size-3 text-slate-500" />
                             Criado há {formatRelativeDuration(c.created_at)}
                           </span>
                         )}
@@ -489,7 +612,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                       {/* GRÁFICO DE BARRA DE PROGRESSO DO PROCESSO */}
                       {progressStats ? (
                         <div className="flex flex-col gap-1 min-w-[150px] max-w-[240px] flex-1 px-2">
-                          <div className="flex items-center justify-between text-[11px] font-medium leading-none">
+                          <div className="flex items-center justify-between text-xs font-medium leading-none">
                             <span className="text-slate-500">Progresso</span>
                             <span
                               className={`font-bold ${
@@ -507,7 +630,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                               style={{ width: `${progressStats.pct}%` }}
                             />
                           </div>
-                          <span className="text-[10px] text-slate-400 leading-none">
+                          <span className="text-xs text-slate-500 leading-none">
                             {progressStats.subtext}
                           </span>
                         </div>
@@ -515,7 +638,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 
                       <div className="flex items-center gap-2.5 shrink-0">
                         <span
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
                             CYCLE_STATUS_STYLE[status] ?? "bg-slate-100 text-slate-600 ring-slate-200"
                           }`}
                         >
@@ -527,6 +650,23 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 
                     {/* CORPO DO CARD */}
                     <div className="p-4 space-y-3">
+                      {(() => {
+                        const wfId = cycle ? versionToWorkflow.get(cycle.workflow_version_id) : undefined;
+                        const values = Object.entries((c.custom_fields ?? {}) as Record<string, string>)
+                          .map(([key, value]) => ({ label: wfId ? fieldLabelByWorkflowKey.get(`${wfId}:${key}`) : undefined, value }))
+                          .filter((v): v is { label: string; value: string } => !!v.label && !!v.value)
+                          .slice(0, 3);
+                        return values.length ? (
+                          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
+                            {values.map((v) => (
+                              <div key={v.label} className="flex gap-1.5">
+                                <dt className="text-slate-500">{v.label}:</dt>
+                                <dd className="font-medium text-slate-900">{v.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : null;
+                      })()}
                       {isCompleted ? (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-600">
                           <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
@@ -542,7 +682,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                             </span>
                           ) : null}
                           {cycle?.completed_at && (
-                            <span className="text-slate-400">
+                            <span className="text-slate-500">
                               • Encerrado há {formatRelativeDuration(cycle.completed_at)}
                             </span>
                           )}
@@ -554,7 +694,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                             <div className="rounded-lg border border-slate-200/80 bg-slate-50/60 p-3">
                               <div className="flex flex-wrap items-center justify-between gap-2.5">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                                     Etapa Atual
                                   </span>
                                   {activeStages.map((st) => (
@@ -578,7 +718,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                                     return (
                                       <span
                                         key={st.id}
-                                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold border ${
+                                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold border ${
                                           stageSla.isBreached
                                             ? "bg-rose-50 text-rose-700 border-rose-200"
                                             : stageSla.isAtRisk
@@ -587,7 +727,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                                         }`}
                                       >
                                         <Clock3 className="size-3.5" />
-                                        SLA da Etapa: {stageSla.pct}% ({stageSla.formattedRemaining})
+                                        <span title="Prazo da etapa atual, contado desde que ela começou.">SLA da Etapa:</span> {stageSla.pct}% ({stageSla.formattedRemaining})
                                       </span>
                                     );
                                   })}
@@ -600,9 +740,9 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                           <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5 text-[12px]">
                             {totalFlowSla ? (
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-500">SLA Total do Fluxo:</span>
+                                <span title="Prazo para concluir o fluxo inteiro, contado desde a abertura do sinistro." className="font-medium text-slate-500">SLA Total do Fluxo:</span>
                                 <span
-                                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold border ${
+                                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold border ${
                                     totalFlowSla.isBreached
                                       ? "bg-rose-50 text-rose-700 border-rose-200"
                                       : totalFlowSla.isAtRisk
@@ -621,9 +761,9 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 
                             {activeGroups.length > 0 && (
                               <div className="flex items-center gap-1.5 text-slate-500">
-                                <Users className="size-3.5 text-slate-400" />
+                                <Users className="size-3.5 text-slate-500" />
                                 <span>Aguardando:</span>
-                                <span className="font-semibold text-slate-800 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded text-[11px]">
+                                <span className="font-semibold text-slate-800 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded text-xs">
                                   {activeGroups.join(", ")}
                                 </span>
                               </div>

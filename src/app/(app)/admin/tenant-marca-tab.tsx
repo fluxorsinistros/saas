@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState } from "react";
+import { useState, useActionState, useEffect } from "react";
 import { Palette, Image as ImageIcon, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
 import { saveTenantBranding, type ActionState } from "./actions";
 
@@ -25,6 +25,13 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
   const [previewTagline, setPreviewTagline] = useState(initialBrand.tagline ?? "");
   const [previewColor, setPreviewColor] = useState(initialBrand.color ?? "#2563eb");
   const [logoPreview, setLogoPreview] = useState<string | null>(initialBrand.logoUrl ?? null);
+
+  useEffect(() => {
+    if (initialBrand.name !== undefined) setPreviewName(initialBrand.name ?? "");
+    if (initialBrand.tagline !== undefined) setPreviewTagline(initialBrand.tagline ?? "");
+    if (initialBrand.color) setPreviewColor(initialBrand.color);
+    if (initialBrand.logoUrl !== undefined) setLogoPreview(initialBrand.logoUrl);
+  }, [initialBrand.name, initialBrand.tagline, initialBrand.color, initialBrand.logoUrl]);
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -86,9 +93,9 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                     className={`${inputClass} file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2.5 file:py-1 file:text-[12px] file:font-medium file:text-slate-700 hover:file:bg-slate-200`}
                   />
                   <div className="mt-1 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400">Formatos aceitos: PNG, SVG, WEBP ou JPG (até 1MB)</span>
+                    <span className="text-xs text-slate-400">Formatos aceitos: PNG, SVG, WEBP ou JPG (até 1MB)</span>
                     {initialBrand.logoUrl && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-rose-600 hover:text-rose-700">
+                      <label className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700">
                         <input type="checkbox" name="remove_logo" disabled={!whiteLabelEnabled} /> Remover logo atual
                       </label>
                     )}
@@ -112,8 +119,8 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                   disabled={!whiteLabelEnabled}
                   className={inputClass}
                 />
-                <span className="mt-1 block text-[11px] text-slate-400">
-                  Substitui o nome do produto no menu e cabeçalhos. Deixe vazio para usar a marca padrão.
+                <span className="mt-1 block text-xs text-slate-400">
+                  Substitui o nome do produto no menu e cabeçalhos. Deixe vazio para manter o nome padrão da plataforma.
                 </span>
               </div>
 
@@ -130,7 +137,7 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                   disabled={!whiteLabelEnabled}
                   className={inputClass}
                 />
-                <span className="mt-1 block text-[11px] text-slate-400">
+                <span className="mt-1 block text-xs text-slate-400">
                   Exibido abaixo do nome no topo do menu lateral.
                 </span>
               </div>
@@ -174,7 +181,7 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                   ))}
                 </div>
               </div>
-              <p className="mt-1.5 text-[11px] text-slate-500">
+              <p className="mt-1.5 text-xs text-slate-500">
                 Esta cor personalizada será aplicada aos botões principais, links ativos e destaques visuais do sistema para todos os membros da sua empresa.
               </p>
             </div>
@@ -191,7 +198,7 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
               </div>
             )}
 
-            <div className="pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <button
                 type="submit"
                 disabled={!whiteLabelEnabled || pending}
@@ -200,6 +207,13 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                 <Sparkles className="size-4" />
                 {pending ? "Salvando alterações…" : "Salvar Configurações de Marca"}
               </button>
+
+              {(initialBrand.name || initialBrand.logoUrl || (initialBrand.color && initialBrand.color.toLowerCase() !== "#2563eb")) && (
+                <label className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-rose-600 cursor-pointer">
+                  <input type="checkbox" name="reset_branding" disabled={!whiteLabelEnabled || pending} />
+                  <span>Restaurar marca padrão da plataforma</span>
+                </label>
+              )}
             </div>
           </form>
         </div>
@@ -229,7 +243,7 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                   <div className="truncate text-[14px] font-semibold text-white">
                     {previewName || "Fluxor (Padrão)"}
                   </div>
-                  <div className="truncate text-[11px] text-slate-400">
+                  <div className="truncate text-xs text-slate-400">
                     {previewTagline || "Workflow de sinistros"}
                   </div>
                 </div>

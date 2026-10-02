@@ -64,7 +64,7 @@ export function TabPlano({
               White-label liberado
             </label>
             <div className="w-40">
-              <label className="mb-0.5 block text-[11px] text-slate-500">Acréscimo na mensalidade (%)</label>
+              <label className="mb-0.5 block text-xs text-slate-500">Acréscimo na mensalidade (%)</label>
               <input
                 key={contract.white_label_surcharge_pct}
                 name="surcharge_pct"

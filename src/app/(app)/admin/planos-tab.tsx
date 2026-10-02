@@ -71,7 +71,7 @@ export async function PlanosTab() {
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
                   <div>
                     <span className="text-[13px] font-medium text-slate-900">{plan.name}</span>
-                    <span className="ml-2 text-[11px] text-slate-400">{plan.code}</span>
+                    <span className="ml-2 text-xs text-slate-500">{plan.code}</span>
                   </div>
                   <div className="flex items-center gap-3 text-[12px] text-slate-500">
                     <span>Implantação {currency.format(plan.setup_fee)}</span>
@@ -103,7 +103,7 @@ export async function PlanosTab() {
 
                   <form action={savePlanLimits}>
                     <input type="hidden" name="plan_id" value={plan.id} />
-                    <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.06em] text-slate-400">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-[0.06em] text-slate-500">
                       Limites — deixe vazio para não limitar
                     </p>
                     <div
@@ -115,7 +115,7 @@ export async function PlanosTab() {
                         return (
                           <div key={def.key}>
                             <label className="mb-1 block text-[12px] font-medium text-slate-600">
-                              {def.label} <span className="font-normal text-slate-400">({def.unit})</span>
+                              {def.label} <span className="font-normal text-slate-500">({def.unit})</span>
                             </label>
                             {def.kind === "toggle" ? (
                               <select name={`limit_${def.key}`} defaultValue={Number(current?.limit_value) === 1 ? "1" : "0"} className={input}>
@@ -131,7 +131,7 @@ export async function PlanosTab() {
                                 className={input}
                               />
                             )}
-                            <p className="mt-0.5 text-[11px] text-slate-400">{def.hint}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{def.hint}</p>
                           </div>
                         );
                       })}
@@ -141,7 +141,7 @@ export async function PlanosTab() {
 
                   {(limitsByPlan.get(plan.id) ?? []).some((l) => !PLAN_LIMIT_KEYS.has(l.limit_key)) && (
                     <div>
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-slate-400">
+                      <p className="mb-1 text-xs font-medium uppercase tracking-[0.06em] text-slate-500">
                         Limites antigos fora do catálogo
                       </p>
                       <ul className="space-y-1">
@@ -152,7 +152,7 @@ export async function PlanosTab() {
                               <span>{l.limit_key}</span>
                               <span className="text-slate-500">{l.limit_value === null ? "ilimitado" : l.limit_value}</span>
                               <form action={removePlanLimit.bind(null, l.id)}>
-                                <button className="text-slate-400 hover:text-rose-600" aria-label={`Remover limite ${l.limit_key}`}>
+                                <button className="text-slate-500 hover:text-rose-600" aria-label={`Remover limite ${l.limit_key}`}>
                                   <X className="size-3.5" />
                                 </button>
                               </form>

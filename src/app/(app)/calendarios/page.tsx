@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { CalendarClock, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, CalendarClock, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -37,10 +38,18 @@ export default async function CalendariosPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
+        <div className="mb-4">
+          <Link
+            href="/admin?aba=sla"
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-500 hover:text-slate-800 transition"
+          >
+            <ArrowLeft className="size-3.5" /> Voltar para Administração (SLA)
+          </Link>
+        </div>
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Calendários de SLA</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
-          Dias úteis, horário de expediente e feriados — usados pelo motor de SLA para calcular prazos (Documento 4 §3). Um
+          Dias úteis, horário de expediente e feriados — usados pelo motor de SLA para calcular prazos. Um
           SLA sem calendário conta corrido, 24/7.
         </p>
 
@@ -81,12 +90,12 @@ export default async function CalendariosPage() {
               <div key={cal.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <CalendarClock className="size-4 text-slate-400" />
+                    <CalendarClock className="size-4 text-slate-500" />
                     <span className="text-[14px] font-medium text-slate-900">{cal.name}</span>
                   </div>
                   {canManage && (
                     <form action={deleteCalendar.bind(null, cal.id)}>
-                      <button className="text-slate-400 hover:text-rose-600" aria-label={`Remover ${cal.name}`}>
+                      <button className="text-slate-500 hover:text-rose-600" aria-label={`Remover ${cal.name}`}>
                         <Trash2 className="size-4" />
                       </button>
                     </form>
@@ -104,11 +113,11 @@ export default async function CalendariosPage() {
                         <span className={e.is_working_day ? "text-emerald-700" : "text-rose-700"}>
                           {new Date(e.exception_date + "T00:00:00").toLocaleDateString("pt-BR")} —{" "}
                           {e.is_working_day ? "dia útil extra" : "feriado"}
-                          {e.note && <span className="ml-1 text-slate-400">({e.note})</span>}
+                          {e.note && <span className="ml-1 text-slate-500">({e.note})</span>}
                         </span>
                         {canManage && (
                           <form action={removeException.bind(null, e.id)}>
-                            <button className="text-slate-400 hover:text-rose-600">Remover</button>
+                            <button className="text-slate-500 hover:text-rose-600">Remover</button>
                           </form>
                         )}
                       </li>
@@ -133,7 +142,7 @@ export default async function CalendariosPage() {
             );
           })}
           {(calendars ?? []).length === 0 && (
-            <p className="text-[13px] text-slate-400">Nenhum calendário ainda — SLAs contam corrido, 24/7.</p>
+            <p className="text-[13px] text-slate-500">Nenhum calendário ainda — SLAs contam corrido, 24/7.</p>
           )}
         </div>
       </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, DollarSign, Download, FileText, PauseCircle, PlayCircle, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, DollarSign, Download, FileText, PauseCircle, PlayCircle, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
@@ -26,6 +26,7 @@ import { requestDocument, reviewDocument } from "../documents-actions";
 import { DocumentUploadForm } from "@/components/documents/DocumentUploadForm";
 import { getLimits, isAllowed, limitOf } from "@/lib/limits";
 import { createFinancialEntry, markFinancialEntry, setDeclaredValue } from "../financial-actions";
+import { ClaimHistoryTimeline, type HistoryItem } from "./ClaimHistoryTimeline";
 
 export const metadata: Metadata = { title: "Sinistro" };
 
@@ -143,7 +144,7 @@ export default async function ClaimPage({
 
   const { data: claim } = await supabase
     .from("claims")
-    .select("id, claim_number, status, occurred_at, created_at, declared_value, custom_fields")
+    .select("id, claim_number, status, occurred_at, created_at, declared_value, custom_fields, created_by")
     .eq("id", claimId)
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
@@ -173,7 +174,7 @@ export default async function ClaimPage({
 
   const { data: allCycles } = await supabase
     .from("claim_cycles")
-    .select("id, status, cycle_number, workflow_version_id, formalized_at, completed_at")
+    .select("id, status, cycle_number, workflow_version_id, formalized_at, completed_at, created_by")
     .eq("claim_id", claim.id)
     .order("cycle_number", { ascending: false });
   if (!allCycles?.length) notFound();
@@ -343,10 +344,26 @@ export default async function ClaimPage({
   ];
   const { data: auditLogs } = await supabase
     .from("audit_logs")
-    .select("id, action, reason, created_at")
+    .select("id, actor_id, action, entity_type, entity_id, previous_value, new_value, reason, created_at")
     .in("entity_id", entityIds)
     .order("created_at", { ascending: false })
     .limit(50);
+
+  const actorIds = Array.from(
+    new Set(
+      [
+        ...(auditLogs ?? []).map((l) => l.actor_id),
+        claim.created_by,
+        cycle.created_by,
+      ].filter((id): id is string => Boolean(id))
+    )
+  );
+
+  const { data: actorProfiles } = actorIds.length
+    ? await supabase.from("user_profiles").select("id, full_name, email").in("id", actorIds)
+    : { data: [] as { id: string; full_name: string | null; email: string }[] };
+
+  const actorNameMap = new Map((actorProfiles ?? []).map((p) => [p.id, p.full_name || p.email]));
 
   const blockedReason = auditLogs?.find((a) => a.action === "cycle.blocked")?.reason;
 
@@ -398,20 +415,133 @@ export default async function ClaimPage({
   });
   const execEdges = graph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: e.label || undefined }));
 
+  const historyItems: HistoryItem[] = (auditLogs ?? []).map((log) => {
+    const newVal = (log.new_value ?? {}) as Record<string, unknown>;
+
+    // Autor da ação
+    let author = log.actor_id ? actorNameMap.get(log.actor_id) : null;
+    if (!author) {
+      if (log.action === "claim.created" && claim.created_by) {
+        author = actorNameMap.get(claim.created_by);
+      } else if (log.action === "cycle.created" && cycle.created_by) {
+        author = actorNameMap.get(cycle.created_by);
+      }
+    }
+
+    // Identificação da etapa ou elemento
+    let stageTitle: string | null = null;
+    let eventDetail: string | null = null;
+    let dotTone: "blue" | "emerald" | "amber" | "rose" | "indigo" | "slate" = "slate";
+
+    if (log.action === "stage.entered") {
+      dotTone = "blue";
+      const directName = (newVal.node_name as string) || null;
+      const fallbackStage = stages?.find((s) => s.id === log.entity_id);
+      const resolvedName = directName || (fallbackStage ? nodeById.get(fallbackStage.node_id)?.name : null);
+      stageTitle = resolvedName ? `Etapa iniciada: ${resolvedName}` : "Etapa iniciada";
+    } else if (log.action === "activity.completed") {
+      dotTone = "emerald";
+      const directName = (newVal.node_name as string) || null;
+      const act = activities?.find((a) => a.id === log.entity_id);
+      const stg = stages?.find((s) => s.id === act?.stage_instance_id);
+      const resolvedName = directName || (stg ? nodeById.get(stg.node_id)?.name : null);
+      stageTitle = resolvedName ? `Atividade concluída: ${resolvedName}` : "Atividade concluída";
+    } else if (log.action === "decision.made") {
+      dotTone = "amber";
+      const dec = decisions?.find((d) => d.id === log.entity_id);
+      const stg = stages?.find((s) => s.id === dec?.stage_instance_id);
+      const resolvedName = stg ? nodeById.get(stg.node_id)?.name : null;
+      const option = (newVal.selected_option as string) || dec?.selected_option;
+      stageTitle = resolvedName ? `Decisão em "${resolvedName}"` : "Decisão registrada";
+      if (option) {
+        eventDetail = `Opção: "${option}"`;
+      }
+    } else if (log.action === "claim.created") {
+      dotTone = "indigo";
+      stageTitle = `Sinistro #${claim.claim_number} cadastrado`;
+    } else if (log.action === "cycle.created") {
+      dotTone = "indigo";
+      stageTitle = `Ciclo ${cycle.cycle_number} aberto`;
+      if (newVal.workflow_name) {
+        eventDetail = `Fluxo: ${newVal.workflow_name}`;
+      }
+    } else if (log.action === "document.requested") {
+      dotTone = "blue";
+      const typeName = (newVal.type as string) || (documents?.find((d) => d.id === log.entity_id) ? docTypeName.get(documents.find((d) => d.id === log.entity_id)!.document_type_id ?? "") : null);
+      stageTitle = typeName ? `Documento solicitado: ${typeName}` : "Documento solicitado";
+    } else if (log.action === "document.received") {
+      dotTone = "emerald";
+      const fileName = (newVal.file_name as string) || null;
+      stageTitle = fileName ? `Documento recebido: ${fileName}` : "Documento recebido";
+    } else if (log.action === "document.validated") {
+      dotTone = "emerald";
+      stageTitle = "Documento validado com sucesso";
+    } else if (log.action === "document.rejected") {
+      dotTone = "rose";
+      stageTitle = "Documento rejeitado";
+    } else if (log.action === "pending_item.created") {
+      dotTone = "amber";
+      const title = (newVal.title as string) || pendingItems?.find((p) => p.id === log.entity_id)?.title;
+      stageTitle = title ? `Pendência aberta: ${title}` : "Pendência aberta";
+    } else if (log.action === "pending_item.resolved") {
+      dotTone = "emerald";
+      const title = pendingItems?.find((p) => p.id === log.entity_id)?.title;
+      stageTitle = title ? `Pendência resolvida: ${title}` : "Pendência resolvida";
+    } else if (log.action === "claim.declared_value_set") {
+      dotTone = "emerald";
+      const val = newVal.declared_value !== undefined ? currency.format(Number(newVal.declared_value)) : null;
+      stageTitle = "Valor declarado atualizado";
+      if (val) eventDetail = `Novo valor: ${val}`;
+    } else if (log.action === "financial_entry.created") {
+      dotTone = "blue";
+      const desc = (newVal.description as string) || "Lançamento financeiro";
+      const amt = newVal.amount !== undefined ? currency.format(Number(newVal.amount)) : null;
+      stageTitle = `Lançamento criado: ${desc}`;
+      if (amt) eventDetail = amt;
+    } else if (log.action === "sla.paused") {
+      dotTone = "amber";
+      stageTitle = "Prazo de SLA pausado";
+    } else if (log.action === "sla.resumed") {
+      dotTone = "blue";
+      stageTitle = "Prazo de SLA retomado";
+    } else if (log.action === "cycle.blocked") {
+      dotTone = "rose";
+      stageTitle = "Processo bloqueado";
+    } else if (log.action === "cycle.discarded") {
+      dotTone = "rose";
+      stageTitle = "Ciclo descartado";
+    } else if (log.action === "cycle.reopened") {
+      dotTone = "blue";
+      stageTitle = "Ciclo reaberto";
+    } else {
+      stageTitle = AUDIT_LABEL[log.action] ?? log.action;
+    }
+
+    return {
+      id: log.id,
+      stageTitle,
+      eventDetail,
+      reason: log.reason,
+      author: author ?? null,
+      createdAt: log.created_at,
+      dotTone,
+    };
+  });
+
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
         <Link href="/sinistros" className="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800">
           <ArrowLeft className="size-4" /> Sinistros
         </Link>
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">{claim.claim_number}</h1>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
             {workflow?.name} · v{version?.version_number}
           </span>
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
               cycle.status === "blocked"
                 ? "bg-rose-50 text-rose-700 ring-rose-200"
                 : cycle.status === "completed"
@@ -427,7 +557,7 @@ export default async function ClaimPage({
                 <Link
                   key={c.id}
                   href={c.id === allCycles[0].id ? `/sinistros/${claim.id}` : `/sinistros/${claim.id}?ciclo=${c.id}`}
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
                     c.id === cycle.id ? "bg-brand text-white ring-brand" : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
                   }`}
                 >
@@ -462,8 +592,9 @@ export default async function ClaimPage({
             </summary>
             <form
               action={discardCycle.bind(null, cycle.id)}
-              className="mt-2 flex max-w-md items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3"
+              className="mt-2 flex max-w-md flex-wrap items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3"
             >
+              <p className="basis-full text-[12px] text-rose-800">O ciclo atual será encerrado e um novo começará do início do fluxo. O histórico é mantido.</p>
               <input name="reason" required placeholder="Motivo do descarte" className={`${input} text-[12px]`} />
               <button className="shrink-0 rounded-md bg-rose-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-rose-700">
                 Descartar e abrir novo ciclo
@@ -515,8 +646,214 @@ export default async function ClaimPage({
         )}
 
         <section className="mt-6">
-          <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Execução</h2>
-          <ExecutionViewToggle graph={<ExecutionGraph nodes={execNodes} edges={execEdges} />} timeline={
+          <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Execução e Detalhes</h2>
+          <ExecutionViewToggle
+            historyCount={historyItems.length}
+            history={<ClaimHistoryTimeline items={historyItems} />}
+            graph={<ExecutionGraph nodes={execNodes} edges={execEdges} />}
+            financialCount={(financialEntries ?? []).length}
+            financial={
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  {perms.has("financial.manage") ? (
+                    <form action={setDeclaredValue.bind(null, claim.id)} className="flex items-center gap-2">
+                      <label htmlFor="declared_value" className="text-[12px] text-slate-500">
+                        Valor de carga/prejuízo declarado
+                      </label>
+                      <input
+                        id="declared_value"
+                        name="declared_value"
+                        type="number"
+                        step="0.01"
+                        defaultValue={claim.declared_value ?? ""}
+                        placeholder="0,00"
+                        className={`${input} w-32 text-[12px]`}
+                      />
+                      <button className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
+                        Salvar
+                      </button>
+                    </form>
+                  ) : (
+                    <span className="text-[12px] text-slate-500">
+                      Valor de carga/prejuízo declarado:{" "}
+                      <span className="font-medium text-slate-700">
+                        {claim.declared_value != null ? currency.format(Number(claim.declared_value)) : "—"}
+                      </span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 py-3 sm:grid-cols-4">
+                  <FinancialStat label="Despesas" value={totals.expense} tone="rose" />
+                  <FinancialStat label="Recebimentos" value={totals.receipt} tone="emerald" />
+                  <FinancialStat label="Ressarcimentos" value={totals.reimbursement} tone="emerald" />
+                  <FinancialStat label="Saldo" value={balance} tone={balance >= 0 ? "emerald" : "rose"} />
+                </div>
+
+                {(financialEntries ?? []).length > 0 && (
+                  <ul className="divide-y divide-slate-100 border-t border-slate-100">
+                    {(financialEntries ?? []).map((e) => (
+                      <li key={e.id} className="flex items-center justify-between gap-2 py-2 text-[12px]">
+                        <div className={e.status === "cancelled" ? "text-slate-500 line-through" : "text-slate-700"}>
+                          <span className="font-medium">{FINANCIAL_TYPE_LABEL[e.entry_type] ?? e.entry_type}</span> — {e.description}
+                          <span className="ml-1.5 text-slate-500">
+                            {new Date(e.entry_date).toLocaleDateString("pt-BR")} · {currency.format(Number(e.amount))}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              e.status === "paid"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : e.status === "cancelled"
+                                  ? "bg-slate-100 text-slate-500"
+                                  : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {e.status === "paid" ? "Pago" : e.status === "cancelled" ? "Cancelado" : "Pendente"}
+                          </span>
+                          {e.status === "pending" && perms.has("financial.manage") && (
+                            <>
+                              <form action={markFinancialEntry.bind(null, e.id, claim.id, "paid")}>
+                                <button className="text-emerald-600 hover:underline cursor-pointer">Marcar pago</button>
+                              </form>
+                              <form action={markFinancialEntry.bind(null, e.id, claim.id, "cancelled")}>
+                                <button className="text-slate-500 hover:underline cursor-pointer">Cancelar</button>
+                              </form>
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {perms.has("financial.manage") && (
+                  <form action={createFinancialEntry.bind(null, cycle.id)} className="mt-3 flex flex-wrap items-end gap-1.5 border-t border-slate-100 pt-3">
+                    <input type="hidden" name="claim_id" value={claim.id} />
+                    <select name="entry_type" required className={`${input} w-36 text-[12px]`}>
+                      <option value="expense">Despesa</option>
+                      <option value="receipt">Recebimento</option>
+                      <option value="reimbursement">Ressarcimento</option>
+                    </select>
+                    <input name="description" required placeholder="Descrição" className={`${input} w-44 text-[12px]`} />
+                    <input name="amount" type="number" step="0.01" required placeholder="Valor" className={`${input} w-24 text-[12px]`} />
+                    <input name="entry_date" type="date" className={`${input} w-36 text-[12px]`} />
+                    <button className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600 cursor-pointer">Lançar</button>
+                  </form>
+                )}
+              </div>
+            }
+            documentsCount={(documents ?? []).length}
+            documents={
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {(documents ?? []).map((doc) => {
+                    const versions = versionsByDoc.get(doc.id) ?? [];
+                    const canReview = (doc.status === "received" || doc.status === "in_validation") && perms.has("document.validate");
+                    return (
+                      <div key={doc.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <FileText className="size-4 text-slate-500" />
+                            <span className="text-[13px] font-medium text-slate-900">{docTypeName.get(doc.document_type_id) ?? "—"}</span>
+                            {doc.is_required && (
+                              <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                                obrigatório
+                              </span>
+                            )}
+                          </div>
+                          <DocStatusBadge status={doc.status} />
+                        </div>
+
+                        {versions.length === 0 ? (
+                          <p className="mt-2 text-[12px] text-slate-500">Nenhum arquivo enviado ainda.</p>
+                        ) : (
+                          <ul className="mt-2 space-y-1">
+                            {versions.map((v) => {
+                              const url = urlByPath.get(v.storage_path);
+                              return (
+                              <li key={v.id} className="flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
+                                <span className="text-slate-500">v{v.version_number}</span>
+                                {url ? (
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
+                                  >
+                                    <Download className="size-3" /> {v.file_name}
+                                  </a>
+                                ) : (
+                                  v.file_name
+                                )}
+                                <span className="text-slate-500">{(v.size_bytes / 1024).toFixed(0)} KB</span>
+                                {v.rejection_reason && <span className="text-rose-700">— {v.rejection_reason}</span>}
+                                {v.validated_at && !v.rejection_reason && (
+                                  <span className="inline-flex items-center gap-1 text-emerald-700">
+                                    <CheckCircle2 className="size-3" /> validado
+                                  </span>
+                                )}
+                              </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                          <DocumentUploadForm variant="version" claimId={claim.id} claimCycleId={cycle.id} documentId={doc.id} hint={uploadHint} />
+
+                          {canReview && (
+                            <>
+                              <form action={reviewDocument}>
+                                <input type="hidden" name="claim_id" value={claim.id} />
+                                <input type="hidden" name="document_id" value={doc.id} />
+                                <input type="hidden" name="decision" value="validated" />
+                                <button className="rounded-md px-2.5 py-1 text-[12px] font-medium text-emerald-700 hover:bg-emerald-50 cursor-pointer">
+                                  Validar
+                                </button>
+                              </form>
+                              <form action={reviewDocument} className="flex items-center gap-1">
+                                <input type="hidden" name="claim_id" value={claim.id} />
+                                <input type="hidden" name="document_id" value={doc.id} />
+                                <input type="hidden" name="decision" value="rejected" />
+                                <input
+                                  name="reason"
+                                  required
+                                  placeholder="Motivo da rejeição"
+                                  className="rounded-md border border-slate-200 px-2 py-1 text-[12px]"
+                                />
+                                <button className="rounded-md px-2.5 py-1 text-[12px] font-medium text-rose-700 hover:bg-rose-50 cursor-pointer">
+                                  Rejeitar
+                                </button>
+                              </form>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <form action={requestDocument} className="rounded-xl border border-dashed border-slate-300 bg-white p-3 shadow-xs">
+                    <p className="mb-2 text-[12px] font-medium text-slate-600">Solicitar documento</p>
+                    <input type="hidden" name="claim_id" value={claim.id} />
+                    <input type="hidden" name="claim_cycle_id" value={cycle.id} />
+                    <input name="type_name" required placeholder="Ex.: Boletim de ocorrência" className={`${input} mb-1.5`} />
+                    <label className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
+                      <input type="checkbox" name="is_required" className="size-3.5 accent-[var(--color-brand)]" /> Obrigatório
+                    </label>
+                    <button className="w-full rounded-lg border border-slate-200 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
+                      Solicitar
+                    </button>
+                  </form>
+
+                  <DocumentUploadForm variant="standalone" claimId={claim.id} claimCycleId={cycle.id} hint={uploadHint} />
+                </div>
+              </div>
+            }
+            timeline={
           <ol className="space-y-3">
             {(stages ?? []).map((stage) => {
               const node = nodeById.get(stage.node_id);
@@ -536,7 +873,7 @@ export default async function ClaimPage({
                 <li key={stage.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                         {NODE_META[type]?.label ?? type}
                         {stage.pass_number > 1 && ` · ${stage.pass_number}ª passagem`}
                       </span>
@@ -545,7 +882,7 @@ export default async function ClaimPage({
                     <div className="flex items-center gap-1.5">
                       {liveSla && liveSla.status !== "completed" && (
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${SLA_STATUS_STYLE[liveSla.status]}`}
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${SLA_STATUS_STYLE[liveSla.status]}`}
                           title={tracking ? formatMinutesRemaining(tracking.target_at) : undefined}
                         >
                           {SLA_STATUS_LABEL[liveSla.status]}
@@ -562,13 +899,13 @@ export default async function ClaimPage({
                       </span>
                       {cycle.status === "discarded" ? null : isPaused ? (
                         <form action={resumeSla.bind(null, tracking.id, claim.id)}>
-                          <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+                          <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
                             <PlayCircle className="size-3.5" /> Retomar prazo
                           </button>
                         </form>
                       ) : (
                         <details className="relative">
-                          <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+                          <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
                             <PauseCircle className="size-3.5" /> Pausar prazo
                           </summary>
                           <form
@@ -707,9 +1044,9 @@ export default async function ClaimPage({
                           </div>
                         </form>
                       ) : activity.status === "in_progress" && cycle.status === "discarded" ? (
-                        <span className="text-[12px] text-slate-400">Ciclo descartado</span>
+                        <span className="text-[12px] text-slate-500">Ciclo descartado</span>
                       ) : activity.status === "in_progress" ? (
-                        <span className="text-[12px] text-slate-400">Sem permissão para concluir</span>
+                        <span className="text-[12px] text-slate-500">Sem permissão para concluir</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
                           <CheckCircle2 className="size-3.5" /> Concluída
@@ -755,9 +1092,9 @@ export default async function ClaimPage({
                     <ul className="mt-2.5 space-y-1.5 border-t border-slate-100 pt-2.5">
                       {(pendingByActivity.get(activity.id) ?? []).map((p) => (
                         <li key={p.id} className="flex items-center justify-between gap-2 text-[12px]">
-                          <span className={p.status === "open" ? "text-slate-700" : "text-slate-400 line-through"}>
+                          <span className={p.status === "open" ? "text-slate-700" : "text-slate-500 line-through"}>
                             {p.title}
-                            {p.responsible_group_id && <span className="ml-1.5 text-slate-400">· {groupName.get(p.responsible_group_id)}</span>}
+                            {p.responsible_group_id && <span className="ml-1.5 text-slate-500">· {groupName.get(p.responsible_group_id)}</span>}
                           </span>
                           {p.status === "open" && cycle.status !== "discarded" && (
                             <span className="flex shrink-0 items-center gap-2">
@@ -765,7 +1102,7 @@ export default async function ClaimPage({
                                 <button className="text-emerald-600 hover:underline">Resolver</button>
                               </form>
                               <form action={cancelPendingItem.bind(null, p.id, claim.id)}>
-                                <button className="text-slate-400 hover:underline">Cancelar</button>
+                                <button className="text-slate-500 hover:underline">Cancelar</button>
                               </form>
                             </span>
                           )}
@@ -776,7 +1113,7 @@ export default async function ClaimPage({
 
                   {activity && cycle.status !== "discarded" && (
                     <details className="mt-2 border-t border-slate-100 pt-2">
-                      <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-600">
+                      <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-600">
                         + Pendência
                       </summary>
                       <form
@@ -810,7 +1147,7 @@ export default async function ClaimPage({
                         {joinProgress.branches.map((b, i) => (
                           <li
                             key={i}
-                            className={`rounded-md px-2 py-0.5 text-[11px] ring-1 ring-inset ${
+                            className={`rounded-md px-2 py-0.5 text-xs ring-1 ring-inset ${
                               b.done ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"
                             }`}
                           >
@@ -829,9 +1166,9 @@ export default async function ClaimPage({
                           <CheckCircle2 className="size-3.5" /> Escolhido: {decision.selected_option}
                         </p>
                       ) : cycle.status === "discarded" ? (
-                        <p className="mt-2 text-[12px] text-slate-400">Ciclo descartado</p>
+                        <p className="mt-2 text-[12px] text-slate-500">Ciclo descartado</p>
                       ) : !perms.has("claim.execute") || !canActOnGroup(node?.groupId ?? null) ? (
-                        <p className="mt-2 text-[12px] text-slate-400">Sem permissão para decidir</p>
+                        <p className="mt-2 text-[12px] text-slate-500">Sem permissão para decidir</p>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {((decision.options as string[]) ?? []).map((opt) => (
@@ -851,228 +1188,6 @@ export default async function ClaimPage({
           </ol>
           } />
         </section>
-
-        <section className="mt-8">
-          <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-            <DollarSign className="size-3.5" /> Financeiro
-          </h2>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              {perms.has("financial.manage") ? (
-                <form action={setDeclaredValue.bind(null, claim.id)} className="flex items-center gap-2">
-                  <label htmlFor="declared_value" className="text-[12px] text-slate-500">
-                    Valor de carga/prejuízo declarado
-                  </label>
-                  <input
-                    id="declared_value"
-                    name="declared_value"
-                    type="number"
-                    step="0.01"
-                    defaultValue={claim.declared_value ?? ""}
-                    placeholder="0,00"
-                    className={`${input} w-32 text-[12px]`}
-                  />
-                  <button className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
-                    Salvar
-                  </button>
-                </form>
-              ) : (
-                <span className="text-[12px] text-slate-500">
-                  Valor de carga/prejuízo declarado:{" "}
-                  <span className="font-medium text-slate-700">
-                    {claim.declared_value != null ? currency.format(Number(claim.declared_value)) : "—"}
-                  </span>
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 py-3 sm:grid-cols-4">
-              <FinancialStat label="Despesas" value={totals.expense} tone="rose" />
-              <FinancialStat label="Recebimentos" value={totals.receipt} tone="emerald" />
-              <FinancialStat label="Ressarcimentos" value={totals.reimbursement} tone="emerald" />
-              <FinancialStat label="Saldo" value={balance} tone={balance >= 0 ? "emerald" : "rose"} />
-            </div>
-
-            {(financialEntries ?? []).length > 0 && (
-              <ul className="divide-y divide-slate-100 border-t border-slate-100">
-                {(financialEntries ?? []).map((e) => (
-                  <li key={e.id} className="flex items-center justify-between gap-2 py-2 text-[12px]">
-                    <div className={e.status === "cancelled" ? "text-slate-400 line-through" : "text-slate-700"}>
-                      <span className="font-medium">{FINANCIAL_TYPE_LABEL[e.entry_type] ?? e.entry_type}</span> — {e.description}
-                      <span className="ml-1.5 text-slate-400">
-                        {new Date(e.entry_date).toLocaleDateString("pt-BR")} · {currency.format(Number(e.amount))}
-                      </span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          e.status === "paid"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : e.status === "cancelled"
-                              ? "bg-slate-100 text-slate-500"
-                              : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        {e.status === "paid" ? "Pago" : e.status === "cancelled" ? "Cancelado" : "Pendente"}
-                      </span>
-                      {e.status === "pending" && perms.has("financial.manage") && (
-                        <>
-                          <form action={markFinancialEntry.bind(null, e.id, claim.id, "paid")}>
-                            <button className="text-emerald-600 hover:underline">Marcar pago</button>
-                          </form>
-                          <form action={markFinancialEntry.bind(null, e.id, claim.id, "cancelled")}>
-                            <button className="text-slate-400 hover:underline">Cancelar</button>
-                          </form>
-                        </>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {perms.has("financial.manage") && (
-              <form action={createFinancialEntry.bind(null, cycle.id)} className="mt-3 flex flex-wrap items-end gap-1.5 border-t border-slate-100 pt-3">
-                <input type="hidden" name="claim_id" value={claim.id} />
-                <select name="entry_type" required className={`${input} w-36 text-[12px]`}>
-                  <option value="expense">Despesa</option>
-                  <option value="receipt">Recebimento</option>
-                  <option value="reimbursement">Ressarcimento</option>
-                </select>
-                <input name="description" required placeholder="Descrição" className={`${input} w-44 text-[12px]`} />
-                <input name="amount" type="number" step="0.01" required placeholder="Valor" className={`${input} w-24 text-[12px]`} />
-                <input name="entry_date" type="date" className={`${input} w-36 text-[12px]`} />
-                <button className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">Lançar</button>
-              </form>
-            )}
-          </div>
-        </section>
-
-        <section className="mt-8">
-          <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Documentos</h2>
-
-          <div className="space-y-3">
-            {(documents ?? []).map((doc) => {
-              const versions = versionsByDoc.get(doc.id) ?? [];
-              const canReview = (doc.status === "received" || doc.status === "in_validation") && perms.has("document.validate");
-              return (
-                <div key={doc.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="size-4 text-slate-400" />
-                      <span className="text-[13px] font-medium text-slate-900">{docTypeName.get(doc.document_type_id) ?? "—"}</span>
-                      {doc.is_required && (
-                        <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
-                          obrigatório
-                        </span>
-                      )}
-                    </div>
-                    <DocStatusBadge status={doc.status} />
-                  </div>
-
-                  {versions.length === 0 ? (
-                    <p className="mt-2 text-[12px] text-slate-400">Nenhum arquivo enviado ainda.</p>
-                  ) : (
-                    <ul className="mt-2 space-y-1">
-                      {versions.map((v) => {
-                        const url = urlByPath.get(v.storage_path);
-                        return (
-                        <li key={v.id} className="flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
-                          <span className="text-slate-400">v{v.version_number}</span>
-                          {url ? (
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
-                            >
-                              <Download className="size-3" /> {v.file_name}
-                            </a>
-                          ) : (
-                            v.file_name
-                          )}
-                          <span className="text-slate-400">{(v.size_bytes / 1024).toFixed(0)} KB</span>
-                          {v.rejection_reason && <span className="text-rose-700">— {v.rejection_reason}</span>}
-                          {v.validated_at && !v.rejection_reason && (
-                            <span className="inline-flex items-center gap-1 text-emerald-700">
-                              <CheckCircle2 className="size-3" /> validado
-                            </span>
-                          )}
-                        </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-                    <DocumentUploadForm variant="version" claimId={claim.id} claimCycleId={cycle.id} documentId={doc.id} hint={uploadHint} />
-
-                    {canReview && (
-                      <>
-                        <form action={reviewDocument}>
-                          <input type="hidden" name="claim_id" value={claim.id} />
-                          <input type="hidden" name="document_id" value={doc.id} />
-                          <input type="hidden" name="decision" value="validated" />
-                          <button className="rounded-md px-2.5 py-1 text-[12px] font-medium text-emerald-700 hover:bg-emerald-50">
-                            Validar
-                          </button>
-                        </form>
-                        <form action={reviewDocument} className="flex items-center gap-1">
-                          <input type="hidden" name="claim_id" value={claim.id} />
-                          <input type="hidden" name="document_id" value={doc.id} />
-                          <input type="hidden" name="decision" value="rejected" />
-                          <input
-                            name="reason"
-                            required
-                            placeholder="Motivo da rejeição"
-                            className="rounded-md border border-slate-200 px-2 py-1 text-[12px]"
-                          />
-                          <button className="rounded-md px-2.5 py-1 text-[12px] font-medium text-rose-700 hover:bg-rose-50">
-                            Rejeitar
-                          </button>
-                        </form>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <form action={requestDocument} className="rounded-xl border border-dashed border-slate-300 bg-white p-3">
-              <p className="mb-2 text-[12px] font-medium text-slate-600">Solicitar documento</p>
-              <input type="hidden" name="claim_id" value={claim.id} />
-              <input type="hidden" name="claim_cycle_id" value={cycle.id} />
-              <input name="type_name" required placeholder="Ex.: Boletim de ocorrência" className={`${input} mb-1.5`} />
-              <label className="mb-2 flex items-center gap-1.5 text-[11px] text-slate-500">
-                <input type="checkbox" name="is_required" className="size-3.5 accent-[var(--color-brand)]" /> Obrigatório
-              </label>
-              <button className="w-full rounded-lg border border-slate-200 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
-                Solicitar
-              </button>
-            </form>
-
-            <DocumentUploadForm variant="standalone" claimId={claim.id} claimCycleId={cycle.id} hint={uploadHint} />
-          </div>
-        </section>
-
-        <section className="mt-8">
-          <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Histórico</h2>
-          <ul className="space-y-1.5 border-l border-slate-200 pl-4">
-            {(auditLogs ?? []).map((log) => (
-              <li key={log.id} className="relative text-[12px] text-slate-600">
-                <span className="absolute -left-[21px] top-1 size-2 rounded-full bg-slate-300" />
-                <span className="font-medium text-slate-800">{AUDIT_LABEL[log.action] ?? log.action}</span>
-                {log.reason && <span className="text-rose-700"> — {log.reason}</span>}
-                <span className="ml-1.5 inline-flex items-center gap-1 text-slate-400">
-                  <Clock3 className="size-3" /> {new Date(log.created_at).toLocaleString("pt-BR")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
       </div>
     </div>
   );
@@ -1081,7 +1196,7 @@ export default async function ClaimPage({
 function FinancialStat({ label, value, tone }: { label: string; value: number; tone: "emerald" | "rose" }) {
   return (
     <div>
-      <dt className="text-[11px] text-slate-500">{label}</dt>
+      <dt className="text-xs text-slate-500">{label}</dt>
       <dd className={`text-[15px] font-semibold ${tone === "emerald" ? "text-emerald-700" : "text-rose-700"}`}>{currency.format(value)}</dd>
     </div>
   );
@@ -1097,7 +1212,7 @@ function DocStatusBadge({ status }: { status: string }) {
           ? "bg-sky-50 text-sky-700 ring-sky-200"
           : "bg-slate-100 text-slate-600 ring-slate-200";
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${style}`}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}>
       {DOC_STATUS_LABEL[status] ?? status}
     </span>
   );
@@ -1111,5 +1226,5 @@ function StageBadge({ status }: { status: string }) {
         ? "bg-sky-50 text-sky-700 ring-sky-200"
         : "bg-slate-100 text-slate-600 ring-slate-200";
   const label = status === "completed" ? "Concluída" : status === "in_progress" ? "Em andamento" : status;
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${style}`}>{label}</span>;
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}>{label}</span>;
 }

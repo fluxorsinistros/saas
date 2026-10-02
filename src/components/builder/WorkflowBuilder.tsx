@@ -740,7 +740,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
           {!readOnly && paletteOpen && (
             <aside className="flex w-[184px] shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white p-3" aria-label="Elementos">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Elementos</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Elementos</span>
                 <button
                   type="button"
                   onClick={() => setPaletteOpen(false)}
@@ -772,13 +772,13 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                       <span className="mt-0.5">{PALETTE_ICON[t]}</span>
                       <span>
                         <span className="block text-[13px] font-medium text-slate-800">{NODE_META[t].label}</span>
-                        <span className="block text-[11px] leading-tight text-slate-500">{NODE_META[t].hint}</span>
+                        <span className="block text-xs leading-tight text-slate-500">{NODE_META[t].hint}</span>
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
-              <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
+              <p className="mt-4 text-xs leading-relaxed text-slate-500">
                 Conecte arrastando do ponto inferior de um elemento até o superior do próximo.
                 {selectedNode && (
                   <>
@@ -951,7 +951,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
             <section className="max-h-[45%] shrink-0 overflow-y-auto border-t border-slate-200 bg-slate-50/60 p-4" aria-label="Validação">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Validação</h2>
-                {!staleServer && <span className="text-[11px] text-slate-500">resultado da publicação</span>}
+                {!staleServer && <span className="text-xs text-slate-500">resultado da publicação</span>}
               </div>
               {panelIssues.length === 0 ? (
                 <p className="flex items-center gap-2 text-[13px] text-emerald-700">
@@ -964,7 +964,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   )}
                   {[...groupedIssues.byNode.entries()].map(([nodeId, list]) => (
                     <div key={nodeId}>
-                      <p className="mb-1 truncate text-[11px] font-medium text-slate-500">{nameOf.get(nodeId) ?? "Elemento"}</p>
+                      <p className="mb-1 truncate text-xs font-medium text-slate-500">{nameOf.get(nodeId) ?? "Elemento"}</p>
                       <IssueList issues={list} onFocus={focusIssue} />
                     </div>
                   ))}
@@ -1083,7 +1083,7 @@ function StatusBadge({ status }: { status: string }) {
         ? "bg-sky-50 text-sky-700 ring-sky-200"
         : "bg-slate-100 text-slate-600 ring-slate-200";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${style}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}>
       {status === "draft" && <Clock3 className="size-3" />}
       {STATUS_LABEL[status] ?? status}
     </span>

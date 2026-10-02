@@ -24,7 +24,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Usuários</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
           Quem participa da {ctx.tenantName}: pesquise, exporte a lista e clique no lápis para editar o acesso de cada pessoa.

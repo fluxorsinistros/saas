@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* Paleta de referência do Documento 1 §70 (nome comercial ainda em aberto). */
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+/* Paleta de referência do Documento 1 §70. */
 @theme {
   --color-navy: #0b1220;
   --color-navy-800: #111a2e;
@@ -23,9 +25,193 @@ body {
 body {
   background: var(--color-canvas);
   color: #0f172a;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
-/* Pontos de conexão do builder: discretos em repouso, evidentes ao passar o mouse. */
+/* ==========================================================================
+   TEMA ESCURO (DARK MODE) - SUPORTE COMPLETO
+   ========================================================================== */
+:root[data-theme="dark"],
+.dark {
+  --color-canvas: #090d16;
+  color-scheme: dark;
+}
+
+.dark body,
+[data-theme="dark"] body,
+body.dark,
+body[data-theme="dark"] {
+  background-color: #090d16;
+  color: #f1f5f9;
+}
+
+/* Superfícies, Painéis e Cards */
+.dark .bg-white,
+[data-theme="dark"] .bg-white {
+  background-color: #111827 !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/70,
+.dark .bg-slate-50\/80,
+[data-theme="dark"] .bg-slate-50,
+[data-theme="dark"] .bg-slate-50\/50,
+[data-theme="dark"] .bg-slate-50\/70,
+[data-theme="dark"] .bg-slate-50\/80 {
+  background-color: #0d131f !important;
+}
+
+.dark .bg-slate-100,
+[data-theme="dark"] .bg-slate-100 {
+  background-color: #1a2234 !important;
+}
+
+/* Bordas e Divisores */
+.dark .border-slate-200,
+[data-theme="dark"] .border-slate-200 {
+  border-color: #1e293b !important;
+}
+
+.dark .border-slate-100,
+[data-theme="dark"] .border-slate-100 {
+  border-color: #192231 !important;
+}
+
+.dark .border-slate-300,
+[data-theme="dark"] .border-slate-300 {
+  border-color: #2e3d55 !important;
+}
+
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+/* Textos e Tipografia */
+.dark .text-slate-900,
+[data-theme="dark"] .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+.dark .text-slate-800,
+[data-theme="dark"] .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-slate-700,
+[data-theme="dark"] .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-slate-600,
+[data-theme="dark"] .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-slate-500,
+[data-theme="dark"] .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-slate-400,
+[data-theme="dark"] .text-slate-400 {
+  color: #64748b !important;
+}
+
+/* Estados de Hover */
+.dark .hover\:bg-slate-50:hover,
+[data-theme="dark"] .hover\:bg-slate-50:hover {
+  background-color: #182234 !important;
+}
+
+.dark .hover\:bg-slate-100:hover,
+[data-theme="dark"] .hover\:bg-slate-100:hover {
+  background-color: #1f2c42 !important;
+}
+
+/* Formulários e Entradas de Dados */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="file"]),
+.dark select,
+.dark textarea,
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="file"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: #0b111e !important;
+  color: #f8fafc !important;
+  border-color: #1e293b !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #64748b !important;
+}
+
+.dark select option,
+[data-theme="dark"] select option {
+  background-color: #111827 !important;
+  color: #f8fafc !important;
+}
+
+/* Caixas e Banners Semânticos em Dark Mode */
+.dark .bg-amber-50,
+.dark .bg-amber-50\/50,
+.dark .bg-amber-50\/80,
+[data-theme="dark"] .bg-amber-50,
+[data-theme="dark"] .bg-amber-50\/50,
+[data-theme="dark"] .bg-amber-50\/80 {
+  background-color: rgba(120, 53, 15, 0.18) !important;
+  border-color: rgba(217, 119, 6, 0.35) !important;
+}
+
+.dark .bg-rose-50,
+.dark .bg-rose-50\/50,
+[data-theme="dark"] .bg-rose-50,
+[data-theme="dark"] .bg-rose-50\/50 {
+  background-color: rgba(159, 18, 57, 0.18) !important;
+  border-color: rgba(225, 29, 72, 0.35) !important;
+}
+
+.dark .bg-emerald-50,
+.dark .bg-emerald-50\/50,
+.dark .bg-emerald-50\/90,
+[data-theme="dark"] .bg-emerald-50,
+[data-theme="dark"] .bg-emerald-50\/50,
+[data-theme="dark"] .bg-emerald-50\/90 {
+  background-color: rgba(6, 78, 59, 0.22) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.dark .bg-blue-50,
+.dark .bg-blue-50\/30,
+.dark .bg-blue-50\/70,
+[data-theme="dark"] .bg-blue-50,
+[data-theme="dark"] .bg-blue-50\/30,
+[data-theme="dark"] .bg-blue-50\/70 {
+  background-color: rgba(30, 58, 138, 0.22) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+.dark .bg-purple-50,
+[data-theme="dark"] .bg-purple-50 {
+  background-color: rgba(88, 28, 135, 0.22) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+
+/* Abas ativas no painel */
+.dark .border-b-white,
+[data-theme="dark"] .border-b-white {
+  border-bottom-color: #111827 !important;
+}
+
+/* Pontos de conexão do builder */
 .react-flow__handle {
   width: 10px;
   height: 10px;
@@ -39,8 +225,6 @@ body {
   background: var(--color-brand);
   transform: scale(1.25);
 }
-/* Foco de teclado precisa ficar visível (crítica de design: navegação sem mouse) — a seleção por clique
-   já usa o anel dos próprios componentes de nó, então só o :focus-visible ganha contorno aqui. */
 .react-flow__node.selectable:focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 3px;
@@ -51,3 +235,77 @@ body {
   stroke-width: 3px !important;
 }
 
+/* ==========================================================================
+   BARRA DE ROLAGEM CUSTOMIZADA (SIDEBAR E CONTAINERS ESCUROS)
+   Evita o track/fundo branco nativo do Windows em fundos escuros
+   ========================================================================== */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) #0b1220;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: #0b1220;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Aplicação geral dentro de elementos com bg-navy */
+.bg-navy {
+  scrollbar-color: rgba(255, 255, 255, 0.2) #0b1220;
+}
+
+.bg-navy * {
+  scrollbar-color: rgba(255, 255, 255, 0.2) #0b1220;
+}
+
+.bg-navy *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.bg-navy *::-webkit-scrollbar-track {
+  background: #0b1220;
+}
+
+.bg-navy *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+.bg-navy *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.bg-navy *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+
+/* Larguras de página: uma para telas de lista/painel, outra para formulários e detalhes estreitos. */
+@utility page-wide {
+  max-width: 64rem;
+}
+@utility page-narrow {
+  max-width: 42rem;
+}

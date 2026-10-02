@@ -57,7 +57,7 @@ export async function TabHistorico({ tenantId }: { tenantId: string }) {
             <span className="font-medium text-slate-800">{ACTION_LABEL[e.action] ?? e.action}</span>
             {detail(e.new_value) && <span className="text-slate-500"> — {detail(e.new_value)}</span>}
             {e.reason && <span className="text-rose-700"> — {e.reason}</span>}
-            <span className="ml-2 inline-flex items-center gap-1 text-[12px] text-slate-400">
+            <span className="ml-2 inline-flex items-center gap-1 text-[12px] text-slate-500">
               <Clock3 className="size-3" /> {new Date(e.created_at).toLocaleString("pt-BR")}
               {e.actor_email ? ` · ${e.actor_email}` : ""}
             </span>

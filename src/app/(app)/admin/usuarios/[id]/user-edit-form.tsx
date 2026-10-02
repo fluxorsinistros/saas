@@ -111,7 +111,7 @@ export function UserEditForm({
             ))}
           </select>
           {isSelf && <input type="hidden" name="tipo" value={tipo} />}
-          {isSelf && <p className="mt-1 text-[11px] text-slate-400">Você não pode mudar o seu próprio tipo. Peça a outro Gestor.</p>}
+          {isSelf && <p className="mt-1 text-xs text-slate-500">Você não pode mudar o seu próprio tipo. Peça a outro Gestor.</p>}
         </div>
         <div>
           <label htmlFor="tenant_id" className="mb-1 block text-[12px] font-medium text-slate-600">
@@ -169,7 +169,7 @@ export function UserEditForm({
       {!isGestor && (
         <label className="flex items-center gap-2 text-[13px] font-medium text-slate-700">
           <input key={String(active)} type="checkbox" name="active" defaultChecked={wasGestor ? true : active} /> Ativo
-          <span className="font-normal text-slate-400">— desmarcado, o usuário perde o acesso à empresa na hora</span>
+          <span className="font-normal text-slate-500">— desmarcado, o usuário perde o acesso à empresa na hora</span>
         </label>
       )}
 
@@ -191,7 +191,7 @@ export function UserEditForm({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             O usuário pertence a um único grupo, e é o grupo que define o acesso dele.
             {tenant && tenantGroups.length === 0 && " A empresa escolhida ainda não tem grupos."}
           </p>

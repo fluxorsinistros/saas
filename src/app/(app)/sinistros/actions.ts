@@ -580,7 +580,7 @@ export async function createClaimAndCycle(
       formalized_at: new Date().toISOString(),
       created_by: userId,
     })
-    .select("id")
+    .select("id, cycle_number")
     .single();
   if (cycleErr || !cycle) throw new Error(cycleErr?.message ?? "Falha ao abrir o ciclo.");
 
@@ -591,8 +591,12 @@ export async function createClaimAndCycle(
     snapshot: graph as unknown as Json,
   });
 
-  await writeAudit(supabase, tenantId, "claim.created", "claim", claim.id);
-  await writeAudit(supabase, tenantId, "cycle.created", "claim_cycle", cycle.id);
+  await writeAudit(supabase, tenantId, "claim.created", "claim", claim.id, {
+    next: { claim_number: claim.claim_number },
+  });
+  await writeAudit(supabase, tenantId, "cycle.created", "claim_cycle", cycle.id, {
+    next: { cycle_number: cycle.cycle_number, workflow_name: workflowName },
+  });
   await enterNode(supabase, tenantId, cycle.id, version.id, graph, start.id, "initial");
 
   return { claimId: claim.id, claimNumber: claim.claim_number };
@@ -783,7 +787,11 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     .update({ status: "completed", completed_at: now, completed_by: ctx.userId })
     .eq("id", activityInstanceId);
   await supabase.from("stage_instances").update({ status: "completed", exited_at: now }).eq("id", stage.id);
-  await writeAudit(supabase, ctx.tenantId, "activity.completed", "activity_instance", activityInstanceId);
+  const graph = await loadGraph(supabase, cycle.workflow_version_id);
+  const node = graph.nodes.find((n) => n.id === stage.node_id);
+  await writeAudit(supabase, ctx.tenantId, "activity.completed", "activity_instance", activityInstanceId, {
+    next: { node_name: node?.name, node_type: node?.type },
+  });
   await completeSlaTracking(supabase, stage.id);
 
   await advance(supabase, ctx.tenantId, cycle.workflow_version_id, cycle.id, stage.node_id, undefined, stage.branch_instance_id);
@@ -799,7 +807,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
 
   const { data: decision, error: dErr } = await supabase
     .from("decisions")
-    .select("id, claim_cycle_id, node_id, stage_instance_id, selected_option")
+    .select("id, claim_cycle_id, node_id, stage_instance_id, selected_option, question")
     .eq("id", decisionId)
     .single();
   if (dErr || !decision) throw new Error("Decisão não encontrada.");
@@ -838,7 +846,10 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
     await supabase.from("stage_instances").update({ status: "completed", exited_at: now }).eq("id", decision.stage_instance_id);
     await completeSlaTracking(supabase, decision.stage_instance_id);
   }
-  await writeAudit(supabase, ctx.tenantId, "decision.made", "decision", decisionId, { next: { selected_option: selectedOption } });
+  await writeAudit(supabase, ctx.tenantId, "decision.made", "decision", decisionId, {
+    next: { selected_option: selectedOption, question: decision.question },
+    reason: justification || undefined,
+  });
 
   await advance(supabase, ctx.tenantId, cycle.workflow_version_id, cycle.id, decision.node_id, selectedOption, branchInstanceId);
 

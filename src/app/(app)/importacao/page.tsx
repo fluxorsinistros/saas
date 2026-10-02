@@ -30,7 +30,7 @@ export default async function ImportacaoPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Importação em massa</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
           Um CSV com uma linha por sinistro cria os sinistros pelas mesmas regras da formalização manual — inclui a mesma
@@ -57,7 +57,7 @@ export default async function ImportacaoPage() {
         <section className="mt-8">
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Importações anteriores</h2>
           {!imports?.length ? (
-            <p className="text-[13px] text-slate-400">Nenhuma importação ainda.</p>
+            <p className="text-[13px] text-slate-500">Nenhuma importação ainda.</p>
           ) : (
             <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
               {imports.map((imp) => (
@@ -75,7 +75,7 @@ export default async function ImportacaoPage() {
                         )}
                       </div>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                       {STATUS_LABEL[imp.status] ?? imp.status}
                     </span>
                     <ChevronRight className="size-4 shrink-0 text-slate-300" />

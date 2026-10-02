@@ -55,14 +55,14 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-8 py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <Link href="/importacao" className="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800">
           <ArrowLeft className="size-4" /> Importações
         </Link>
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-[20px] font-semibold tracking-tight text-slate-900">{imp.file_name}</h1>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
             {imp.total_rows ?? 0} linhas
           </span>
         </div>
@@ -102,7 +102,7 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[12px] font-medium text-slate-500">Linha {row.row_number}</span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
                         ROW_STATUS_STYLE[row.status] ?? "bg-slate-100 text-slate-600 ring-slate-200"
                       }`}
                     >
@@ -120,16 +120,16 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
                   ) : (
                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[12px] text-slate-600 sm:grid-cols-4">
                       <span>
-                        <span className="text-slate-400">Fluxo:</span> {raw.fluxo || "—"}
+                        <span className="text-slate-500">Fluxo:</span> {raw.fluxo || "—"}
                       </span>
                       <span>
-                        <span className="text-slate-400">Data:</span> {raw.data_ocorrencia || "—"}
+                        <span className="text-slate-500">Data:</span> {raw.data_ocorrencia || "—"}
                       </span>
                       <span>
-                        <span className="text-slate-400">Local:</span> {raw.local || "—"}
+                        <span className="text-slate-500">Local:</span> {raw.local || "—"}
                       </span>
                       <span>
-                        <span className="text-slate-400">Ref.:</span> {raw.referencia_externa || "—"}
+                        <span className="text-slate-500">Ref.:</span> {raw.referencia_externa || "—"}
                       </span>
                     </div>
                   )}
@@ -158,7 +158,7 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
 
                   {!isDone && (row.status === "valid" || row.status === "error" || row.status === "duplicate_candidate") && (
                     <form action={ignoreImportRow.bind(null, row.id)} className="mt-1.5">
-                      <button className="text-[11px] text-slate-400 hover:text-slate-600">Ignorar esta linha</button>
+                      <button className="text-xs text-slate-500 hover:text-slate-600">Ignorar esta linha</button>
                     </form>
                   )}
                 </li>
@@ -196,7 +196,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: "eme
   return (
     <div className={`rounded-xl px-3 py-2.5 ${style}`}>
       <div className="text-[20px] font-semibold">{value}</div>
-      <div className="text-[11px] font-medium uppercase tracking-[0.06em]">{label}</div>
+      <div className="text-xs font-medium uppercase tracking-[0.06em]">{label}</div>
     </div>
   );
 }

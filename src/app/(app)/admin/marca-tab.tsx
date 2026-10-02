@@ -18,7 +18,7 @@ export async function MarcaTab() {
                 // eslint-disable-next-line @next/next/no-img-element -- logo do Storage
                 <img src={brand.logoUrl} alt="Logo atual" className="size-10 object-contain" />
               ) : (
-                <span className="px-1 text-center text-[10px] leading-tight text-slate-400">logo padrão</span>
+                <span className="px-1 text-center text-xs leading-tight text-slate-400">logo padrão</span>
               )}
             </div>
             <div className="min-w-[200px] flex-1">

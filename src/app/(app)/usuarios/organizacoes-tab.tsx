@@ -26,7 +26,7 @@ export async function OrganizacoesTab({ tenantId, canManage }: { tenantId: strin
   return (
     <section>
       <p className="mb-3 text-[13px] text-slate-500">
-        Seguradoras, corretoras e outros parceiros que colaboram nesta empresa (Documento 1 §3.2) — não precisam de conta própria do
+        Seguradoras, corretoras e outros parceiros que colaboram nesta empresa — não precisam de conta própria do
         produto, só de usuários vinculados a elas.
       </p>
 
@@ -65,12 +65,12 @@ export async function OrganizacoesTab({ tenantId, canManage }: { tenantId: strin
               <Building2 className="size-4" />
             </div>
             <div className="min-w-0 flex-1 text-[14px] font-medium text-slate-900">{t.organizations?.name}</div>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
               {t.is_owner ? "Interno (dono)" : (ROLE_KIND_LABEL[t.role_kind] ?? t.role_kind)}
             </span>
           </li>
         ))}
-        {(tenantOrgs ?? []).length === 0 && <li className="px-5 py-6 text-center text-[13px] text-slate-400">Nenhuma organização ainda.</li>}
+        {(tenantOrgs ?? []).length === 0 && <li className="px-5 py-6 text-center text-[13px] text-slate-500">Nenhuma organização ainda.</li>}
       </ul>
     </section>
   );

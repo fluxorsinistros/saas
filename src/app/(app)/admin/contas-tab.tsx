@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, Pencil, Search } from "lucide-react";
+import { Building2, Pencil, RotateCcw, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { CreateTenantForm } from "./admin-forms";
@@ -89,7 +89,7 @@ export async function ContasTab({ sp }: { sp: SearchParams }) {
                 Buscar conta
               </label>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
                 <input id="q" name="q" defaultValue={q} placeholder="Nome da empresa" className={`${input} pl-8`} />
               </div>
             </div>
@@ -131,12 +131,14 @@ export async function ContasTab({ sp }: { sp: SearchParams }) {
                 ))}
               </select>
             </div>
-            <button className={btnPrimary}>Filtrar</button>
-            {filtering && (
-              <Link href={`/admin${size !== PAGE_SIZES[0] ? `?size=${size}` : ""}`} className="py-2 text-[12px] font-medium text-slate-500 hover:text-slate-800">
-                Limpar filtros
-              </Link>
-            )}
+            <button className={`${btnPrimary} cursor-pointer`}>Filtrar</button>
+            <Link
+              href={`/admin${size !== PAGE_SIZES[0] ? `?size=${size}` : ""}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-medium text-slate-600 shadow-xs transition hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+            >
+              <RotateCcw className="size-3.5 text-slate-500" />
+              Limpar filtros
+            </Link>
           </form>
 
           <p className="mb-3 text-[12px] text-slate-500">
@@ -153,12 +155,12 @@ export async function ContasTab({ sp }: { sp: SearchParams }) {
               return (
                 <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
                   <div className="flex min-w-0 items-center gap-2">
-                    <Building2 className="size-4 shrink-0 text-slate-400" />
+                    <Building2 className="size-4 shrink-0 text-slate-500" />
                     <span className="truncate text-[14px] font-medium text-slate-900">{t.name}</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
                         t.status === "active"
                           ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                           : "bg-rose-50 text-rose-700 ring-rose-200"
@@ -166,11 +168,11 @@ export async function ContasTab({ sp }: { sp: SearchParams }) {
                     >
                       {TENANT_STATUS_LABEL[t.status] ?? t.status}
                     </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                       {contract ? (planName.get(contract.plan_id) ?? "Plano") : "Sem contrato"}
                     </span>
                     {contract?.white_label_enabled && (
-                      <span className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-medium text-violet">white-label</span>
+                      <span className="rounded-full bg-violet/10 px-2 py-0.5 text-xs font-medium text-violet">white-label</span>
                     )}
                     <Link
                       href={`/admin/contas/${t.id}`}
@@ -199,7 +201,7 @@ export async function ContasTab({ sp }: { sp: SearchParams }) {
                   .filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
                   .map((n, idx, arr) => (
                     <span key={n} className="flex items-center gap-1">
-                      {idx > 0 && n - arr[idx - 1] > 1 && <span className="px-1 text-slate-400">…</span>}
+                      {idx > 0 && n - arr[idx - 1] > 1 && <span className="px-1 text-slate-500">…</span>}
                       <Link
                         href={pageHref(n)}
                         aria-current={n === page ? "page" : undefined}

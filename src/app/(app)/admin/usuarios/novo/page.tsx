@@ -19,7 +19,7 @@ export default async function NewUserPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl space-y-6 px-8 py-8">
+      <div className="mx-auto page-narrow space-y-6 px-4 py-6 md:px-8 md:py-8">
         <div>
           <Link href="/admin/usuarios" className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-800">
             <ArrowLeft className="size-3.5" /> Usuários

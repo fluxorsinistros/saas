@@ -100,7 +100,7 @@ export function DocumentUploadForm({ claimId, claimCycleId, documentId, hint, va
           <Upload className="size-3" /> {busy ? "Enviando…" : "Enviar"}
         </button>
         {status && <span className={`text-[12px] ${statusColor}`}>{status.text}</span>}
-        {hint && !status && <span className="text-[11px] text-slate-400">{hint}</span>}
+        {hint && !status && <span className="text-xs text-slate-500">{hint}</span>}
       </form>
     );
   }
@@ -116,7 +116,7 @@ export function DocumentUploadForm({ claimId, claimCycleId, documentId, hint, va
       {status ? (
         <p className={`mt-1.5 text-[12px] ${statusColor}`}>{status.text}</p>
       ) : (
-        hint && <p className="mt-1.5 text-[11px] text-slate-400">{hint}</p>
+        hint && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>
       )}
     </form>
   );

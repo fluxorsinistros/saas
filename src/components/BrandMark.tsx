@@ -32,7 +32,7 @@ export function BrandMark({
       {!compact && (
         <div className="leading-tight">
           <div className={`text-[14px] font-semibold tracking-tight ${text}`}>{brand.name}</div>
-          {brand.tagline && <div className={`text-[11px] ${sub}`}>{brand.tagline}</div>}
+          {brand.tagline && <div className={`text-xs ${sub}`}>{brand.tagline}</div>}
         </div>
       )}
     </div>
