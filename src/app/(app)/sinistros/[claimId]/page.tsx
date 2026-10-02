@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, DollarSign, Download, FileText, PauseCircle, PlayCircle, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileText, PauseCircle, PlayCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
@@ -9,7 +9,7 @@ import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
 import { getPermissionCodes } from "@/lib/permissions";
 import { ExecutionViewToggle } from "@/components/execution/ExecutionViewToggle";
-import { ExecutionGraph } from "@/components/execution/ExecutionGraph";
+import { ExecutionGraph } from "@/components/execution/ExecutionGraphLazy";
 import {
   cancelPendingItem,
   chooseDecision,
@@ -115,24 +115,33 @@ export default async function ClaimPage({
   const { ciclo } = await searchParams;
   const ctx = await getTenantContext();
   const supabase = await createClient();
-  const limits = await getLimits(supabase, ctx.tenantId);
+  const [limits, perms, { data: membership }, { data: claim }] = await Promise.all([
+    getLimits(supabase, ctx.tenantId),
+    getPermissionCodes(ctx.userId, ctx.tenantId),
+    supabase
+      .from("tenant_memberships")
+      .select("id, membership_roles(roles(name))")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("user_id", ctx.userId)
+      .eq("status", "active")
+      .maybeSingle(),
+    supabase
+      .from("claims")
+      .select("id, claim_number, status, occurred_at, created_at, declared_value, custom_fields, created_by")
+      .eq("id", claimId)
+      .eq("tenant_id", ctx.tenantId)
+      .maybeSingle(),
+  ]);
+  if (!claim) notFound();
   const fileMaxMb = limitOf(limits, "file_max_mb");
   const uploadHint =
     fileMaxMb === null
       ? "Fotos são compactadas antes do envio."
       : `Máx. ${fileMaxMb} MB por arquivo${isAllowed(limits, "allow_file_overage") ? " (acima disso, com cobrança extra)" : ""}. Fotos são compactadas antes do envio.`;
-  const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
   // Etapa aponta pro grupo responsável, não pra pessoa (Documento 1 §5.3): ter claim.execute não
   // basta, só quem é do grupo da etapa (ou Administrador, que nunca é travado por grupo) pode agir
   // nela. completeActivity/chooseDecision já barram isso no servidor; aqui só escondemos o botão.
-  const { data: membership } = await supabase
-    .from("tenant_memberships")
-    .select("id, membership_roles(roles(name))")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("user_id", ctx.userId)
-    .eq("status", "active")
-    .maybeSingle();
   const isAdmin = (membership?.membership_roles ?? []).some(
     (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
   );
@@ -142,22 +151,18 @@ export default async function ClaimPage({
   const myGroupIds = new Set((myGroupRows ?? []).map((g) => g.group_id));
   const canActOnGroup = (groupId: string | null) => isAdmin || !groupId || myGroupIds.has(groupId);
 
-  const { data: claim } = await supabase
-    .from("claims")
-    .select("id, claim_number, status, occurred_at, created_at, declared_value, custom_fields, created_by")
-    .eq("id", claimId)
-    .eq("tenant_id", ctx.tenantId)
-    .maybeSingle();
-  if (!claim) notFound();
   const customFields = (claim.custom_fields ?? {}) as Record<string, string>;
 
   // Duplicidade (Documento 2 §28): avisa, nunca bloqueia — mostra o `pending` mais recente (se houver)
   // com os candidatos e a evidência, pro usuário decidir. Roda só uma vez, na formalização.
-  const { data: allDuplicateChecks } = await supabase
-    .from("duplicate_checks")
-    .select("id, evidence, decision")
-    .eq("claim_id", claim.id)
-    .order("created_at", { ascending: false });
+  const [{ data: allDuplicateChecks }, { data: allCycles }] = await Promise.all([
+    supabase.from("duplicate_checks").select("id, evidence, decision").eq("claim_id", claim.id).order("created_at", { ascending: false }),
+    supabase
+      .from("claim_cycles")
+      .select("id, status, cycle_number, workflow_version_id, formalized_at, completed_at, created_by")
+      .eq("claim_id", claim.id)
+      .order("cycle_number", { ascending: false }),
+  ]);
   const duplicateCheck = (allDuplicateChecks ?? []).find((d) => d.decision === "pending");
   let duplicateCandidates: { confidence: number | null; matched_fields: unknown; claim_number: string }[] = [];
   if (duplicateCheck) {
@@ -172,27 +177,63 @@ export default async function ClaimPage({
     }));
   }
 
-  const { data: allCycles } = await supabase
-    .from("claim_cycles")
-    .select("id, status, cycle_number, workflow_version_id, formalized_at, completed_at, created_by")
-    .eq("claim_id", claim.id)
-    .order("cycle_number", { ascending: false });
   if (!allCycles?.length) notFound();
   const cycle = (ciclo ? allCycles.find((c) => c.id === ciclo) : null) ?? allCycles[0];
 
-  const { data: version } = await supabase
-    .from("workflow_versions")
-    .select("workflow_id, version_number")
-    .eq("id", cycle.workflow_version_id)
-    .single();
-  const { data: workflow } = await supabase.from("workflows").select("name").eq("id", version!.workflow_id).single();
+  // Tudo o que só depende do ciclo corrente vai em paralelo (antes eram ~10 idas seguidas ao banco).
+  const [
+    { data: version },
+    graph,
+    { data: nodePositions },
+    { data: stages },
+    { data: decisions },
+    { data: groups },
+    { data: documents },
+    { data: financialEntries },
+    { data: docTypes },
+    { data: joins },
+  ] = await Promise.all([
+    supabase.from("workflow_versions").select("workflow_id, version_number").eq("id", cycle.workflow_version_id).single(),
+    loadGraph(supabase, cycle.workflow_version_id),
+    // Posições dos nós (Documento 5 §5, modo "grafo completo") — loadGraph não carrega isso porque o
+    // motor de execução não precisa; aqui é só pra desenhar.
+    supabase.from("workflow_nodes").select("id, position").eq("workflow_version_id", cycle.workflow_version_id),
+    supabase
+      .from("stage_instances")
+      .select("id, node_id, pass_number, status, entered_at, exited_at")
+      .eq("claim_cycle_id", cycle.id)
+      .order("entered_at", { ascending: false }),
+    supabase.from("decisions").select("id, stage_instance_id, question, options, selected_option, decided_at").eq("claim_cycle_id", cycle.id),
+    supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId),
+    supabase
+      .from("documents")
+      .select("id, status, is_required, document_type_id, requested_at")
+      .eq("claim_cycle_id", cycle.id)
+      .order("requested_at", { ascending: true, nullsFirst: false }),
+    // Financeiro do ciclo (Documento 5 §14): dado de domínio do sinistro (guincho, armazenagem,
+    // ressarcimento) — nunca confundir com billing_events, que é a cobrança do SaaS ao tenant.
+    supabase
+      .from("cycle_financial_entries")
+      .select("id, entry_type, description, amount, entry_date, status")
+      .eq("claim_cycle_id", cycle.id)
+      .order("entry_date", { ascending: false }),
+    supabase.from("document_types").select("id, name").eq("tenant_id", ctx.tenantId),
+    supabase
+      .from("joins")
+      .select("id, node_id, branch_id, rule_type, min_count, status")
+      .eq("claim_cycle_id", cycle.id)
+      .eq("status", "waiting"),
+  ]);
+  const [{ data: workflow }, { data: workflowFields }] = await Promise.all([
+    supabase.from("workflows").select("name").eq("id", version!.workflow_id).single(),
+    supabase
+      .from("workflow_fields")
+      .select("id, key, label, field_type, options, required, is_unique, default_value")
+      .eq("workflow_id", version!.workflow_id),
+  ]);
 
   // Campos personalizados (Documento 1, "estilo SHARP"): cada etapa pede um subconjunto do
   // catálogo do fluxo; os valores caem todos em claims.custom_fields, nunca por etapa.
-  const { data: workflowFields } = await supabase
-    .from("workflow_fields")
-    .select("id, key, label, field_type, options, required, is_unique, default_value")
-    .eq("workflow_id", version!.workflow_id);
   const fieldByKey = new Map((workflowFields ?? []).map((f) => [f.key, f]));
   const hasPersonField = (workflowFields ?? []).some((f) => f.field_type === "person");
   const hasAttachmentField = (workflowFields ?? []).some((f) => f.field_type === "attachment");
@@ -223,34 +264,17 @@ export default async function ClaimPage({
     : { data: [] as { path: string | null; signedUrl: string }[] };
   const attachmentUrlByPath = new Map((signedAttachments ?? []).filter((s) => s.path).map((s) => [s.path as string, s.signedUrl]));
 
-  const graph = await loadGraph(supabase, cycle.workflow_version_id);
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
 
-  // Posições dos nós (Documento 5 §5, modo "grafo completo") — loadGraph não carrega isso porque o
-  // motor de execução não precisa; aqui é só pra desenhar.
-  const { data: nodePositions } = await supabase
-    .from("workflow_nodes")
-    .select("id, position")
-    .eq("workflow_version_id", cycle.workflow_version_id);
   const positionById = new Map((nodePositions ?? []).map((n) => [n.id, n.position as unknown as { x: number; y: number }]));
 
-  const { data: stages } = await supabase
-    .from("stage_instances")
-    .select("id, node_id, pass_number, status, entered_at, exited_at")
-    .eq("claim_cycle_id", cycle.id)
-    .order("entered_at", { ascending: false });
   const stageIds = (stages ?? []).map((s) => s.id);
-
-  const [{ data: activities }, { data: decisions }, { data: groups }] = await Promise.all([
-    stageIds.length
-      ? supabase
-          .from("activity_instances")
-          .select("id, stage_instance_id, status, group_id, started_at, completed_at")
-          .in("stage_instance_id", stageIds)
-      : Promise.resolve({ data: [] as never[] }),
-    supabase.from("decisions").select("id, stage_instance_id, question, options, selected_option, decided_at").eq("claim_cycle_id", cycle.id),
-    supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId),
-  ]);
+  const { data: activities } = stageIds.length
+    ? await supabase
+        .from("activity_instances")
+        .select("id, stage_instance_id, status, group_id, started_at, completed_at")
+        .in("stage_instance_id", stageIds)
+    : { data: [] as never[] };
 
   const activityByStage = new Map((activities ?? []).map((a) => [a.stage_instance_id, a]));
   const decisionByStage = new Map((decisions ?? []).filter((d) => d.stage_instance_id).map((d) => [d.stage_instance_id as string, d]));
@@ -288,20 +312,8 @@ export default async function ClaimPage({
     : { data: [] as { sla_tracking_id: string }[] };
   const pausedTrackingIds = new Set((openPauses ?? []).map((p) => p.sla_tracking_id));
 
-  const { data: documents } = await supabase
-    .from("documents")
-    .select("id, status, is_required, document_type_id, requested_at")
-    .eq("claim_cycle_id", cycle.id)
-    .order("requested_at", { ascending: true, nullsFirst: false });
   const docIds = (documents ?? []).map((d) => d.id);
 
-  // Financeiro do ciclo (Documento 5 §14): dado de domínio do sinistro (guincho, armazenagem,
-  // ressarcimento) — nunca confundir com billing_events, que é a cobrança do SaaS ao tenant.
-  const { data: financialEntries } = await supabase
-    .from("cycle_financial_entries")
-    .select("id, entry_type, description, amount, entry_date, status")
-    .eq("claim_cycle_id", cycle.id)
-    .order("entry_date", { ascending: false });
   const totals = { expense: 0, receipt: 0, reimbursement: 0 };
   for (const e of financialEntries ?? []) {
     if (e.status === "cancelled") continue;
@@ -309,7 +321,6 @@ export default async function ClaimPage({
   }
   const balance = totals.receipt + totals.reimbursement - totals.expense;
 
-  const { data: docTypes } = await supabase.from("document_types").select("id, name").eq("tenant_id", ctx.tenantId);
   const docTypeName = new Map((docTypes ?? []).map((t) => [t.id, t.name]));
 
   const { data: docVersions } = docIds.length
@@ -370,11 +381,6 @@ export default async function ClaimPage({
   // Convergências (Documento 3 §5): mostra "aguardando N de M" enquanto o join não libera — sem
   // isso o usuário vê uma etapa "Convergência" concluída na trilha sem entender por que o processo
   // não seguiu ainda para o próximo passo.
-  const { data: joins } = await supabase
-    .from("joins")
-    .select("id, node_id, branch_id, rule_type, min_count, status")
-    .eq("claim_cycle_id", cycle.id)
-    .eq("status", "waiting");
   const branchIds = (joins ?? []).map((j) => j.branch_id).filter((b): b is string => !!b);
   const { data: branchInstances } = branchIds.length
     ? await supabase.from("branch_instances").select("branch_id, status, is_required, target_node_id").in("branch_id", branchIds)

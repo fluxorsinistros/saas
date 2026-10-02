@@ -37,7 +37,7 @@ const TABS = [
 export default async function TorreDeControlePage({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string; fluxo?: string; versao?: string }>;
+  searchParams: Promise<{ aba?: string; fluxo?: string; versao?: string; carregar?: string }>;
 }) {
   const sp = await searchParams;
   const currentTab = sp.aba === "fluxo" ? "fluxo" : "numeros";
@@ -244,7 +244,8 @@ export default async function TorreDeControlePage({
   }
 
   // Carrega snapshot se estiver na aba de números/indicadores
-  const snap = currentTab === "numeros" ? await loadOperationalSnapshot(supabase, ctx.tenantId) : null;
+  // Os indicadores varrem todos os ciclos do tenant: só carregam depois de pedir, nunca sozinhos ao abrir a tela.
+  const snap = currentTab === "numeros" && sp.carregar === "1" ? await loadOperationalSnapshot(supabase, ctx.tenantId) : null;
   const open = snap
     ? (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0)
     : 0;
@@ -280,6 +281,20 @@ export default async function TorreDeControlePage({
         </nav>
 
         {/* Aba 1: Indicadores e Prazos (Números) */}
+        {currentTab === "numeros" && !snap && (
+          <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+            <BarChart3 className="size-8 text-slate-300" />
+            <p className="text-[15px] font-medium text-slate-800">Os indicadores não carregam sozinhos</p>
+            <p className="max-w-sm text-[13px] text-slate-500">Eles somam todos os sinistros da empresa. Carregue quando precisar.</p>
+            <Link
+              href="/torre-de-controle?carregar=1"
+              className="rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600"
+            >
+              Carregar indicadores
+            </Link>
+          </div>
+        )}
+
         {currentTab === "numeros" && snap && (
           <div className="mt-6 space-y-8">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -34,7 +34,8 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
     .select("id, status, group_id, started_at, stage_instance_id")
     .eq("tenant_id", ctx.tenantId)
     .in("status", ["not_started", "in_progress"])
-    .order("started_at", { ascending: true });
+    .order("started_at", { ascending: true })
+    .limit(100);
   if (scope === "mine") query = query.in("group_id", myGroupIds.length ? myGroupIds : ["00000000-0000-0000-0000-000000000000"]);
   const { data: activities } = await query;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useActionState } from "react";
+import { useState, useActionState } from "react";
 import Link from "next/link";
 import { Clock, CalendarClock, AlertTriangle, ArrowRight, CheckCircle2, ShieldAlert } from "lucide-react";
 import { saveTenantSlaSettings, type ActionState } from "./actions";
@@ -36,17 +36,15 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
   const [warningPct, setWarningPct] = useState(currentSlaSettings.warning_threshold_pct ?? 75);
   const [criticalPct, setCriticalPct] = useState(currentSlaSettings.critical_threshold_pct ?? 90);
 
-  useEffect(() => {
-    if (currentSlaSettings.default_calendar_id !== undefined) {
-      setSelectedCalId(currentSlaSettings.default_calendar_id ?? "");
-    }
-    if (currentSlaSettings.warning_threshold_pct !== undefined) {
-      setWarningPct(currentSlaSettings.warning_threshold_pct);
-    }
-    if (currentSlaSettings.critical_threshold_pct !== undefined) {
-      setCriticalPct(currentSlaSettings.critical_threshold_pct);
-    }
-  }, [currentSlaSettings.default_calendar_id, currentSlaSettings.warning_threshold_pct, currentSlaSettings.critical_threshold_pct]);
+  // Ressincroniza quando o servidor devolve as regras salvas (ajuste durante o render, sem efeito).
+  const slaKey = `${currentSlaSettings.default_calendar_id}|${currentSlaSettings.warning_threshold_pct}|${currentSlaSettings.critical_threshold_pct}`;
+  const [seenSlaKey, setSeenSlaKey] = useState(slaKey);
+  if (seenSlaKey !== slaKey) {
+    setSeenSlaKey(slaKey);
+    if (currentSlaSettings.default_calendar_id !== undefined) setSelectedCalId(currentSlaSettings.default_calendar_id ?? "");
+    if (currentSlaSettings.warning_threshold_pct !== undefined) setWarningPct(currentSlaSettings.warning_threshold_pct);
+    if (currentSlaSettings.critical_threshold_pct !== undefined) setCriticalPct(currentSlaSettings.critical_threshold_pct);
+  }
 
   // Posiciona a opção ativa/selecionada sempre em primeiro lugar no combobox
   const activeCalendar = calendars.find((c) => c.id === selectedCalId);

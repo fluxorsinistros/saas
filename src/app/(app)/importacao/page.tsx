@@ -26,7 +26,8 @@ export default async function ImportacaoPage() {
     .from("imports")
     .select("id, file_name, status, total_rows, created_rows, error_rows, duplicate_rows, created_at")
     .eq("tenant_id", ctx.tenantId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(30);
 
   return (
     <div className="h-full overflow-y-auto">

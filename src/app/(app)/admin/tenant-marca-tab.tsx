@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState, useEffect } from "react";
+import { useState, useActionState } from "react";
 import { Palette, Image as ImageIcon, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
 import { saveTenantBranding, type ActionState } from "./actions";
 
@@ -26,12 +26,16 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
   const [previewColor, setPreviewColor] = useState(initialBrand.color ?? "#2563eb");
   const [logoPreview, setLogoPreview] = useState<string | null>(initialBrand.logoUrl ?? null);
 
-  useEffect(() => {
+  // Ressincroniza quando o servidor devolve a marca salva (ajuste durante o render, sem efeito).
+  const brandKey = `${initialBrand.name}|${initialBrand.tagline}|${initialBrand.color}|${initialBrand.logoUrl}`;
+  const [seenBrandKey, setSeenBrandKey] = useState(brandKey);
+  if (seenBrandKey !== brandKey) {
+    setSeenBrandKey(brandKey);
     if (initialBrand.name !== undefined) setPreviewName(initialBrand.name ?? "");
     if (initialBrand.tagline !== undefined) setPreviewTagline(initialBrand.tagline ?? "");
     if (initialBrand.color) setPreviewColor(initialBrand.color);
     if (initialBrand.logoUrl !== undefined) setLogoPreview(initialBrand.logoUrl);
-  }, [initialBrand.name, initialBrand.tagline, initialBrand.color, initialBrand.logoUrl]);
+  }
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

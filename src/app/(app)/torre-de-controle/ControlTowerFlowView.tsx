@@ -9,12 +9,12 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
-  GitBranch,
   Layers,
   RotateCcw,
   Workflow,
 } from "lucide-react";
-import { ExecutionGraph, type ExecutionEdge, type ExecutionNode } from "@/components/execution/ExecutionGraph";
+import type { ExecutionEdge, ExecutionNode } from "@/components/execution/ExecutionGraph";
+import { ExecutionGraph } from "@/components/execution/ExecutionGraphLazy";
 
 export type FlowClaim = {
   claimId: string;

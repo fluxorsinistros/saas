@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useActionState, useTransition, useEffect } from "react";
+import { useState, useRef, useActionState, useTransition } from "react";
 import Link from "next/link";
 import {
   Building2,
@@ -146,10 +146,12 @@ export function TenantEmpresaTab({ tenant, contract, membersCount, companyIconUr
   const initialTheme = (((tenant.settings ?? {}) as Record<string, unknown>).theme as "light" | "dark") || "light";
   const [selectedTheme, setSelectedTheme] = useState<"light" | "dark">(initialTheme);
 
-  useEffect(() => {
-    const t = (((tenant.settings ?? {}) as Record<string, unknown>).theme as "light" | "dark") || "light";
-    setSelectedTheme(t);
-  }, [tenant.settings]);
+  // Ressincroniza quando o servidor devolve outro tema (ajuste durante o render, sem efeito).
+  const [seenTheme, setSeenTheme] = useState(initialTheme);
+  if (seenTheme !== initialTheme) {
+    setSeenTheme(initialTheme);
+    setSelectedTheme(initialTheme);
+  }
   const [isCompressing, setIsCompressing] = useState(false);
   const [, startTransition] = useTransition();
 

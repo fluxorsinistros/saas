@@ -38,6 +38,7 @@ export function ExecutionViewToggle({
       const saved = localStorage.getItem(STORAGE_KEY);
       const validModes: Mode[] = ["timeline", "graph", "history", "financial", "documents"];
       if (validModes.includes(saved as Mode)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage só existe no cliente; sincroniza uma vez após montar
         setMode(saved as Mode);
       }
     } catch {

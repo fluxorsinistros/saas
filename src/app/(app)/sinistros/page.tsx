@@ -133,6 +133,7 @@ type SearchParams = {
   sla_total?: string;
   situacao?: string;
   searched?: string;
+  pagina?: string;
 };
 
 export default async function SinistrosPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -192,13 +193,15 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       requestedSlaTotal ||
       requestedSituacao
   );
-  const searched = sp.searched === "1" || hasActiveFilters || sp.searched === undefined;
+  // A lista só consulta o banco depois de "Filtrar" (ou com filtro na URL) — nunca sozinha ao abrir a tela.
+  const searched = sp.searched === "1" || hasActiveFilters;
+  const PAGE_SIZE = 20;
+  const page = Math.max(1, Number.parseInt(sp.pagina ?? "1", 10) || 1);
 
   // Carrega fluxos, versões e etapas ativas para os filtros dinâmicos
   const [
     { data: allWorkflows },
     { data: allVersions },
-    { data: allNodes },
   ] = await Promise.all([
     supabase
       .from("workflows")
@@ -210,12 +213,16 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       .from("workflow_versions")
       .select("id, workflow_id, status")
       .eq("tenant_id", ctx.tenantId),
-    supabase
-      .from("workflow_nodes")
-      .select("id, workflow_version_id, name, node_type")
-      .eq("tenant_id", ctx.tenantId)
-      .in("node_type", ["stage", "wait", "decision"]),
   ]);
+  // Opções de etapa só vêm das versões publicadas: carregar o histórico inteiro de nós do tenant só pesa a tela.
+  const publishedVersionIds = (allVersions ?? []).filter((v) => v.status === "published").map((v) => v.id);
+  const { data: allNodes } = publishedVersionIds.length
+    ? await supabase
+        .from("workflow_nodes")
+        .select("id, workflow_version_id, name, node_type")
+        .in("workflow_version_id", publishedVersionIds)
+        .in("node_type", ["stage", "wait", "decision"])
+    : { data: [] as { id: string; workflow_version_id: string; name: string; node_type: string }[] };
 
   const versionToWorkflow = new Map<string, string>();
   const workflowById = new Map<string, { id: string; name: string }>();
@@ -287,14 +294,18 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   const fieldLabelByWorkflowKey = new Map<string, string>();
   let groupNameById = new Map<string, string>();
   let visibleClaims: typeof claims = [];
+  const CLAIM_FETCH_CAP = 300;
+  let capped = false;
 
   if (searched) {
     const { data: claimRows } = await supabase
       .from("claims")
       .select("id, claim_number, status, created_at, custom_fields, claim_cycles(id, status, cycle_number, formalized_at, completed_at, workflow_version_id)")
       .eq("tenant_id", ctx.tenantId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(CLAIM_FETCH_CAP);
     claims = claimRows ?? [];
+    capped = claims.length >= CLAIM_FETCH_CAP;
 
     // Identidade do sinistro na lista: os primeiros valores dos campos de abertura (placa, segurado...)
     // — sem isso o operador só tem o número e precisa abrir cada cartão.
@@ -541,7 +552,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
           </div>
         ) : (
           <div className="mt-6 flex flex-col gap-4">
-            {visibleClaims.map((c) => {
+            {visibleClaims.slice(0, page * PAGE_SIZE).map((c) => {
               const cycle = currentCycleByClaim.get(c.id);
               const status = cycle?.status ?? c.status;
               const isCompleted = status === "completed";
@@ -776,6 +787,24 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                 </div>
               );
             })}
+            {visibleClaims.length > page * PAGE_SIZE && (
+              <Link
+                scroll={false}
+                href={`/sinistros?${new URLSearchParams({
+                  ...Object.fromEntries(Object.entries(sp).filter(([, v]) => typeof v === "string") as [string, string][]),
+                  searched: "1",
+                  pagina: String(page + 1),
+                }).toString()}`}
+                className="self-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Mostrar mais ({visibleClaims.length - page * PAGE_SIZE} restantes)
+              </Link>
+            )}
+            {capped && (
+              <p className="text-center text-[12px] text-slate-500">
+                Mostrando só os {CLAIM_FETCH_CAP} sinistros mais recentes. Use os filtros para refinar.
+              </p>
+            )}
           </div>
         )}
       </div>
