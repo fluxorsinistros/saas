@@ -41,9 +41,12 @@ export type OperationalSnapshot = {
   byCategory: CategoryCount[];
   slaOverdue: SlaItem[];
   slaAtRisk: SlaItem[];
+  // As listas acima mostram só os primeiros itens; as contagens abaixo são o total de verdade.
+  blockedCount: number;
+  slaOverdueCount: number;
+  slaAtRiskCount: number;
 };
 
-const OPEN_STATUSES = ["draft", "open", "in_progress", "waiting"];
 
 // Alimenta Tower of Control (Documento 5 §6) e Dashboard (§7) — os dois leem o mesmo agregado,
 // só mudam o que destacam, para nunca haver duas contas diferentes de "quantos estão atrasados".
@@ -64,149 +67,48 @@ export async function loadGroupScope(supabase: Supa, tenantId: string, groupId: 
   return { cycleIds: new Set((stages ?? []).map((s) => s.claim_cycle_id)), stageIds: new Set(stageIds) };
 }
 
+const NO_GROUP = "00000000-0000-0000-0000-000000000000";
+
+type RpcItem = { cycle_id: string; claim_id: string; claim_number: string };
+type RpcSummary = {
+  total: number;
+  status_counts: Record<string, number>;
+  by_category: { id: string; name: string; count: number }[];
+  backlog: { id: string; name: string; count: number }[];
+  blocked_count: number;
+  blocked: (RpcItem & { reason: string | null; blocked_at: string | null })[];
+  aging: (RpcItem & { status: string; formalized_at: string; days: number })[];
+  sla_overdue_count: number;
+  sla_overdue: (RpcItem & { minutes: number })[];
+  sla_at_risk_count: number;
+  sla_at_risk: (RpcItem & { minutes: number })[];
+};
+
+// Os números vêm prontos do banco (public.operational_summary): o app não baixa mais todos os ciclos para somar, então
+// o custo não cresce com o número de sinistros. `scope` presente = visão do Operador (só o grupo dele; sem grupo = nada).
 export async function loadOperationalSnapshot(
   supabase: Supa,
   tenantId: string,
   scope?: { groupId: string | null },
 ): Promise<OperationalSnapshot> {
-  const groupScope = scope ? await loadGroupScope(supabase, tenantId, scope.groupId) : null;
-  const { data: allCycles } = await supabase
-    .from("claim_cycles")
-    .select("id, claim_id, status, formalized_at")
-    .eq("tenant_id", tenantId);
-  const cycles = groupScope ? (allCycles ?? []).filter((c) => groupScope.cycleIds.has(c.id)) : allCycles;
-
-  const claimIds = [...new Set((cycles ?? []).map((c) => c.claim_id))];
-  const { data: claims } = claimIds.length
-    ? await supabase.from("claims").select("id, claim_number, claim_category_id").in("id", claimIds)
-    : { data: [] as { id: string; claim_number: string; claim_category_id: string }[] };
-  const claimById = new Map((claims ?? []).map((c) => [c.id, c]));
-
-  const categoryIds = [...new Set((claims ?? []).map((c) => c.claim_category_id))];
-  const { data: categories } = categoryIds.length
-    ? await supabase.from("claim_categories").select("id, name").in("id", categoryIds)
-    : { data: [] as { id: string; name: string }[] };
-  const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
-
-  const statusCounts: CycleStatusCounts = {};
-  const byCategoryMap = new Map<string, number>();
-  for (const c of cycles ?? []) {
-    statusCounts[c.status] = (statusCounts[c.status] ?? 0) + 1;
-    const claim = claimById.get(c.claim_id);
-    if (claim) byCategoryMap.set(claim.claim_category_id, (byCategoryMap.get(claim.claim_category_id) ?? 0) + 1);
-  }
-  const byCategory: CategoryCount[] = [...byCategoryMap.entries()]
-    .map(([categoryId, count]) => ({ categoryId, categoryName: categoryName.get(categoryId) ?? "—", count }))
-    .sort((a, b) => b.count - a.count);
-
-  const blockedCycles = (cycles ?? []).filter((c) => c.status === "blocked");
-  const blockedIds = blockedCycles.map((c) => c.id);
-  const { data: blockLogs } = blockedIds.length
-    ? await supabase
-        .from("audit_logs")
-        .select("entity_id, reason, created_at")
-        .in("entity_id", blockedIds)
-        .eq("action", "cycle.blocked")
-        .order("created_at", { ascending: false })
-    : { data: [] as { entity_id: string; reason: string | null; created_at: string }[] };
-  const reasonByCycle = new Map<string, { reason: string | null; created_at: string }>();
-  for (const log of blockLogs ?? []) {
-    if (!reasonByCycle.has(log.entity_id)) reasonByCycle.set(log.entity_id, log);
-  }
-  const blocked: BlockedCycle[] = blockedCycles.map((c) => ({
-    cycleId: c.id,
-    claimId: c.claim_id,
-    claimNumber: claimById.get(c.claim_id)?.claim_number ?? "—",
-    reason: reasonByCycle.get(c.id)?.reason ?? null,
-    blockedAt: reasonByCycle.get(c.id)?.created_at ?? null,
-  }));
-
-  const now = Date.now();
-  const aging: AgingCycle[] = (cycles ?? [])
-    .filter((c) => OPEN_STATUSES.includes(c.status) && c.formalized_at)
-    .map((c) => ({
-      cycleId: c.id,
-      claimId: c.claim_id,
-      claimNumber: claimById.get(c.claim_id)?.claim_number ?? "—",
-      status: c.status,
-      formalizedAt: c.formalized_at!,
-      days: Math.floor((now - new Date(c.formalized_at!).getTime()) / 86_400_000),
-    }))
-    .sort((a, b) => b.days - a.days)
-    .slice(0, 8);
-
-  const cycleIds = (cycles ?? []).map((c) => c.id);
-  const { data: stages } = cycleIds.length
-    ? await supabase.from("stage_instances").select("id, claim_cycle_id").in("claim_cycle_id", cycleIds)
-    : { data: [] as { id: string; claim_cycle_id: string }[] };
-  const stageIds = (stages ?? []).map((s) => s.id);
-  const { data: activities } = stageIds.length
-    ? await supabase
-        .from("activity_instances")
-        .select("group_id, status")
-        .in("stage_instance_id", stageIds)
-        .in("status", ["not_started", "in_progress"])
-    : { data: [] as { group_id: string | null; status: string }[] };
-
-  const { data: groups } = await supabase.from("groups").select("id, name").eq("tenant_id", tenantId);
-  const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
-  const backlogMap = new Map<string, number>();
-  for (const a of activities ?? []) {
-    if (!a.group_id) continue;
-    if (scope && a.group_id !== scope.groupId) continue; // Operador: só o backlog do grupo dele
-    backlogMap.set(a.group_id, (backlogMap.get(a.group_id) ?? 0) + 1);
-  }
-  const backlogByGroup: GroupBacklog[] = [...backlogMap.entries()]
-    .map(([groupId, count]) => ({ groupId, groupName: groupName.get(groupId) ?? "—", count }))
-    .sort((a, b) => b.count - a.count);
-
-  // SLA (Documento 4/5 §6-§7): "próximos do prazo" e "atrasados" calculados ao vivo sobre
-  // sla_tracking, sem esperar o scheduler periódico (ainda não implementado — ver §10 do doc4).
-  const { data: openTracking } = cycleIds.length
-    ? await supabase
-        .from("sla_tracking")
-        .select("claim_cycle_id, stage_instance_id, started_at, target_at, workflow_slas(alert_thresholds)")
-        .in("claim_cycle_id", cycleIds)
-        .in("status", ["on_track", "at_risk"])
-    : { data: [] as { claim_cycle_id: string; stage_instance_id: string; started_at: string; target_at: string; workflow_slas: { alert_thresholds: number[] } | null }[] };
-
-  const cycleById = new Map((cycles ?? []).map((c) => [c.id, c]));
-  const overdueMap = new Map<string, number>();
-  const atRiskMap = new Map<string, number>();
-  const nowTs = Date.now();
-  for (const t of openTracking ?? []) {
-    const cycle = cycleById.get(t.claim_cycle_id);
-    if (!cycle) continue;
-    if (groupScope && (!t.stage_instance_id || !groupScope.stageIds.has(t.stage_instance_id))) continue; // Operador: prazos só das etapas do grupo dele
-    const started = new Date(t.started_at).getTime();
-    const target = new Date(t.target_at).getTime();
-    const minutesOverdue = Math.round((nowTs - target) / 60_000);
-    if (minutesOverdue >= 0) {
-      overdueMap.set(t.claim_cycle_id, Math.max(overdueMap.get(t.claim_cycle_id) ?? 0, minutesOverdue));
-      continue;
-    }
-    if (target <= started) continue;
-    // "próximo do prazo" = já cruzou o primeiro alert_threshold configurado (Documento 4 §4), a
-    // mesma régua do alerta do motor de SLA — não é um "falta pouco tempo" arbitrário da tela.
-    const elapsedPct = ((nowTs - started) / (target - started)) * 100;
-    const thresholds = (t.workflow_slas as unknown as { alert_thresholds: number[] } | null)?.alert_thresholds ?? [75, 90, 95, 100];
-    const firstThreshold = Math.min(...thresholds);
-    if (elapsedPct >= firstThreshold) {
-      atRiskMap.set(t.claim_cycle_id, Math.round((target - nowTs) / 60_000) * -1);
-    }
-  }
-
-  const toSlaItems = (map: Map<string, number>): SlaItem[] =>
-    [...map.entries()]
-      .map(([cycleId, minutesOverdue]) => {
-        const cycle = cycleById.get(cycleId)!;
-        return { cycleId, claimId: cycle.claim_id, claimNumber: claimById.get(cycle.claim_id)?.claim_number ?? "—", minutesOverdue };
-      })
-      .sort((a, b) => b.minutesOverdue - a.minutesOverdue)
-      .slice(0, 8);
-
-  const slaOverdue = toSlaItems(overdueMap);
-  const slaAtRisk = toSlaItems(atRiskMap);
-
-  return { totalCycles: (cycles ?? []).length, statusCounts, blocked, aging, backlogByGroup, byCategory, slaOverdue, slaAtRisk };
+  const { data, error } = await supabase.rpc("operational_summary", {
+    p_tenant_id: tenantId,
+    p_group_id: scope ? (scope.groupId ?? NO_GROUP) : undefined,
+  });
+  if (error) throw new Error(error.message);
+  const r = data as unknown as RpcSummary;
+  const item = (x: RpcItem & { minutes: number }): SlaItem => ({ cycleId: x.cycle_id, claimId: x.claim_id, claimNumber: x.claim_number, minutesOverdue: x.minutes });
+  return {
+    totalCycles: r.total,
+    statusCounts: r.status_counts,
+    blocked: r.blocked.map((b) => ({ cycleId: b.cycle_id, claimId: b.claim_id, claimNumber: b.claim_number, reason: b.reason, blockedAt: b.blocked_at })),
+    aging: r.aging.map((a) => ({ cycleId: a.cycle_id, claimId: a.claim_id, claimNumber: a.claim_number, status: a.status, formalizedAt: a.formalized_at, days: a.days })),
+    backlogByGroup: r.backlog.map((g) => ({ groupId: g.id, groupName: g.name, count: g.count })),
+    byCategory: r.by_category.map((c) => ({ categoryId: c.id, categoryName: c.name, count: c.count })),
+    slaOverdue: r.sla_overdue.map(item),
+    slaAtRisk: r.sla_at_risk.map(item),
+    blockedCount: r.blocked_count,
+    slaOverdueCount: r.sla_overdue_count,
+    slaAtRiskCount: r.sla_at_risk_count,
+  };
 }

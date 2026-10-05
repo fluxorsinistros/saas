@@ -3245,6 +3245,7 @@ export type Database = {
         Args: { p_membership_id: string; p_role_id: string; p_group_id?: string | null; p_active: boolean }
         Returns: undefined
       }
+      operational_summary: { Args: { p_tenant_id: string; p_group_id?: string }; Returns: Json }
       set_member_groups: { Args: { p_membership_id: string; p_group_ids: string[] }; Returns: undefined }
       admin_create_tenant: { Args: { p_name: string; p_admin_email?: string }; Returns: string }
       admin_grant_tenant_admin: { Args: { p_tenant_id: string; p_email: string }; Returns: string }

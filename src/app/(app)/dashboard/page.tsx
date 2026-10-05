@@ -44,8 +44,8 @@ export default async function DashboardPage() {
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <Card label="Atrasados (SLA)" value={snap.slaOverdue.length} accent={snap.slaOverdue.length > 0 ? "text-rose-600" : undefined} />
-          <Card label="Próximos do prazo" value={snap.slaAtRisk.length} accent={snap.slaAtRisk.length > 0 ? "text-amber-600" : undefined} />
+          <Card label="Atrasados (SLA)" value={snap.slaOverdueCount} accent={snap.slaOverdueCount > 0 ? "text-rose-600" : undefined} />
+          <Card label="Próximos do prazo" value={snap.slaAtRiskCount} accent={snap.slaAtRiskCount > 0 ? "text-amber-600" : undefined} />
         </div>
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
@@ -66,10 +66,10 @@ export default async function DashboardPage() {
           </section>
         </div>
 
-        {snap.blocked.length > 0 && (
+        {snap.blockedCount > 0 && (
           <section className="mt-8 rounded-xl border border-rose-200 bg-rose-50 p-4">
             <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-rose-700">
-              <AlertTriangle className="size-3.5" /> {snap.blocked.length} sinistro(s) bloqueado(s)
+              <AlertTriangle className="size-3.5" /> {snap.blockedCount} sinistro(s) bloqueado(s)
             </h2>
             <ul className="space-y-1">
               {snap.blocked.slice(0, 5).map((b) => (

@@ -38,7 +38,7 @@ const TABS = [
 export default async function TorreDeControlePage({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string; fluxo?: string; versao?: string; carregar?: string }>;
+  searchParams: Promise<{ aba?: string; fluxo?: string; versao?: string }>;
 }) {
   const sp = await searchParams;
   const currentTab = sp.aba === "fluxo" ? "fluxo" : "numeros";
@@ -249,8 +249,8 @@ export default async function TorreDeControlePage({
   }
 
   // Carrega snapshot se estiver na aba de números/indicadores
-  // Os indicadores varrem todos os ciclos do tenant: só carregam depois de pedir, nunca sozinhos ao abrir a tela.
-  const snap = currentTab === "numeros" && sp.carregar === "1" ? await loadOperationalSnapshot(supabase, ctx.tenantId, isAdmin ? undefined : { groupId: activeGroup?.id ?? null }) : null;
+  // Indicadores são um resumo calculado no banco (tamanho fixo, não cresce com o número de sinistros): carregam direto.
+  const snap = currentTab === "numeros" ? await loadOperationalSnapshot(supabase, ctx.tenantId, isAdmin ? undefined : { groupId: activeGroup?.id ?? null }) : null;
   const open = snap
     ? (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0)
     : 0;
@@ -289,20 +289,6 @@ export default async function TorreDeControlePage({
         </nav>
 
         {/* Aba 1: Indicadores e Prazos (Números) */}
-        {currentTab === "numeros" && !snap && (
-          <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-            <BarChart3 className="size-8 text-slate-300" />
-            <p className="text-[15px] font-medium text-slate-800">Os indicadores não carregam sozinhos</p>
-            <p className="max-w-sm text-[13px] text-slate-500">{isAdmin ? "Eles somam todos os sinistros da empresa." : "Eles somam os sinistros do seu grupo."} Carregue quando precisar.</p>
-            <Link
-              href="/torre-de-controle?carregar=1"
-              className="rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600"
-            >
-              Carregar indicadores
-            </Link>
-          </div>
-        )}
-
         {currentTab === "numeros" && snap && (
           <div className="mt-6 space-y-8">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -313,11 +299,11 @@ export default async function TorreDeControlePage({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Stat label="Atrasados (SLA)" value={snap.slaOverdue.length} tone="danger" />
-              <Stat label="Próximos do prazo" value={snap.slaAtRisk.length} tone="warning" />
+              <Stat label="Atrasados (SLA)" value={snap.slaOverdueCount} tone="danger" />
+              <Stat label="Próximos do prazo" value={snap.slaAtRiskCount} tone="warning" />
             </div>
 
-            {(snap.slaOverdue.length > 0 || snap.slaAtRisk.length > 0) && (
+            {(snap.slaOverdueCount > 0 || snap.slaAtRiskCount > 0) && (
               <section>
                 <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                   <Clock3 className="size-3.5" /> Prazos (SLA)
@@ -347,7 +333,7 @@ export default async function TorreDeControlePage({
               <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                 <AlertTriangle className="size-3.5" /> Precisa de atenção agora
               </h2>
-              {snap.blocked.length === 0 ? (
+              {snap.blockedCount === 0 ? (
                 <p className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] text-emerald-700">
                   <CheckCircle2 className="size-4" /> Nenhum ciclo bloqueado.
                 </p>
