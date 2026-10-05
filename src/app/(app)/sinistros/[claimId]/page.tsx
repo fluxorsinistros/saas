@@ -1,3 +1,4 @@
+import { signedAvatarUrls } from "@/lib/avatars";
 import { GroupChip } from "@/lib/group-icons";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { UNDO_WINDOW_MINUTES } from "@/lib/undo";
@@ -388,10 +389,12 @@ export default async function ClaimPage({
   );
 
   const { data: actorProfiles } = actorIds.length
-    ? await supabase.from("user_profiles").select("id, full_name, email").in("id", actorIds)
-    : { data: [] as { id: string; full_name: string | null; email: string }[] };
+    ? await supabase.from("user_profiles").select("id, full_name, email, avatar_path").in("id", actorIds)
+    : { data: [] as { id: string; full_name: string | null; email: string; avatar_path: string | null }[] };
 
   const actorNameMap = new Map((actorProfiles ?? []).map((p) => [p.id, p.full_name || p.email]));
+  const actorAvatarUrls = await signedAvatarUrls((actorProfiles ?? []).map((p) => p.avatar_path));
+  const actorAvatarById = new Map((actorProfiles ?? []).map((p) => [p.id, p.avatar_path ? (actorAvatarUrls.get(p.avatar_path) ?? null) : null]));
 
   // Aba "Dados": todos os campos do catálogo do fluxo, com o valor preenchido (ou "Não preenchido") e onde cada um é pedido.
   const fieldWhere = new Map<string, string[]>();
@@ -470,11 +473,14 @@ export default async function ClaimPage({
     const newVal = (log.new_value ?? {}) as Record<string, unknown>;
 
     // Autor da ação
-    let author = log.actor_id ? actorNameMap.get(log.actor_id) : null;
+    let authorId: string | null = log.actor_id ?? null;
+    let author = authorId ? actorNameMap.get(authorId) : null;
     if (!author) {
       if (log.action === "claim.created" && claim.created_by) {
+        authorId = claim.created_by;
         author = actorNameMap.get(claim.created_by);
       } else if (log.action === "cycle.created" && cycle.created_by) {
+        authorId = cycle.created_by;
         author = actorNameMap.get(cycle.created_by);
       }
     }
@@ -574,6 +580,7 @@ export default async function ClaimPage({
       eventDetail,
       reason: log.reason,
       author: author ?? null,
+      authorAvatarUrl: authorId ? (actorAvatarById.get(authorId) ?? null) : null,
       createdAt: log.created_at,
       dotTone,
     };

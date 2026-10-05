@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/Avatar";
 import { useState } from "react";
 import { Clock3, User, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -9,6 +10,7 @@ export type HistoryItem = {
   eventDetail: string | null;
   reason: string | null;
   author: string | null;
+  authorAvatarUrl?: string | null;
   createdAt: string;
   dotTone: "blue" | "emerald" | "amber" | "rose" | "indigo" | "slate";
 };
@@ -70,7 +72,10 @@ export function ClaimHistoryTimeline({ items }: { items: HistoryItem[] }) {
                   <span className="inline-flex items-center gap-1 font-medium text-slate-600">
                     <User className="size-3 text-slate-500" />
                     {item.author ? (
-                      <span>{item.author}</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Avatar name={item.author} url={item.authorAvatarUrl} className="size-5" textClassName="text-[9px]" />
+                        {item.author}
+                      </span>
                     ) : (
                       <span className="italic text-slate-500">Sistema (automático)</span>
                     )}

@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { Avatar } from "@/components/Avatar";
 import { GroupIcon } from "@/lib/group-icons";
 import { useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Users } from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
 import { toggleQuickTheme } from "./admin/actions";
@@ -16,6 +18,9 @@ type Props = {
   companyIconUrl?: string | null;
   tenants: { id: string; name: string; iconUrl?: string | null }[];
   email: string;
+  /** Nome e foto de quem está logado (a foto é opcional; sem ela aparecem as iniciais). */
+  personName?: string;
+  avatarUrl?: string | null;
   isPlatformAdmin: boolean;
   isAdmin?: boolean;
   hiddenScreens?: string[];
@@ -71,6 +76,8 @@ export function AppSidebar({
   companyIconUrl,
   tenants,
   email,
+  personName,
+  avatarUrl = null,
   isPlatformAdmin,
   isAdmin = false,
   hiddenScreens = [],
@@ -275,11 +282,14 @@ export function AppSidebar({
           </button>
         </form>
 
-        {!collapsed && (
-          <div className="truncate px-2 pt-1 text-xs text-slate-400" title={email}>
-            {email}
-          </div>
-        )}
+        <Link
+          href="/perfil"
+          title="Meu perfil — foto e dados"
+          className={`flex items-center gap-2 rounded-md py-1 text-xs text-slate-400 transition hover:bg-navy-700 hover:text-white ${collapsed ? "justify-center px-0" : "px-2"}`}
+        >
+          <Avatar name={personName || email} url={avatarUrl} className="size-6" />
+          {!collapsed && <span className="min-w-0 flex-1 truncate">{email}</span>}
+        </Link>
         <form action={signOut}>
           <button
             type="submit"

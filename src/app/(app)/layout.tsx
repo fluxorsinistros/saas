@@ -6,6 +6,7 @@ import { darkenHex, ensureWhiteContrast, getPlatformBrand, getTenantBrand } from
 import { createClient } from "@/lib/supabase/server";
 import { getHiddenScreensForMember } from "@/lib/screens";
 import { getMemberGroups } from "@/lib/active-group";
+import { signedAvatarUrls } from "@/lib/avatars";
 import { AppSidebar } from "./AppSidebar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +18,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    const { data: me } = user ? await supabase.from("user_profiles").select("full_name, avatar_path").eq("id", user.id).maybeSingle() : { data: null };
+    const myUrls = await signedAvatarUrls([me?.avatar_path]);
     const cookieStore = await cookies();
     const theme = (cookieStore.get("app_theme")?.value as "light" | "dark") || "light";
     return (
@@ -28,6 +31,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           tenants={[]}
           email={user?.email ?? ""}
           isPlatformAdmin
+          personName={me?.full_name || user?.email || ""}
+          avatarUrl={me?.avatar_path ? (myUrls.get(me.avatar_path) ?? null) : null}
           isAdmin
           brand={brand}
           currentTheme={theme}
@@ -44,6 +49,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     isTenantAdmin(ctx.userId, ctx.tenantId),
     getMemberGroups(ctx.userId, ctx.tenantId),
   ]);
+  const supabaseMe = await createClient();
+  const { data: me } = await supabaseMe.from("user_profiles").select("full_name, avatar_path").eq("id", ctx.userId).maybeSingle();
+  const myUrls = await signedAvatarUrls([me?.avatar_path]);
   const themeVars = own?.color
     ? ({ "--color-brand": ensureWhiteContrast(own.color), "--color-brand-600": darkenHex(ensureWhiteContrast(own.color)) } as React.CSSProperties)
     : undefined;
@@ -56,6 +64,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         companyIconUrl={ctx.companyIconUrl}
         tenants={ctx.tenants}
         email={ctx.email}
+        personName={me?.full_name || ctx.email}
+        avatarUrl={me?.avatar_path ? (myUrls.get(me.avatar_path) ?? null) : null}
         isPlatformAdmin={false}
         isAdmin={tenantAdmin}
         hiddenScreens={hiddenScreens}
