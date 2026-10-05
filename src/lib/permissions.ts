@@ -1,3 +1,4 @@
+import { getMemberGroups } from "@/lib/active-group";
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
@@ -60,26 +61,11 @@ export async function requirePermission(ctx: TenantContext, code: PermissionCode
 // nunca é travado por grupo (mesma decisão já aplicada em telas, src/lib/screens.ts).
 export async function canActOnGroup(ctx: TenantContext, groupId: string | null): Promise<boolean> {
   if (!groupId) return true;
-  const supabase = await createClient();
-  const { data: membership } = await supabase
-    .from("tenant_memberships")
-    .select("id, membership_roles(roles(name))")
-    .eq("user_id", ctx.userId)
-    .eq("tenant_id", ctx.tenantId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (!membership) return false;
-  const isAdmin = (membership.membership_roles ?? []).some(
-    (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
-  );
+  const { membershipId, isAdmin, active } = await getMemberGroups(ctx.userId, ctx.tenantId);
+  if (!membershipId) return false;
   if (isAdmin) return true;
-  const { data: gm } = await supabase
-    .from("group_members")
-    .select("group_id")
-    .eq("membership_id", membership.id)
-    .eq("group_id", groupId)
-    .maybeSingle();
-  return !!gm;
+  // Operador só age na etapa do grupo em que está atuando agora.
+  return active?.id === groupId;
 }
 
 export async function requireGroupAccess(ctx: TenantContext, groupId: string | null): Promise<void> {

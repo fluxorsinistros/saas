@@ -1,3 +1,4 @@
+import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2, ClipboardList, Users } from "lucide-react";
@@ -17,17 +18,8 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
   const ctx = await getTenantContext();
   const supabase = await createClient();
 
-  const { data: membership } = await supabase
-    .from("tenant_memberships")
-    .select("id")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("user_id", ctx.userId)
-    .single();
-
-  const { data: myGroupRows } = membership
-    ? await supabase.from("group_members").select("group_id").eq("membership_id", membership.id)
-    : { data: [] as { group_id: string }[] };
-  const myGroupIds = (myGroupRows ?? []).map((g) => g.group_id);
+  const { active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
+  const myGroupIds = activeGroup ? [activeGroup.id] : [];
 
   let query = supabase
     .from("activity_instances")

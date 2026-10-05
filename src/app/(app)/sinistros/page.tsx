@@ -1,3 +1,4 @@
+import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, Plus, RotateCcw, SearchX, Users } from "lucide-react";
@@ -144,25 +145,12 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   // Quem é Administrador vê e escolhe qualquer grupo (inclusive "Todos"); Operador só enxerga os
   // próprios grupos — grupo é conceito de Operador (decisão do usuário), igual à visibilidade de
   // menu em src/lib/screens.ts.
-  const { data: membership } = await supabase
-    .from("tenant_memberships")
-    .select("id, membership_roles(roles(name))")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("user_id", ctx.userId)
-    .eq("status", "active")
-    .maybeSingle();
-  const isAdmin = (membership?.membership_roles ?? []).some(
-    (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
-  );
-  const { data: myGroupRows } = membership
-    ? await supabase.from("group_members").select("groups(id, name, disabled_actions)").eq("membership_id", membership.id)
-    : { data: [] as { groups: { id: string; name: string; disabled_actions: string[] } | null }[] };
-  const myGroupsFull = (myGroupRows ?? [])
-    .map((g) => g.groups)
-    .filter((g): g is { id: string; name: string; disabled_actions: string[] } => !!g);
+  const { isAdmin, active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
+  // Operador atua num grupo por vez (o ativo na sessão); só ele aparece e vale nos filtros.
+  const myGroupsFull = activeGroup ? [activeGroup] : [];
   const myGroups = myGroupsFull.map((g) => ({ id: g.id, name: g.name }));
   // Restrição adicional do grupo sobre claim.formalize (Documento 1 §32 + aba "Ações" do grupo):
-  // Administrador nunca é afetado; Operador precisa de pelo menos um grupo que libere a ação.
+  // Administrador nunca é afetado; Operador precisa do grupo ativo liberar a ação.
   const canFormalize = isAdmin || myGroupsFull.some((g) => !g.disabled_actions.includes("claim.formalize"));
 
   const { data: allGroups } = isAdmin

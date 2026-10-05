@@ -5,6 +5,7 @@ import { isTenantAdmin } from "@/lib/permissions";
 import { darkenHex, ensureWhiteContrast, getPlatformBrand, getTenantBrand } from "@/lib/branding";
 import { createClient } from "@/lib/supabase/server";
 import { getHiddenScreensForMember } from "@/lib/screens";
+import { getMemberGroups } from "@/lib/active-group";
 import { AppSidebar } from "./AppSidebar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -37,10 +38,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const ctx = await getTenantContext();
-  const [own, hiddenScreens, tenantAdmin] = await Promise.all([
+  const [own, hiddenScreens, tenantAdmin, memberGroups] = await Promise.all([
     getTenantBrand(ctx.tenantId),
     getHiddenScreensForMember(ctx.userId, ctx.tenantId),
     isTenantAdmin(ctx.userId, ctx.tenantId),
+    getMemberGroups(ctx.userId, ctx.tenantId),
   ]);
   const themeVars = own?.color
     ? ({ "--color-brand": ensureWhiteContrast(own.color), "--color-brand-600": darkenHex(ensureWhiteContrast(own.color)) } as React.CSSProperties)
@@ -59,6 +61,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         hiddenScreens={hiddenScreens}
         brand={own?.brand ?? brand}
         currentTheme={ctx.theme}
+        groups={tenantAdmin ? [] : memberGroups.groups.map((g) => ({ id: g.id, name: g.name }))}
+        activeGroupId={memberGroups.active?.id ?? null}
       />
       <main className="min-w-0 flex-1 h-full overflow-hidden pt-12 md:pt-0">{children}</main>
     </div>

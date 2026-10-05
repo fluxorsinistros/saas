@@ -1,5 +1,5 @@
+import { getMemberGroups } from "@/lib/active-group";
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
 
 // Catálogo das telas que um Grupo pode esconder do menu (groups.hidden_screens). Espelha os itens
 // de NavLinks — "admin" fica de fora porque é exclusivo do administrador de plataforma, nunca
@@ -31,23 +31,8 @@ export const SCREENS: { key: ScreenKey; label: string }[] = [
 // grupo dela tenha telas escondidas (decisão explícita do usuário — grupo nunca tranca quem admina
 // a própria empresa fora de uma tela).
 export async function getHiddenScreensForMember(userId: string, tenantId: string): Promise<string[]> {
-  const supabase = await createClient();
-  const { data: membership } = await supabase
-    .from("tenant_memberships")
-    .select("id, membership_roles(roles(name))")
-    .eq("user_id", userId)
-    .eq("tenant_id", tenantId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (!membership) return [];
-
-  const roleNames = (membership.membership_roles ?? []).map((mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name);
-  if (roleNames.includes("Administrador")) return [];
-
-  const { data: memberGroup } = await supabase
-    .from("group_members")
-    .select("groups(hidden_screens)")
-    .eq("membership_id", membership.id)
-    .maybeSingle();
-  return (memberGroup?.groups as unknown as { hidden_screens: string[] } | null)?.hidden_screens ?? [];
+  const { isAdmin, active } = await getMemberGroups(userId, tenantId);
+  if (isAdmin) return [];
+  // Só o grupo ativo da sessão vale: quem está em vários grupos atua em um por vez.
+  return active?.hidden_screens ?? [];
 }

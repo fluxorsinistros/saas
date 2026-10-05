@@ -1,3 +1,4 @@
+import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -115,16 +116,10 @@ export default async function ClaimPage({
   const { ciclo } = await searchParams;
   const ctx = await getTenantContext();
   const supabase = await createClient();
-  const [limits, perms, { data: membership }, { data: claim }] = await Promise.all([
+  const [limits, perms, { isAdmin, active: activeGroup }, { data: claim }] = await Promise.all([
     getLimits(supabase, ctx.tenantId),
     getPermissionCodes(ctx.userId, ctx.tenantId),
-    supabase
-      .from("tenant_memberships")
-      .select("id, membership_roles(roles(name))")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("user_id", ctx.userId)
-      .eq("status", "active")
-      .maybeSingle(),
+    getMemberGroups(ctx.userId, ctx.tenantId),
     supabase
       .from("claims")
       .select("id, claim_number, status, occurred_at, created_at, declared_value, custom_fields, created_by")
@@ -142,13 +137,8 @@ export default async function ClaimPage({
   // Etapa aponta pro grupo responsável, não pra pessoa (Documento 1 §5.3): ter claim.execute não
   // basta, só quem é do grupo da etapa (ou Administrador, que nunca é travado por grupo) pode agir
   // nela. completeActivity/chooseDecision já barram isso no servidor; aqui só escondemos o botão.
-  const isAdmin = (membership?.membership_roles ?? []).some(
-    (mr) => (mr as unknown as { roles: { name: string } | null }).roles?.name === "Administrador",
-  );
-  const { data: myGroupRows } = membership
-    ? await supabase.from("group_members").select("group_id").eq("membership_id", membership.id)
-    : { data: [] as { group_id: string }[] };
-  const myGroupIds = new Set((myGroupRows ?? []).map((g) => g.group_id));
+  // Operador age só na etapa do grupo em que está atuando agora (o ativo na sessão).
+  const myGroupIds = new Set(activeGroup ? [activeGroup.id] : []);
   const canActOnGroup = (groupId: string | null) => isAdmin || !groupId || myGroupIds.has(groupId);
 
   const customFields = (claim.custom_fields ?? {}) as Record<string, string>;

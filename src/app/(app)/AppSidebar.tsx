@@ -2,12 +2,12 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X } from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Users } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
 import { toggleQuickTheme } from "./admin/actions";
 import { NavLinks } from "./NavLinks";
-import { switchTenant } from "./tenant-actions";
+import { switchGroup, switchTenant } from "./tenant-actions";
 
 type Props = {
   tenantId: string;
@@ -22,6 +22,9 @@ type Props = {
   /** Administrador geral da plataforma: sem empresa, só a área de Administração. */
   platformMode?: boolean;
   currentTheme?: "light" | "dark";
+  /** Grupos do Operador (só quando há mais de um a escolher) e o que está ativo agora. */
+  groups?: { id: string; name: string }[];
+  activeGroupId?: string | null;
 };
 
 // O menu recolhe e expande pelo botão do topo e a escolha fica guardada no navegador. Sem escolha, dentro
@@ -73,11 +76,16 @@ export function AppSidebar({
   brand,
   platformMode = false,
   currentTheme = "light",
+  groups = [],
+  activeGroupId = null,
 }: Props) {
   const { collapsed: desktopCollapsed, toggle } = useCollapsed();
   // Abaixo de md o menu é uma gaveta: fechada some, aberta sempre expandida (a preferência de recolher é só do desktop).
   const [drawerOpen, setDrawerOpen] = useState(false);
   const collapsed = desktopCollapsed && !drawerOpen;
+  const [groupOpen, setGroupOpen] = useState(false);
+  const canPickGroup = groups.length > 1;
+  const activeGroupName = groups.find((g) => g.id === activeGroupId)?.name ?? groups[0]?.name ?? "";
 
   return (
     <>
@@ -200,6 +208,28 @@ export function AppSidebar({
         </div>
       )}
 
+      {canPickGroup && (
+        <div className={`mt-3 ${collapsed ? "flex justify-center px-2" : "px-3"}`}>
+          <button
+            type="button"
+            onClick={() => setGroupOpen(true)}
+            title={`Grupo atual: ${activeGroupName} — clique para trocar`}
+            aria-label={`Grupo atual: ${activeGroupName}. Trocar grupo`}
+            className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 text-left transition hover:border-navy-600 ${
+              collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
+            }`}
+          >
+            <Users className="size-4 shrink-0 text-cyan" />
+            {!collapsed && (
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs text-slate-400">Atuando no grupo</span>
+                <span className="block truncate text-[13px] font-medium text-white">{activeGroupName}</span>
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       <nav className={`sidebar-scrollbar mt-4 flex-1 overflow-y-auto overflow-x-hidden ${collapsed ? "px-2" : "px-3"}`} aria-label="Principal">
         <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} isAdmin={isAdmin} platformOnly={platformMode} hiddenScreens={hiddenScreens} />
       </nav>
@@ -243,6 +273,53 @@ export function AppSidebar({
         </form>
       </div>
     </aside>
+      {groupOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4" onClick={() => setGroupOpen(false)}>
+          <form
+            action={async (fd) => {
+              await switchGroup(fd);
+              setGroupOpen(false);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="group-dialog-title"
+            className="w-full max-w-sm rounded-xl bg-white p-5 text-slate-800 shadow-xl"
+          >
+            <h2 id="group-dialog-title" className="text-[15px] font-semibold text-slate-900">
+              Em qual grupo você vai atuar agora?
+            </h2>
+            <p className="mt-1 text-[12px] text-slate-500">
+              Cada grupo tem telas e ações próprias. Você atua em um por vez e pode trocar quando quiser.
+            </p>
+            <label htmlFor="group_id" className="mt-4 block text-[12px] font-medium text-slate-600">
+              Grupo
+            </label>
+            <select
+              id="group_id"
+              name="group_id"
+              defaultValue={activeGroupId ?? groups[0]?.id}
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
+            >
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setGroupOpen(false)}
+                className="rounded-lg border border-slate-200 px-3.5 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button className="rounded-lg bg-brand px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-brand-600">Atuar neste grupo</button>
+            </div>
+          </form>
+        </div>
+      )}
     </>
   );
 }
