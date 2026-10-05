@@ -1134,9 +1134,16 @@ export default async function ClaimPage({
                   </div>
 
                   {liveSla && liveSla.status !== "completed" && tracking && (
-                    <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-                      <span className="text-[12px] text-slate-500">
-                        {isPaused ? "Prazo pausado" : formatMinutesRemaining(tracking.target_at)}
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+                      <span className="inline-flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
+                        {isPaused ? (
+                          "Prazo pausado"
+                        ) : node && slaOf(node) ? (
+                          <StageSlaBadge enteredAt={stage.entered_at} slaMinutes={slaOf(node)} />
+                        ) : (
+                          formatMinutesRemaining(tracking.target_at)
+                        )}
+                        <span>nesta etapa há {formatDuration(minutesSince(stage.entered_at))}</span>
                       </span>
                       {cycle.status === "discarded" ? null : isPaused ? (
                         <form action={resumeSla.bind(null, tracking.id, claim.id)}>
