@@ -245,7 +245,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
         setNodes((ns) =>
           ns.map((n) =>
             n.data.config.field_keys?.includes(key)
-              ? { ...n, data: { ...n.data, config: { ...n.data.config, field_keys: n.data.config.field_keys!.filter((k) => k !== key) } } }
+              ? { ...n, data: { ...n.data, config: { ...n.data.config, field_keys: n.data.config.field_keys!.filter((k) => k !== key), readonly_field_keys: (n.data.config.readonly_field_keys ?? []).filter((k) => k !== key) } } }
               : n,
           ),
         );

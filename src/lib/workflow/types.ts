@@ -14,6 +14,9 @@ export type NodeConfig = {
   // Chaves de workflow_fields que esta etapa pede pra preencher — valores entram em
   // claims.custom_fields na conclusão (ficha única do sinistro, nunca fragmentada por etapa).
   field_keys?: string[];
+  // Subconjunto de field_keys que esta etapa só MOSTRA (consulta): a pessoa vê o valor, mas não edita. O valor é editado em
+  // outra etapa/grupo. Vale para etapas de trabalho; no Início todos os campos são editáveis.
+  readonly_field_keys?: string[];
 };
 
 export type FieldType = "text" | "textarea" | "number" | "date" | "boolean" | "select" | "person" | "attachment";

@@ -157,6 +157,14 @@ export function NodeInspector({
       {FIELD_TYPES.includes(type) && onCreateField && (
         <FieldsSection
           selected={data.config.field_keys ?? []}
+          readonlyKeys={data.config.readonly_field_keys ?? []}
+          allowReadonlyMode={type !== "start"}
+          onSetReadonly={(key, ro) => {
+            const current = new Set(data.config.readonly_field_keys ?? []);
+            if (ro) current.add(key);
+            else current.delete(key);
+            setConfig({ readonly_field_keys: [...current] });
+          }}
           fields={fields}
           readOnly={readOnly}
           onCreateField={onCreateField}
@@ -167,7 +175,9 @@ export function NodeInspector({
             const current = new Set(data.config.field_keys ?? []);
             if (checked) current.add(key);
             else current.delete(key);
-            setConfig({ field_keys: [...current] });
+            // campo que sai da etapa também sai da lista de "só consulta"
+            const ro = (data.config.readonly_field_keys ?? []).filter((k) => current.has(k));
+            setConfig({ field_keys: [...current], readonly_field_keys: ro });
           }}
           onCreated={(field) => setConfig({ field_keys: [...(data.config.field_keys ?? []), field.key] })}
         />
@@ -421,6 +431,9 @@ function Toggle({
 function FieldsSection({
   fields,
   selected,
+  readonlyKeys,
+  allowReadonlyMode,
+  onSetReadonly,
   readOnly,
   onToggle,
   onCreateField,
@@ -431,6 +444,9 @@ function FieldsSection({
 }: {
   fields: WorkflowField[];
   selected: string[];
+  readonlyKeys: string[];
+  allowReadonlyMode: boolean;
+  onSetReadonly: (key: string, readonly: boolean) => void;
   readOnly: boolean;
   onToggle: (key: string, checked: boolean) => void;
   onCreateField: (formData: FormData) => Promise<FieldResult>;
@@ -490,6 +506,19 @@ function FieldsSection({
                   {f.required && <span className="ml-1 text-xs font-medium text-rose-600">obrigatório</span>}
                   {f.is_unique && <span className="ml-1 text-xs font-medium text-violet">único</span>}
                 </label>
+                {allowReadonlyMode && selectedSet.has(f.key) && (
+                  <select
+                    aria-label={`Como a etapa trata o campo ${f.label}`}
+                    title="Editável: a pessoa preenche nesta etapa. Só consulta: ela vê o valor, mas não altera."
+                    value={readonlyKeys.includes(f.key) ? "view" : "edit"}
+                    disabled={readOnly}
+                    onChange={(e) => onSetReadonly(f.key, e.target.value === "view")}
+                    className="shrink-0 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-700 focus:border-brand focus:outline-none"
+                  >
+                    <option value="edit">Editável</option>
+                    <option value="view">Só consulta</option>
+                  </select>
+                )}
                 {!readOnly && onMoveField && fields.length > 1 && (
                   <span className="flex shrink-0 flex-col">
                     <button

@@ -737,6 +737,8 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
   // e duplicidade são validados aqui, não só escondendo/marcando o input (Documento 1 §56).
   const { data: nodeRow } = await supabase.from("workflow_nodes").select("config").eq("id", stage.node_id).single();
   const stageFieldKeys = ((nodeRow?.config as { field_keys?: string[] } | null)?.field_keys ?? []) as string[];
+  // Campos desta etapa que são só consulta: o servidor ignora qualquer valor enviado para eles e não os exige.
+  const readonlyKeys = new Set(((nodeRow?.config as { readonly_field_keys?: string[] } | null)?.readonly_field_keys ?? []) as string[]);
   if (stageFieldKeys.length) {
     const { data: versionRow } = await supabase
       .from("workflow_versions")
@@ -756,6 +758,7 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     const patch: Record<string, string> = {};
     for (const [k, v] of fieldEntries) {
       const key = k.slice("field_".length);
+      if (readonlyKeys.has(key)) continue;
       if (defByKey.get(key)?.field_type === "attachment") {
         if (!(v instanceof File) || v.size === 0) continue;
         const path = `${ctx.tenantId}/custom-fields/${cycle.claim_id}/${key}-${Date.now()}-${v.name}`;
@@ -772,6 +775,7 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     const merged = { ...current, ...patch };
 
     for (const def of fieldDefs ?? []) {
+      if (readonlyKeys.has(def.key)) continue;
       if (def.required && !merged[def.key]) throw new Error(`O campo "${def.label}" é obrigatório.`);
     }
     for (const def of fieldDefs ?? []) {

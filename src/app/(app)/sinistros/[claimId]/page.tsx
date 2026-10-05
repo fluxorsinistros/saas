@@ -1182,6 +1182,9 @@ export default async function ClaimPage({
                       .map((k) => fieldByKey.get(k))
                       .filter((f): f is NonNullable<typeof f> => !!f);
                     stageFields.sort((x, y) => x.position - y.position);
+                    const readonlyKeys = new Set(node?.config.readonly_field_keys ?? []);
+                    const editableFields = stageFields.filter((f) => !readonlyKeys.has(f.key));
+                    const consultFields = stageFields.filter((f) => readonlyKeys.has(f.key));
                     return (
                     <>
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
@@ -1246,9 +1249,43 @@ export default async function ClaimPage({
                       perms.has("claim.execute") &&
                       canActOnGroup(activity.group_id) ? (
                         <form action={completeActivity.bind(null, activity.id)} className="w-full space-y-2.5">
-                          {stageFields.length > 0 && (
+                          {consultFields.length > 0 && (
+                            <dl className="grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-[12px] sm:grid-cols-2 lg:grid-cols-3" aria-label="Campos só para consulta">
+                              {consultFields.map((f) => {
+                                const raw = customFields[f.key];
+                                const has = raw !== undefined && raw !== null && String(raw) !== "";
+                                const display = !has
+                                  ? "—"
+                                  : f.field_type === "boolean"
+                                    ? raw === "true"
+                                      ? "Sim"
+                                      : "Não"
+                                    : f.field_type === "person"
+                                      ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
+                                      : f.field_type === "date"
+                                        ? new Date(`${raw}T00:00:00`).toLocaleDateString("pt-BR")
+                                        : String(raw);
+                                return (
+                                  <div key={f.key} className="flex gap-1.5">
+                                    <dt className="text-slate-500">{f.label}:</dt>
+                                    <dd className="font-medium text-slate-800">
+                                      {f.field_type === "attachment" && has && attachmentUrlByPath.get(raw) ? (
+                                        <a href={attachmentUrlByPath.get(raw) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                                          Ver arquivo
+                                        </a>
+                                      ) : (
+                                        display
+                                      )}
+                                    </dd>
+                                  </div>
+                                );
+                              })}
+                              <div className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">Somente consulta nesta etapa.</div>
+                            </dl>
+                          )}
+                          {editableFields.length > 0 && (
                             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                              {stageFields.map((f) => (
+                              {editableFields.map((f) => (
                                 <div key={f.key}>
                                   <label htmlFor={`field-${f.key}`} className="mb-1 block text-[12px] font-medium text-slate-600">
                                     {f.label}
