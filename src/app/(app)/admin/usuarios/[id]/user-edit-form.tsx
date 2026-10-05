@@ -150,8 +150,8 @@ export function UserEditForm({
       {moving && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800 ring-1 ring-inset ring-amber-200">
           Mover para outra empresa: o acesso na empresa atual é inativado (o histórico fica lá), o grupo atual é removido e a pessoa
-          passa a ter este tipo na empresa escolhida. Para a pessoa ficar nas DUAS empresas, não mova: use "Habilitar em outra
-          empresa", logo abaixo.
+          passa a ter este tipo na empresa escolhida. Para a pessoa ficar nas DUAS empresas, não mova: use &ldquo;Habilitar em outra
+          empresa&rdquo;, logo abaixo.
         </p>
       )}
       {isGestor && !wasGestor && (
