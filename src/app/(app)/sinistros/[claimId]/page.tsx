@@ -282,13 +282,30 @@ export default async function ClaimPage({
   // Pendências (Documento 3 §2.2, caso H): não movem o processo — são solicitações dentro da
   // atividade atual, por isso vivem agrupadas por activity_instance_id, não por stage.
   const activityIds = (activities ?? []).map((a) => a.id);
-  const { data: pendingItems } = activityIds.length
-    ? await supabase
-        .from("pending_items")
-        .select("id, activity_instance_id, title, description, status, due_at, responsible_group_id, created_at")
-        .in("activity_instance_id", activityIds)
-        .order("created_at", { ascending: true })
-    : { data: [] as { id: string; activity_instance_id: string | null; title: string; description: string | null; status: string; due_at: string | null; responsible_group_id: string | null; created_at: string }[] };
+  const docIds = (documents ?? []).map((d) => d.id);
+  // Pendências, SLA e versões de documento só dependem de ids já conhecidos: vão juntas, não uma depois da outra.
+  const [{ data: pendingItems }, { data: slaTracking }, { data: docVersions }] = await Promise.all([
+    activityIds.length
+      ? supabase
+          .from("pending_items")
+          .select("id, activity_instance_id, title, description, status, due_at, responsible_group_id, created_at")
+          .in("activity_instance_id", activityIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] as { id: string; activity_instance_id: string | null; title: string; description: string | null; status: string; due_at: string | null; responsible_group_id: string | null; created_at: string }[] }),
+    stageIds.length
+      ? supabase
+          .from("sla_tracking")
+          .select("id, stage_instance_id, status, started_at, target_at, workflow_slas(alert_thresholds)")
+          .in("stage_instance_id", stageIds)
+      : Promise.resolve({ data: [] as never[] }),
+    docIds.length
+      ? supabase
+          .from("document_versions")
+          .select("id, document_id, version_number, file_name, size_bytes, storage_path, uploaded_at, validated_at, rejection_reason")
+          .in("document_id", docIds)
+          .order("version_number", { ascending: false })
+      : Promise.resolve({ data: [] as { id: string; document_id: string; version_number: number; file_name: string; size_bytes: number; storage_path: string; uploaded_at: string; validated_at: string | null; rejection_reason: string | null }[] }),
+  ]);
   const pendingByActivity = new Map<string, typeof pendingItems>();
   for (const p of pendingItems ?? []) {
     if (!p.activity_instance_id) continue;
@@ -299,20 +316,9 @@ export default async function ClaimPage({
   // SLA (Documento 4): relógio por etapa, status calculado ao vivo (sem esperar o scheduler
   // periódico do §7, ainda não implementado). Pausa em aberto (sla_pauses.resumed_at is null)
   // decide se mostramos "Retomar" em vez de "Pausar".
-  const { data: slaTracking } = stageIds.length
-    ? await supabase
-        .from("sla_tracking")
-        .select("id, stage_instance_id, status, started_at, target_at, workflow_slas(alert_thresholds)")
-        .in("stage_instance_id", stageIds)
-    : { data: [] as never[] };
   const slaByStage = new Map((slaTracking ?? []).map((s) => [s.stage_instance_id, s]));
   const trackingIds = (slaTracking ?? []).map((s) => s.id);
-  const { data: openPauses } = trackingIds.length
-    ? await supabase.from("sla_pauses").select("sla_tracking_id").in("sla_tracking_id", trackingIds).is("resumed_at", null)
-    : { data: [] as { sla_tracking_id: string }[] };
-  const pausedTrackingIds = new Set((openPauses ?? []).map((p) => p.sla_tracking_id));
 
-  const docIds = (documents ?? []).map((d) => d.id);
 
   const totals = { expense: 0, receipt: 0, reimbursement: 0 };
   for (const e of financialEntries ?? []) {
@@ -323,23 +329,12 @@ export default async function ClaimPage({
 
   const docTypeName = new Map((docTypes ?? []).map((t) => [t.id, t.name]));
 
-  const { data: docVersions } = docIds.length
-    ? await supabase
-        .from("document_versions")
-        .select("id, document_id, version_number, file_name, size_bytes, storage_path, uploaded_at, validated_at, rejection_reason")
-        .in("document_id", docIds)
-        .order("version_number", { ascending: false })
-    : { data: [] as { id: string; document_id: string; version_number: number; file_name: string; size_bytes: number; storage_path: string; uploaded_at: string; validated_at: string | null; rejection_reason: string | null }[] };
   const versionsByDoc = new Map<string, typeof docVersions>();
   for (const v of docVersions ?? []) {
     versionsByDoc.set(v.document_id, [...(versionsByDoc.get(v.document_id) ?? []), v]);
   }
 
   const allPaths = (docVersions ?? []).map((v) => v.storage_path);
-  const { data: signedUrls } = allPaths.length
-    ? await supabase.storage.from("documents").createSignedUrls(allPaths, 300)
-    : { data: [] as { path: string | null; signedUrl: string }[] };
-  const urlByPath = new Map((signedUrls ?? []).map((s) => [s.path, s.signedUrl]));
 
   const entityIds = [
     cycle.id,
@@ -353,12 +348,23 @@ export default async function ClaimPage({
     ...(financialEntries ?? []).map((e) => e.id),
     claim.id,
   ];
-  const { data: auditLogs } = await supabase
-    .from("audit_logs")
-    .select("id, actor_id, action, entity_type, entity_id, previous_value, new_value, reason, created_at")
-    .in("entity_id", entityIds)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  // Pausas de SLA, URLs assinadas e trilha de auditoria são independentes entre si: uma ida só ao banco/storage.
+  const [{ data: openPauses }, { data: signedUrls }, { data: auditLogs }] = await Promise.all([
+    trackingIds.length
+      ? supabase.from("sla_pauses").select("sla_tracking_id").in("sla_tracking_id", trackingIds).is("resumed_at", null)
+      : Promise.resolve({ data: [] as { sla_tracking_id: string }[] }),
+    allPaths.length
+      ? supabase.storage.from("documents").createSignedUrls(allPaths, 300)
+      : Promise.resolve({ data: [] as { path: string | null; signedUrl: string }[] }),
+    supabase
+      .from("audit_logs")
+      .select("id, actor_id, action, entity_type, entity_id, previous_value, new_value, reason, created_at")
+      .in("entity_id", entityIds)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
+  const pausedTrackingIds = new Set((openPauses ?? []).map((p) => p.sla_tracking_id));
+  const urlByPath = new Map((signedUrls ?? []).map((s) => [s.path, s.signedUrl]));
 
   const actorIds = Array.from(
     new Set(
