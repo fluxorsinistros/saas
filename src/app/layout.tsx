@@ -19,6 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: brand.name, template: `%s · ${brand.name}` },
     description: "Governança, execução e rastreabilidade do ciclo de sinistros.",
+    // O ícone da aba é o logo da marca configurada em Administração (o padrão só entra se não houver logo).
+    icons: { icon: brand.logoUrl ?? "/favicon.ico", apple: brand.logoUrl ?? undefined },
   };
 }
 
