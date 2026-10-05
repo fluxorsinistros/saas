@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadOperationalSnapshot } from "@/lib/reports";
+import { getMemberGroups } from "@/lib/active-group";
 import { MagnitudeBars } from "@/components/reports/Bars";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -14,7 +15,9 @@ export const metadata: Metadata = { title: "Dashboard" };
 export default async function DashboardPage() {
   const ctx = await getTenantContext();
   const supabase = await createClient();
-  const snap = await loadOperationalSnapshot(supabase, ctx.tenantId);
+  // Administrador vê a empresa inteira; Operador, só o grupo em que está atuando.
+  const { isAdmin, active } = await getMemberGroups(ctx.userId, ctx.tenantId);
+  const snap = await loadOperationalSnapshot(supabase, ctx.tenantId, isAdmin ? undefined : { groupId: active?.id ?? null });
 
   const open = (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0);
   const blocked = snap.statusCounts.blocked ?? 0;
@@ -26,7 +29,7 @@ export default async function DashboardPage() {
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Dashboard</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
-          Visão geral. Para agir agora, use a{" "}
+          {isAdmin ? "Visão geral da empresa." : `Visão do seu grupo${active ? ` (${active.name})` : ""}.`} Para agir agora, use a{" "}
           <Link href="/torre-de-controle" className="text-brand hover:underline">
             Torre de Controle
           </Link>

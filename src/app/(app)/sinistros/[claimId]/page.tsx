@@ -171,6 +171,17 @@ export default async function ClaimPage({
   }
 
   if (!allCycles?.length) notFound();
+
+  // Operador só abre sinistro em que o grupo dele atua (ou que ele mesmo abriu). Administrador abre qualquer um da empresa.
+  if (!isAdmin && claim.created_by !== ctx.userId) {
+    const { data: cycleStages } = await supabase.from("stage_instances").select("id").in("claim_cycle_id", allCycles.map((c) => c.id));
+    const stageIdList = (cycleStages ?? []).map((x) => x.id);
+    const { data: mine } =
+      stageIdList.length && activeGroup
+        ? await supabase.from("activity_instances").select("id").in("stage_instance_id", stageIdList).eq("group_id", activeGroup.id).limit(1)
+        : { data: [] as { id: string }[] };
+    if (!mine?.length) notFound();
+  }
   const cycle = (ciclo ? allCycles.find((c) => c.id === ciclo) : null) ?? allCycles[0];
 
   // Tudo o que só depende do ciclo corrente vai em paralelo (antes eram ~10 idas seguidas ao banco).

@@ -47,11 +47,34 @@ const OPEN_STATUSES = ["draft", "open", "in_progress", "waiting"];
 
 // Alimenta Tower of Control (Documento 5 §6) e Dashboard (§7) — os dois leem o mesmo agregado,
 // só mudam o que destacam, para nunca haver duas contas diferentes de "quantos estão atrasados".
-export async function loadOperationalSnapshot(supabase: Supa, tenantId: string): Promise<OperationalSnapshot> {
-  const { data: cycles } = await supabase
+//
+// `groupId`: visão do Operador. Só entram os ciclos em que o grupo dele tem (ou teve) atividade, e os prazos contados são
+// os das etapas desse grupo. Sem `groupId` (Administrador) é a empresa inteira.
+export async function loadGroupScope(supabase: Supa, tenantId: string, groupId: string | null): Promise<{ cycleIds: Set<string>; stageIds: Set<string> }> {
+  if (!groupId) return { cycleIds: new Set(), stageIds: new Set() };
+  const { data: acts } = await supabase
+    .from("activity_instances")
+    .select("stage_instance_id")
+    .eq("tenant_id", tenantId)
+    .eq("group_id", groupId);
+  const stageIds = [...new Set((acts ?? []).map((a) => a.stage_instance_id))];
+  const { data: stages } = stageIds.length
+    ? await supabase.from("stage_instances").select("id, claim_cycle_id").in("id", stageIds)
+    : { data: [] as { id: string; claim_cycle_id: string }[] };
+  return { cycleIds: new Set((stages ?? []).map((s) => s.claim_cycle_id)), stageIds: new Set(stageIds) };
+}
+
+export async function loadOperationalSnapshot(
+  supabase: Supa,
+  tenantId: string,
+  scope?: { groupId: string | null },
+): Promise<OperationalSnapshot> {
+  const groupScope = scope ? await loadGroupScope(supabase, tenantId, scope.groupId) : null;
+  const { data: allCycles } = await supabase
     .from("claim_cycles")
     .select("id, claim_id, status, formalized_at")
     .eq("tenant_id", tenantId);
+  const cycles = groupScope ? (allCycles ?? []).filter((c) => groupScope.cycleIds.has(c.id)) : allCycles;
 
   const claimIds = [...new Set((cycles ?? []).map((c) => c.claim_id))];
   const { data: claims } = claimIds.length
@@ -130,6 +153,7 @@ export async function loadOperationalSnapshot(supabase: Supa, tenantId: string):
   const backlogMap = new Map<string, number>();
   for (const a of activities ?? []) {
     if (!a.group_id) continue;
+    if (scope && a.group_id !== scope.groupId) continue; // Operador: só o backlog do grupo dele
     backlogMap.set(a.group_id, (backlogMap.get(a.group_id) ?? 0) + 1);
   }
   const backlogByGroup: GroupBacklog[] = [...backlogMap.entries()]
@@ -141,10 +165,10 @@ export async function loadOperationalSnapshot(supabase: Supa, tenantId: string):
   const { data: openTracking } = cycleIds.length
     ? await supabase
         .from("sla_tracking")
-        .select("claim_cycle_id, started_at, target_at, workflow_slas(alert_thresholds)")
+        .select("claim_cycle_id, stage_instance_id, started_at, target_at, workflow_slas(alert_thresholds)")
         .in("claim_cycle_id", cycleIds)
         .in("status", ["on_track", "at_risk"])
-    : { data: [] as { claim_cycle_id: string; started_at: string; target_at: string; workflow_slas: { alert_thresholds: number[] } | null }[] };
+    : { data: [] as { claim_cycle_id: string; stage_instance_id: string; started_at: string; target_at: string; workflow_slas: { alert_thresholds: number[] } | null }[] };
 
   const cycleById = new Map((cycles ?? []).map((c) => [c.id, c]));
   const overdueMap = new Map<string, number>();
@@ -153,6 +177,7 @@ export async function loadOperationalSnapshot(supabase: Supa, tenantId: string):
   for (const t of openTracking ?? []) {
     const cycle = cycleById.get(t.claim_cycle_id);
     if (!cycle) continue;
+    if (groupScope && (!t.stage_instance_id || !groupScope.stageIds.has(t.stage_instance_id))) continue; // Operador: prazos só das etapas do grupo dele
     const started = new Date(t.started_at).getTime();
     const target = new Date(t.target_at).getTime();
     const minutesOverdue = Math.round((nowTs - target) / 60_000);

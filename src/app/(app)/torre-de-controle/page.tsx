@@ -4,7 +4,8 @@ import Link from "next/link";
 import { AlertTriangle, BarChart3, CheckCircle2, Clock3, GitBranch, ListChecks } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { loadOperationalSnapshot } from "@/lib/reports";
+import { loadGroupScope, loadOperationalSnapshot } from "@/lib/reports";
+import { getMemberGroups } from "@/lib/active-group";
 import { MagnitudeBars } from "@/components/reports/Bars";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import type { ExecutionEdge, ExecutionNode } from "@/components/execution/ExecutionGraph";
@@ -44,6 +45,9 @@ export default async function TorreDeControlePage({
 
   const ctx = await getTenantContext();
   const supabase = await createClient();
+  // Administrador acompanha a empresa inteira; Operador, só os sinistros em que o grupo dele atua (o ativo na sessão).
+  const { isAdmin, active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
+  const groupScope = isAdmin ? null : await loadGroupScope(supabase, ctx.tenantId, activeGroup?.id ?? null);
 
   // Se a aba for "fluxo", carrega o grafo e as posições de cada sinistro nas etapas
   let flowViewProps = null;
@@ -106,7 +110,7 @@ export default async function TorreDeControlePage({
         .eq("workflow_version_id", selectedVersion.versionId);
       const positionById = new Map((nodePositions ?? []).map((n) => [n.id, n.position as unknown as { x: number; y: number }]));
 
-      const { data: cycles } = await supabase
+      const { data: cyclesAll } = await supabase
         .from("claim_cycles")
         .select(`
           id,
@@ -124,6 +128,7 @@ export default async function TorreDeControlePage({
         `)
         .eq("workflow_version_id", selectedVersion.versionId)
         .neq("status", "discarded");
+      const cycles = groupScope ? (cyclesAll ?? []).filter((c) => groupScope.cycleIds.has(c.id)) : cyclesAll;
 
       const activeCycles = (cycles ?? []).filter((c) => c.status !== "completed");
       const activeCycleIds = activeCycles.map((c) => c.id);
@@ -245,7 +250,7 @@ export default async function TorreDeControlePage({
 
   // Carrega snapshot se estiver na aba de números/indicadores
   // Os indicadores varrem todos os ciclos do tenant: só carregam depois de pedir, nunca sozinhos ao abrir a tela.
-  const snap = currentTab === "numeros" && sp.carregar === "1" ? await loadOperationalSnapshot(supabase, ctx.tenantId) : null;
+  const snap = currentTab === "numeros" && sp.carregar === "1" ? await loadOperationalSnapshot(supabase, ctx.tenantId, isAdmin ? undefined : { groupId: activeGroup?.id ?? null }) : null;
   const open = snap
     ? (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0)
     : 0;
@@ -256,7 +261,10 @@ export default async function TorreDeControlePage({
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Torre de Controle</h1>
-        <p className="mt-1 max-w-xl text-[14px] text-slate-500">Onde está o gargalo, agora — não uma foto de ontem.</p>
+        <p className="mt-1 max-w-xl text-[14px] text-slate-500">
+          Onde está o gargalo, agora — não uma foto de ontem.
+          {!isAdmin && ` Você vê só os sinistros do seu grupo${activeGroup ? ` (${activeGroup.name})` : ""}.`}
+        </p>
 
         {/* Abas da Torre de Controle: Dividindo números e fluxo visual */}
         <nav className="mt-6 flex flex-wrap gap-1 border-b border-slate-200" aria-label="Abas da Torre de Controle">
@@ -285,7 +293,7 @@ export default async function TorreDeControlePage({
           <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <BarChart3 className="size-8 text-slate-300" />
             <p className="text-[15px] font-medium text-slate-800">Os indicadores não carregam sozinhos</p>
-            <p className="max-w-sm text-[13px] text-slate-500">Eles somam todos os sinistros da empresa. Carregue quando precisar.</p>
+            <p className="max-w-sm text-[13px] text-slate-500">{isAdmin ? "Eles somam todos os sinistros da empresa." : "Eles somam os sinistros do seu grupo."} Carregue quando precisar.</p>
             <Link
               href="/torre-de-controle?carregar=1"
               className="rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600"
