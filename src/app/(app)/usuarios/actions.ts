@@ -40,16 +40,27 @@ export async function addUser(_prev: AccessState, formData: FormData): Promise<A
     return { ok: false, message: e instanceof Error ? e.message : "Limite do plano atingido." };
   }
 
+  const groupIds = formData.getAll("group_ids").map(String).filter(Boolean);
   const { data, error } = await supabase.rpc("tenant_add_user", {
     p_tenant_id: ctx.tenantId,
     p_email: email,
     p_role_id: roleId,
-    p_group_id: String(formData.get("group_id") ?? "") || null,
+    p_group_id: groupIds[0] ?? null,
     p_full_name: String(formData.get("full_name") ?? "").trim() || null,
     p_phone: String(formData.get("phone") ?? "").trim() || null,
     p_cpf: String(formData.get("cpf") ?? "").trim() || null,
   });
   if (error) return { ok: false, message: publicDbMessage(error) };
+  // Pessoa que já tinha conta entra na hora: grava a lista completa de grupos (convite pendente fica só com o primeiro).
+  if (data === "added" && groupIds.length > 1) {
+    const { data: created } = await supabase
+      .from("tenant_memberships")
+      .select("id, user_profiles!inner(email)")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("user_profiles.email", email)
+      .maybeSingle();
+    if (created) await supabase.rpc("set_member_groups", { p_membership_id: created.id, p_group_ids: groupIds });
+  }
   const orgId = String(formData.get("organization_id") ?? "");
   if (orgId) {
     const { error: orgError } = await supabase.rpc("set_person_organization", { p_tenant_id: ctx.tenantId, p_email: email, p_organization_id: orgId });
@@ -89,13 +100,17 @@ export async function updateMemberAccess(_prev: AccessState, formData: FormData)
     }
   }
 
+  const groupIds = formData.getAll("group_ids").map(String).filter(Boolean);
   const { error } = await supabase.rpc("tenant_update_member", {
     p_membership_id: membershipId,
     p_role_id: roleId,
-    p_group_id: String(formData.get("group_id") ?? "") || null,
+    p_group_id: groupIds[0] ?? null,
     p_active: active,
   });
   if (error) return { ok: false, message: publicDbMessage(error) };
+  // As funções acima gravam só o primeiro grupo; a lista completa (Operador em vários grupos) entra aqui.
+  const { error: groupsError } = await supabase.rpc("set_member_groups", { p_membership_id: membershipId, p_group_ids: groupIds });
+  if (groupsError) return { ok: false, message: publicDbMessage(groupsError) };
   const orgId = String(formData.get("organization_id") ?? "");
   if (orgId) {
     const { data: who } = await supabase.from("tenant_memberships").select("user_profiles(email)").eq("id", membershipId).maybeSingle();

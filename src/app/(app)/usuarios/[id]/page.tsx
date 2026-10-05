@@ -35,7 +35,7 @@ export default async function EditTenantUserPage({ params }: { params: Promise<{
 
   const [{ data: profile }, { data: memberGroup }, { data: groups }, roles, { data: roleRows }, organizations] = await Promise.all([
     supabase.from("user_profiles").select("full_name, email, phone, cpf").eq("id", membership.user_id).maybeSingle(),
-    supabase.from("group_members").select("group_id").eq("membership_id", id).maybeSingle(),
+    supabase.from("group_members").select("group_id").eq("membership_id", id),
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
     getRoleOptions(supabase, ctx.tenantId),
     supabase.from("roles").select("id, name").in("id", (membership.membership_roles ?? []).map((r) => r.role_id)),
@@ -67,7 +67,7 @@ export default async function EditTenantUserPage({ params }: { params: Promise<{
           cpf={profile?.cpf ?? ""}
           tenantName={ctx.tenantName}
           roleId={formRoleId}
-          groupId={memberGroup?.group_id ?? ""}
+          groupIds={(memberGroup ?? []).map((m) => m.group_id)}
           active={membership.status === "active"}
           roles={roles}
           organizations={organizations}

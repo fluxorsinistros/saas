@@ -90,20 +90,20 @@ export function NewUserForm({
           Administrador administra a conta e não fica em grupo de usuários.
         </p>
       ) : (
-        <div className="max-w-sm">
-          <label htmlFor="group_id" className="mb-1 block text-[12px] font-medium text-slate-600">
-            Grupo de usuários
-          </label>
-          <select id="group_id" name="group_id" defaultValue="" className={input}>
-            <option value="">Sem grupo</option>
+        <fieldset className="max-w-sm">
+          <legend className="mb-1 block text-[12px] font-medium text-slate-600">Grupos de usuários</legend>
+          <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-2">
             {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
+              <label key={g.id} className="flex items-center gap-2 text-[13px] text-slate-700">
+                <input type="checkbox" name="group_ids" value={g.id} /> {g.name}
+              </label>
             ))}
-          </select>
-          <p className="mt-1 text-xs text-slate-500">O usuário pertence a um único grupo, e é o grupo que define o acesso dele.</p>
-        </div>
+            {groups.length === 0 && <p className="text-xs text-slate-500">A empresa ainda não tem grupos.</p>}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            O Operador pode estar em vários grupos, mas atua em um por vez (ele escolhe no menu). É o grupo que define o acesso.
+          </p>
+        </fieldset>
       )}
 
       <label className="flex items-center gap-2 text-[13px] text-slate-700">
