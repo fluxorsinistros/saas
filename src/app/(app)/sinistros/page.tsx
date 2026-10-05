@@ -6,7 +6,7 @@ import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, Plus, RotateCc
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
-import { computeSla, formatDuration } from "@/lib/format";
+import { computeProcessProgress, computeSla, formatDuration } from "@/lib/format";
 import { SinistrosFilterBar } from "./SinistrosFilterBar";
 
 export const metadata: Metadata = { title: "Sinistros" };
@@ -56,52 +56,6 @@ function formatDurationBetween(startIso: string | null | undefined, endIso: stri
   const diffMs = Math.max(0, end - start);
   const diffMin = Math.floor(diffMs / 60_000);
   return formatDuration(diffMin);
-}
-
-function computeProcessProgress(
-  isCompleted: boolean,
-  workflowVersionId: string | undefined,
-  completedNodeIds: Set<string> | undefined,
-  stepsByVersion: Map<string, { id: string; name: string; sla_minutes: number }[]>,
-) {
-  const steps = workflowVersionId ? stepsByVersion.get(workflowVersionId) ?? [] : [];
-  const totalCount = steps.length || 1;
-
-  if (isCompleted) {
-    return {
-      pct: 100,
-      completedCount: totalCount,
-      totalCount,
-      subtext: `${totalCount} de ${totalCount} etapas concluídas`,
-    };
-  }
-
-  if (steps.length === 0) return null;
-
-  const totalMinutes = steps.reduce((sum, s) => sum + s.sla_minutes, 0);
-  const doneIds = completedNodeIds ?? new Set<string>();
-
-  let completedMinutes = 0;
-  let completedCount = 0;
-
-  for (const step of steps) {
-    if (doneIds.has(step.id)) {
-      completedMinutes += step.sla_minutes;
-      completedCount++;
-    }
-  }
-
-  const pct = totalMinutes > 0 ? Math.min(100, Math.round((completedMinutes / totalMinutes) * 100)) : 0;
-  const subtext = `${completedCount} de ${totalCount} etapas concluídas`;
-
-  return {
-    pct,
-    completedCount,
-    totalCount,
-    completedMinutes,
-    totalMinutes,
-    subtext,
-  };
 }
 
 type SearchParams = {

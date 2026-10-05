@@ -33,3 +33,55 @@ export function computeSla(startedAtIso: string | null | undefined, slaMinutes: 
     formattedLimit: formatDuration(slaMinutes),
   };
 }
+
+// Andamento do sinistro pelas etapas do fluxo (peso de cada etapa = o prazo dela). Uma conta só para a lista e o detalhe.
+export function computeProcessProgress(
+  isCompleted: boolean,
+  workflowVersionId: string | undefined,
+  completedNodeIds: Set<string> | undefined,
+  stepsByVersion: Map<string, { id: string; name: string; sla_minutes: number }[]>,
+) {
+  const steps = workflowVersionId ? stepsByVersion.get(workflowVersionId) ?? [] : [];
+  const totalCount = steps.length || 1;
+
+  if (isCompleted) {
+    return {
+      pct: 100,
+      completedCount: totalCount,
+      totalCount,
+      subtext: `${totalCount} de ${totalCount} etapas concluídas`,
+    };
+  }
+
+  if (steps.length === 0) return null;
+
+  const totalMinutes = steps.reduce((sum, s) => sum + s.sla_minutes, 0);
+  const doneIds = completedNodeIds ?? new Set<string>();
+
+  let completedMinutes = 0;
+  let completedCount = 0;
+
+  for (const step of steps) {
+    if (doneIds.has(step.id)) {
+      completedMinutes += step.sla_minutes;
+      completedCount++;
+    }
+  }
+
+  const pct = totalMinutes > 0 ? Math.min(100, Math.round((completedMinutes / totalMinutes) * 100)) : 0;
+  const subtext = `${completedCount} de ${totalCount} etapas concluídas`;
+
+  return {
+    pct,
+    completedCount,
+    totalCount,
+    completedMinutes,
+    totalMinutes,
+    subtext,
+  };
+}
+
+// Minutos corridos desde um instante (para "parado há X").
+export function minutesSince(iso: string): number {
+  return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+}

@@ -12,6 +12,8 @@ import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
+import { computeProcessProgress, computeSla, formatDuration, minutesSince } from "@/lib/format";
+import { StageSlaBadge } from "@/components/StageSlaBadge";
 import { getPermissionCodes } from "@/lib/permissions";
 import { ExecutionViewToggle } from "@/components/execution/ExecutionViewToggle";
 import { ExecutionGraph } from "@/components/execution/ExecutionGraphLazy";
@@ -424,6 +426,30 @@ export default async function ClaimPage({
     return { key: f.key, label: f.label, required: f.required, where: fieldWhere.get(f.key) ?? [], filled, href, display };
   });
 
+  // Resumo do topo: andamento pelas etapas, etapa atual, prazo da etapa e prazo total do fluxo (mesmas contas da lista).
+  const stepNodes = graph.nodes.filter((n) => n.type === "stage" || n.type === "wait" || n.type === "decision");
+  const slaOf = (n: { config: { sla_minutes?: number | null } }) => (typeof n.config.sla_minutes === "number" && n.config.sla_minutes > 0 ? n.config.sla_minutes : undefined);
+  const stepsForProgress = new Map([[cycle.workflow_version_id, stepNodes.map((n) => ({ id: n.id, name: n.name, sla_minutes: slaOf(n) ?? 60 }))]]);
+  const doneNodeIds = new Set((stages ?? []).filter((st) => st.status === "completed").map((st) => st.node_id));
+  const cycleDone = cycle.status === "completed";
+  const progress = computeProcessProgress(cycleDone, cycle.workflow_version_id, doneNodeIds, stepsForProgress);
+  const flowLimitMinutes = stepNodes.reduce((sum, n) => sum + (slaOf(n) ?? 0), 0) || undefined;
+  const flowStartedAt = cycle.formalized_at || claim.created_at;
+  const runningFlowSla = !cycleDone ? computeSla(flowStartedAt, flowLimitMinutes) : null;
+  const flowTookMinutes =
+    cycleDone && cycle.completed_at ? Math.max(0, Math.round((new Date(cycle.completed_at).getTime() - new Date(flowStartedAt).getTime()) / 60000)) : null;
+  const currentStages = (stages ?? [])
+    .filter((st) => st.status === "in_progress")
+    .map((st) => ({ id: st.id, node: nodeById.get(st.node_id), enteredAt: st.entered_at }))
+    .filter((x) => x.node && x.node.type !== "end");
+  const waitingGroupIds = [
+    ...new Set(
+      (activities ?? [])
+        .filter((a) => a.group_id && (a.status === "in_progress" || a.status === "not_started"))
+        .map((a) => a.group_id as string),
+    ),
+  ];
+
   const blockedReason = auditLogs?.find((a) => a.action === "cycle.blocked")?.reason;
 
   // Convergências (Documento 3 §5): mostra "aguardando N de M" enquanto o join não libera — sem
@@ -702,6 +728,96 @@ export default async function ClaimPage({
             </div>
           </div>
         )}
+
+        <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-xs" aria-label="Resumo do andamento">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+            {progress && (
+              <div className="min-w-[200px] max-w-[320px] flex-1">
+                <div className="flex items-center justify-between text-xs font-medium leading-none">
+                  <span className="text-slate-500">Progresso</span>
+                  <span className={`font-bold ${progress.pct === 100 ? "text-emerald-700" : "text-brand"}`}>{progress.pct}%</span>
+                </div>
+                <div className="relative mt-1.5 h-2 w-full overflow-hidden rounded-full border border-slate-300/40 bg-slate-200/80">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${progress.pct === 100 ? "bg-emerald-500" : "bg-brand"}`}
+                    style={{ width: `${progress.pct}%` }}
+                  />
+                </div>
+                <div className="mt-1 text-xs text-slate-500">{progress.subtext}</div>
+              </div>
+            )}
+
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
+              {cycleDone ? (
+                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+                  <CheckCircle2 className="size-4" /> Fluxo concluído
+                </span>
+              ) : currentStages.length > 0 ? (
+                currentStages.map((cs) => (
+                  <span key={cs.id} className="inline-flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Etapa atual</span>
+                    <span className="font-semibold text-slate-900">{cs.node?.name}</span>
+                    <span className="text-xs text-slate-500">
+                      (há {formatDuration(minutesSince(cs.enteredAt))})
+                    </span>
+                    <StageSlaBadge enteredAt={cs.enteredAt} slaMinutes={cs.node ? slaOf(cs.node) : undefined} />
+                  </span>
+                ))
+              ) : (
+                <span className="text-slate-500">Sem etapa em andamento</span>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 text-[12px]">
+            {cycleDone && flowTookMinutes !== null ? (
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-500">Prazo total do fluxo:</span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                    flowLimitMinutes && flowTookMinutes > flowLimitMinutes
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  Concluído em {formatDuration(flowTookMinutes)}
+                  {flowLimitMinutes
+                    ? flowTookMinutes > flowLimitMinutes
+                      ? ` • estourou o limite de ${formatDuration(flowLimitMinutes)} em ${formatDuration(flowTookMinutes - flowLimitMinutes)}`
+                      : ` • dentro do limite de ${formatDuration(flowLimitMinutes)}`
+                    : ""}
+                </span>
+              </div>
+            ) : runningFlowSla ? (
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-500">Prazo total do fluxo:</span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                    runningFlowSla.isBreached
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : runningFlowSla.isAtRisk
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-sky-200 bg-sky-50 text-sky-700"
+                  }`}
+                >
+                  {runningFlowSla.pct}% consumido • {runningFlowSla.formattedRemaining} (limite: {runningFlowSla.formattedLimit})
+                </span>
+              </div>
+            ) : (
+              <div />
+            )}
+            {!cycleDone && waitingGroupIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 text-slate-500">
+                <span>Aguardando:</span>
+                {waitingGroupIds.map((gid) => (
+                  <span key={gid} className="rounded border border-slate-200/60 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">
+                    <GroupChip name={groupMeta.get(gid)?.name ?? "—"} icon={groupMeta.get(gid)?.icon} color={groupMeta.get(gid)?.color} />
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className="mt-6">
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Execução e Detalhes</h2>
@@ -1199,6 +1315,26 @@ export default async function ClaimPage({
                         </span>
                       )}
                     </div>
+                    {stage.status === "completed" && stage.exited_at && node?.type !== "end" && (() => {
+                      const limit = node ? slaOf(node) : undefined;
+                      const took = Math.max(0, Math.round((new Date(stage.exited_at).getTime() - new Date(stage.entered_at).getTime()) / 60000));
+                      const late = limit ? took > limit : false;
+                      return (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                              !limit ? "border-slate-200 bg-slate-50 text-slate-600" : late ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            }`}
+                          >
+                            {!limit
+                              ? `Levou ${formatDuration(took)} (sem prazo definido)`
+                              : late
+                                ? `Fora do prazo • estourou em ${formatDuration(took - limit)} (levou ${formatDuration(took)} de ${formatDuration(limit)})`
+                                : `No prazo • levou ${formatDuration(took)} de ${formatDuration(limit)}`}
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {activity.status === "completed" &&
                       stage.id === lastDoneStageId &&
                       perms.has("claim.execute") &&
