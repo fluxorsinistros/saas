@@ -1,0 +1,20 @@
+name: Manter o Supabase ativo
+
+# O plano gratuito do Supabase pausa o projeto depois de alguns dias sem uso. Este job chama o endpoint de saúde do app
+# (que consulta o banco) a cada 3 dias. Se o banco não responder, a execução falha e o GitHub avisa por e-mail.
+on:
+  schedule:
+    - cron: "0 12 */3 * *" # 12:00 UTC, nos dias 1, 4, 7, 10 ... do mês
+  workflow_dispatch: {} # também dá para rodar na mão, na aba Actions
+
+permissions: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar o banco pelo app
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 10 --max-time 60 \
+            https://fluxor-sinistros.vercel.app/api/saude
