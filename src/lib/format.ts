@@ -34,7 +34,7 @@ export function computeSla(startedAtIso: string | null | undefined, slaMinutes: 
   };
 }
 
-// Andamento do sinistro pelas etapas do fluxo (peso de cada etapa = o prazo dela). Uma conta só para a lista e o detalhe.
+// Andamento do sinistro pelas etapas do fluxo (cada etapa vale igual). Uma conta só para a lista e o detalhe.
 export function computeProcessProgress(
   isCompleted: boolean,
   workflowVersionId: string | undefined,
@@ -68,7 +68,8 @@ export function computeProcessProgress(
     }
   }
 
-  const pct = totalMinutes > 0 ? Math.min(100, Math.round((completedMinutes / totalMinutes) * 100)) : 0;
+  // Cada etapa vale igual: 1 de 2 concluídas = 50%. (Antes pesava pelo prazo de cada etapa e o número não batia com "1 de 2".)
+  const pct = Math.min(100, Math.round((completedCount / totalCount) * 100));
   const subtext = `${completedCount} de ${totalCount} etapas concluídas`;
 
   return {
