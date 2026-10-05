@@ -8,7 +8,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { writeAudit, type Supa } from "./actions";
 import { requirePermission } from "@/lib/permissions";
 import { getLimits, isAllowed, limitOf, type Limits } from "@/lib/limits";
-import { HARD_MAX_BYTES, MB, formatMb, mimeForFile, safeFileName } from "@/lib/document-files";
+import { HARD_MAX_BYTES, MB, extOf, formatMb, mimeForFile, safeFileName } from "@/lib/document-files";
 
 // Sem tela própria de "tipos de documento" ainda (mesma decisão de ensureClaimType em actions.ts):
 // o nome digitado vira o tipo, reaproveitando um já existente com o mesmo nome quando houver.
@@ -166,6 +166,11 @@ export async function finalizeDocumentUpload(
   const folder = `${ctx.tenantId}/${claimCycleId}/${documentId}`;
   if (!path.startsWith(`${folder}/`)) return { ok: false, error: "Caminho de arquivo inválido." };
   const objectName = path.slice(folder.length + 1);
+  // O que vale é o objeto que está no Storage, não o nome que o navegador diz ter enviado.
+  if (!mimeForFile(objectName) || extOf(objectName) !== extOf(fileName)) {
+    await supabase.storage.from("documents").remove([path]);
+    return { ok: false, error: "Tipo de arquivo não aceito." };
+  }
 
   // Tamanho real, medido pelo Storage
   const { data: found } = await supabase.storage.from("documents").list(folder, { search: objectName, limit: 10 });
