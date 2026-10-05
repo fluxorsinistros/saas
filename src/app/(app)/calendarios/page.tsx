@@ -48,7 +48,7 @@ export default async function CalendariosPage() {
           </Link>
         </div>
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Calendários de SLA</h1>
-        <p className="mt-1 max-w-xl text-[14px] text-slate-500">
+        <p className="mt-1 max-w-xl text-[14px] text-slate-600">
           Dias úteis, horário de expediente e feriados — usados pelo motor de SLA para calcular prazos. Um
           SLA sem calendário conta corrido, 24/7.
         </p>

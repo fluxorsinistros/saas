@@ -78,7 +78,7 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
       <div className="mx-auto page-wide space-y-5 px-4 py-6 md:px-8 md:py-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Grupos</h1>
-          <p className="mt-1 max-w-xl text-[14px] text-slate-500">
+          <p className="mt-1 max-w-xl text-[14px] text-slate-600">
             Unidades operacionais que respondem pelas etapas do fluxo. A etapa aponta para o grupo, e qualquer membro ativo pode
             atuar nela.
           </p>

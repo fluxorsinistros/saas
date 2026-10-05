@@ -11,7 +11,7 @@
   --color-brand-600: #1d4ed8;
   --color-cyan: #22d3ee;
   --color-violet: #7c3aed;
-  --color-canvas: #f8fafc;
+  --color-canvas: #e8eef8;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -308,4 +308,80 @@ body[data-theme="dark"] {
 }
 @utility page-narrow {
   max-width: 42rem;
+}
+
+/* ==========================================================================
+   TEMA ESCURO — CORES SEMÂNTICAS (cartões de situação, selos e etiquetas)
+   As regras acima cobriam só alguns tons claros fixos. Aqui entram TODAS as variações (inclusive com transparência,
+   como bg-emerald-50/40): fundo = cor translúcida sobre o painel escuro; texto = tom claro legível; borda = tom suave.
+   ========================================================================== */
+:is(.dark, [data-theme="dark"]) :is([class~="bg-slate-50"], [class*="bg-slate-50/"], [class*="bg-slate-100/"]) {
+  background-color: #0d131f !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="bg-slate-200"], [class*="bg-slate-200/"]) {
+  background-color: #263247 !important;
+}
+
+/* verde */
+:is(.dark, [data-theme="dark"]) :is([class~="bg-emerald-50"], [class*="bg-emerald-50/"], [class~="bg-emerald-100"], [class*="bg-emerald-100/"]) {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="text-emerald-600"], [class~="text-emerald-700"], [class~="text-emerald-800"]) {
+  color: #6ee7b7 !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="border-emerald-100"], [class*="border-emerald-100/"], [class~="border-emerald-200"]) {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+/* vermelho */
+:is(.dark, [data-theme="dark"]) :is([class~="bg-rose-50"], [class*="bg-rose-50/"], [class~="bg-rose-100"], [class*="bg-rose-100/"]) {
+  background-color: rgba(244, 63, 94, 0.14) !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="text-rose-600"], [class~="text-rose-700"], [class~="text-rose-800"], [class~="text-rose-900"]) {
+  color: #fda4af !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="border-rose-100"], [class~="border-rose-200"], [class*="border-rose-200/"]) {
+  border-color: rgba(244, 63, 94, 0.38) !important;
+}
+
+/* âmbar */
+:is(.dark, [data-theme="dark"]) :is([class~="bg-amber-50"], [class*="bg-amber-50/"], [class~="bg-amber-100"], [class*="bg-amber-100/"]) {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="text-amber-600"], [class~="text-amber-700"], [class~="text-amber-800"], [class~="text-amber-900"]) {
+  color: #fcd34d !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="border-amber-100"], [class~="border-amber-200"], [class*="border-amber-200/"]) {
+  border-color: rgba(245, 158, 11, 0.38) !important;
+}
+
+/* azul / céu / violeta / verde-água / laranja / rosa (selos de tipo, grupo e etapa) */
+:is(.dark, [data-theme="dark"]) :is([class~="bg-sky-50"], [class~="bg-sky-100"], [class~="bg-blue-100"], [class*="bg-blue-100/"], [class*="bg-sky-50/"]) {
+  background-color: rgba(56, 189, 248, 0.14) !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="text-sky-700"], [class~="text-sky-800"], [class~="text-blue-700"], [class~="text-blue-800"]) {
+  color: #7dd3fc !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="border-sky-200"], [class~="border-blue-200"]) {
+  border-color: rgba(56, 189, 248, 0.35) !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="bg-violet-50"], [class~="bg-violet-100"]) {
+  background-color: rgba(139, 92, 246, 0.16) !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="text-violet-700"], [class~="text-violet-800"]) {
+  color: #c4b5fd !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="bg-teal-100"], [class~="bg-orange-100"], [class~="bg-pink-100"]) {
+  background-color: rgba(148, 163, 184, 0.18) !important;
+}
+:is(.dark, [data-theme="dark"]) :is([class~="text-teal-800"], [class~="text-orange-800"], [class~="text-pink-800"]) {
+  color: #e2e8f0 !important;
+}
+
+/* bordas cinza com transparência (border-slate-200/80 etc.) */
+:is(.dark, [data-theme="dark"]) :is([class*="border-slate-100/"], [class*="border-slate-200/"]) {
+  border-color: #1e293b !important;
+}
+:is(.dark, [data-theme="dark"]) [class*="border-slate-300/"] {
+  border-color: #2e3d55 !important;
 }

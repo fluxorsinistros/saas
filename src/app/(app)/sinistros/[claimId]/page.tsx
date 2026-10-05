@@ -1223,7 +1223,7 @@ export default async function ClaimPage({
                           Date.now() - new Date(activity.completed_at).getTime() <= UNDO_WINDOW_MINUTES * 60000 &&
                           canActOnGroup(activity.group_id))) && (
                         <details className="[&[open]]:basis-full">
-                          <summary className="inline-flex cursor-pointer list-none text-[12px] font-medium text-slate-500 hover:text-slate-700">
+                          <summary className="inline-flex cursor-pointer list-none text-[12px] font-medium text-rose-800 underline-offset-2 hover:text-rose-900 hover:underline">
                             Concluí sem querer — desfazer
                           </summary>
                           <form

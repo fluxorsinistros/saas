@@ -33,7 +33,7 @@ export default async function ImportacaoPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Importação em massa</h1>
-        <p className="mt-1 max-w-xl text-[14px] text-slate-500">
+        <p className="mt-1 max-w-xl text-[14px] text-slate-600">
           Um CSV com uma linha por sinistro cria os sinistros pelas mesmas regras da formalização manual — inclui a mesma
           validação de fluxo publicado, e o mesmo motor de execução assume a partir daí.
         </p>

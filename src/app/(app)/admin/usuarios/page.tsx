@@ -94,7 +94,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Usuários</h1>
-            <p className="mt-1 max-w-xl text-[14px] text-slate-500">
+            <p className="mt-1 max-w-xl text-[14px] text-slate-600">
               Pesquise, exporte a lista e clique no lápis para editar um usuário: dados, tipo, situação e grupos.
             </p>
           </div>
