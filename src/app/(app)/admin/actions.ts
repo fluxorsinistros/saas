@@ -537,6 +537,7 @@ export async function saveUserEdit(_prev: ActionState, formData: FormData): Prom
   const tenantId = String(formData.get("tenant_id") ?? "");
   if (!isGestor && !tenantId) return { ok: false, message: "Escolha a empresa." };
 
+  const groupIds = formData.getAll("group_ids").map(String).filter(Boolean);
   const { data: newId, error } = await supabase.rpc("admin_save_person", {
     p_id: id,
     p_full_name: fullName,
@@ -546,9 +547,14 @@ export async function saveUserEdit(_prev: ActionState, formData: FormData): Prom
     p_tenant_id: isGestor ? null : tenantId,
     p_role_name: isGestor ? "Operador" : tipo,
     p_active: isGestor ? true : formData.get("active") === "on",
-    p_group_id: String(formData.get("group_id") ?? "") || null,
+    p_group_id: groupIds[0] ?? null,
   });
-  if (error || !newId) return { ok: false, message: error?.message ?? "Não foi possível salvar." };
+  if (error || !newId) return { ok: false, message: error ? publicDbMessage(error) : "Não foi possível salvar." };
+  // A função acima grava só o primeiro grupo; a lista completa do Operador (vários grupos) entra aqui.
+  if (!isGestor && tipo === "Operador") {
+    const { error: groupsError } = await supabase.rpc("set_member_groups", { p_membership_id: newId, p_group_ids: groupIds });
+    if (groupsError) return { ok: false, message: publicDbMessage(groupsError) };
+  }
   const orgId = String(formData.get("organization_id") ?? "");
   const email = String(formData.get("email") ?? "");
   if (!isGestor && orgId && email) {
@@ -727,3 +733,38 @@ export async function toggleQuickTheme(currentTheme: "light" | "dark", tenantId?
   revalidatePath("/", "layout");
 }
 
+
+// Habilita a mesma pessoa (mesmo e-mail e senha) em OUTRA empresa, com tipo e grupos próprios dali. O acesso nas
+// outras empresas dela não muda: cada empresa tem o seu próprio papel para a pessoa.
+export async function enableInTenant(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const email = String(formData.get("email") ?? "").trim();
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  const tipo = String(formData.get("tipo") ?? "");
+  const groupIds = formData.getAll("group_ids").map(String).filter(Boolean);
+  if (!email || !tenantId || !["Administrador", "Operador"].includes(tipo)) return { ok: false, message: "Escolha a empresa e o tipo." };
+
+  const { data: role } = await supabase.from("roles").select("id").is("tenant_id", null).eq("name", tipo).maybeSingle();
+  if (!role) return { ok: false, message: "Tipo inválido." };
+
+  const { data, error } = await supabase.rpc("admin_add_person", {
+    p_tenant_id: tenantId,
+    p_email: email,
+    p_role_id: role.id,
+    p_group_id: tipo === "Operador" ? (groupIds[0] ?? null) : null,
+  });
+  if (error) return { ok: false, message: publicDbMessage(error) };
+  if (data === "added" && tipo === "Operador" && groupIds.length > 1) {
+    // RLS esconde de propósito as associações de outras empresas; a busca administrativa devolve o id.
+    const { data: found } = await supabase.rpc("admin_search_users", { p_q: email, p_tenant_id: tenantId, p_limit: 20, p_offset: 0 });
+    const created = (found ?? []).find((r) => r.membership_id && r.email.toLowerCase() === email.toLowerCase());
+    if (created?.membership_id) {
+      const { error: groupsError } = await supabase.rpc("set_member_groups", { p_membership_id: created.membership_id, p_group_ids: groupIds });
+      if (groupsError) return { ok: false, message: publicDbMessage(groupsError) };
+    }
+  }
+  await applyOrganization(supabase, tenantId, email, formData);
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: "Pessoa habilitada na empresa." };
+}

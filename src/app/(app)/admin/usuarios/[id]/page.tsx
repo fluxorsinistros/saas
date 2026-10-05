@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { UserActions } from "../users-forms";
 import { UserEditForm } from "./user-edit-form";
+import { EnableInTenantForm } from "./enable-in-tenant-form";
 
 export const metadata: Metadata = { title: "Editar usuário" };
 
@@ -34,6 +35,20 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
     ? await supabase.from("tenant_memberships").select("organization_id").eq("id", person.membership_id).maybeSingle()
     : { data: null };
   const tenantName = (tenants ?? []).find((t) => t.id === person.tenant_id)?.name;
+  // Empresas em que a mesma pessoa (mesmo e-mail) já tem acesso: cada uma com o papel dela.
+  // (RLS não deixa o Gestor ler associações de outras empresas direto; a busca administrativa já cobre isso.)
+  const { data: found } = !isGestor
+    ? await supabase.rpc("admin_search_users", { p_q: person.email, p_limit: 100, p_offset: 0 })
+    : { data: [] as never[] };
+  const memberships = (found ?? [])
+    .filter((r) => r.membership_id && r.email.toLowerCase() === person.email.toLowerCase())
+    .map((r) => ({ id: r.membership_id as string, tenant_id: r.tenant_id as string, status: r.status, role: r.role_name }));
+  // RLS esconde group_members de outras empresas; a busca administrativa devolve os nomes dos grupos da pessoa.
+  const groupNames = new Set(
+    ((found ?? []).find((r) => r.membership_id === person.membership_id)?.groups ?? "").split(", ").filter(Boolean),
+  );
+  const personGroupIds = (groups ?? []).filter((g) => g.tenant_id === person.tenant_id && groupNames.has(g.name)).map((g) => g.id);
+  const memberTenantIds = new Set((memberships ?? []).filter((m) => m.status === "active").map((m) => m.tenant_id));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -57,7 +72,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
           tenantId={person.tenant_id ?? ""}
           tipo={isGestor ? "gestor" : (person.role_name ?? "Operador")}
           active={person.status === "active"}
-          groupId={person.group_id ?? ""}
+          groupIds={personGroupIds}
           tenants={tenants ?? []}
           roles={(roles ?? []).map((r) => r.name)}
           groups={groups ?? []}
@@ -65,6 +80,43 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
           organizationId={memberOrg?.organization_id ?? ""}
           isSelf={auth.user?.id === person.user_id}
         />
+
+        {!isGestor && (
+          <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Empresas desta pessoa</h2>
+            <p className="mb-3 text-[12px] text-slate-500">
+              O mesmo e-mail e a mesma senha podem entrar em várias empresas. Em cada uma a pessoa tem o próprio tipo e grupos; ao entrar,
+              ela escolhe em qual empresa vai atuar.
+            </p>
+            <ul className="mb-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {(memberships ?? []).map((m) => {
+                const role = m.role ?? "Sem tipo";
+                const name = (tenants ?? []).find((t) => t.id === m.tenant_id)?.name ?? "—";
+                return (
+                  <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 text-[13px]">
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium text-slate-800">{name}</span> · {role} · {m.status === "active" ? "Ativo" : "Inativo"}
+                    </span>
+                    {m.id === id ? (
+                      <span className="text-xs text-slate-500">editando</span>
+                    ) : (
+                      <Link href={`/admin/usuarios/${m.id}`} className="text-[12px] font-medium text-brand hover:underline">
+                        Editar
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <h3 className="mb-2 text-[13px] font-medium text-slate-800">Habilitar em outra empresa</h3>
+            <EnableInTenantForm
+              email={person.email}
+              tenants={(tenants ?? []).filter((t) => !memberTenantIds.has(t.id))}
+              groups={groups ?? []}
+              organizations={organizations ?? []}
+            />
+          </section>
+        )}
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Acesso</h2>

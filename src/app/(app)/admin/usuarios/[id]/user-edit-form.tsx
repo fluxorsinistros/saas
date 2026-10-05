@@ -23,7 +23,7 @@ export function UserEditForm({
   tenantId,
   tipo: initialTipo,
   active,
-  groupId,
+  groupIds,
   tenants,
   roles,
   groups,
@@ -39,7 +39,7 @@ export function UserEditForm({
   tenantId: string;
   tipo: string;
   active: boolean;
-  groupId: string;
+  groupIds: string[];
   tenants: Tenant[];
   roles: string[];
   groups: Group[];
@@ -58,7 +58,6 @@ export function UserEditForm({
   const tenantGroups = groups.filter((g) => g.tenant_id === tenant);
   const tenantOrgs = organizations.filter((o) => o.tenant_id === tenant);
   const currentOrg = tenantOrgs.some((o) => o.id === organizationId) ? organizationId : (tenantOrgs[0]?.id ?? "");
-  const currentGroup = tenantGroups.some((g) => g.id === groupId) ? groupId : "";
   const tipoOptions = [{ value: "gestor", label: "Gestor da plataforma" }, ...roles.map((r) => ({ value: r, label: r }))];
 
   return (
@@ -151,7 +150,8 @@ export function UserEditForm({
       {moving && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800 ring-1 ring-inset ring-amber-200">
           Mover para outra empresa: o acesso na empresa atual é inativado (o histórico fica lá), o grupo atual é removido e a pessoa
-          passa a ter este tipo na empresa escolhida.
+          passa a ter este tipo na empresa escolhida. Para a pessoa ficar nas DUAS empresas, não mova: use "Habilitar em outra
+          empresa", logo abaixo.
         </p>
       )}
       {isGestor && !wasGestor && (
@@ -179,23 +179,20 @@ export function UserEditForm({
           removido ao salvar.
         </p>
       ) : (
-        <div className="max-w-sm">
-          <label htmlFor="group_id" className="mb-1 block text-[12px] font-medium text-slate-600">
-            Grupo de usuários
-          </label>
-          <select key={`${tenant}-${currentGroup}`} id="group_id" name="group_id" defaultValue={currentGroup} className={input}>
-            <option value="">Sem grupo</option>
+        <fieldset key={tenant} className="max-w-sm">
+          <legend className="mb-1 block text-[12px] font-medium text-slate-600">Grupos de usuários</legend>
+          <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-2">
             {tenantGroups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
+              <label key={g.id} className="flex items-center gap-2 text-[13px] text-slate-700">
+                <input type="checkbox" name="group_ids" value={g.id} defaultChecked={groupIds.includes(g.id)} /> {g.name}
+              </label>
             ))}
-          </select>
+            {tenant && tenantGroups.length === 0 && <p className="text-xs text-slate-500">A empresa escolhida ainda não tem grupos.</p>}
+          </div>
           <p className="mt-1 text-xs text-slate-500">
-            O usuário pertence a um único grupo, e é o grupo que define o acesso dele.
-            {tenant && tenantGroups.length === 0 && " A empresa escolhida ainda não tem grupos."}
+            O Operador pode estar em vários grupos, mas atua em um por vez (ele escolhe no menu). É o grupo que define o acesso.
           </p>
-        </div>
+        </fieldset>
       )}
 
       <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
