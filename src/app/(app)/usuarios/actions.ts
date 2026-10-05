@@ -1,5 +1,6 @@
 "use server";
 
+import { publicDbMessage } from "@/lib/errors";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
@@ -48,7 +49,7 @@ export async function addUser(_prev: AccessState, formData: FormData): Promise<A
     p_phone: String(formData.get("phone") ?? "").trim() || null,
     p_cpf: String(formData.get("cpf") ?? "").trim() || null,
   });
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
   const orgId = String(formData.get("organization_id") ?? "");
   if (orgId) {
     const { error: orgError } = await supabase.rpc("set_person_organization", { p_tenant_id: ctx.tenantId, p_email: email, p_organization_id: orgId });
@@ -94,7 +95,7 @@ export async function updateMemberAccess(_prev: AccessState, formData: FormData)
     p_group_id: String(formData.get("group_id") ?? "") || null,
     p_active: active,
   });
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
   const orgId = String(formData.get("organization_id") ?? "");
   if (orgId) {
     const { data: who } = await supabase.from("tenant_memberships").select("user_profiles(email)").eq("id", membershipId).maybeSingle();
@@ -159,7 +160,7 @@ export async function cancelInvite(_prev: AccessState, formData: FormData): Prom
   const inviteId = String(formData.get("invite_id") ?? "");
   if (!inviteId) return { ok: false, message: "Convite não informado." };
   const { error } = await supabase.rpc("tenant_cancel_invite", { p_invite_id: inviteId });
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
   revalidatePath("/usuarios");
   return { ok: true, message: "Convite cancelado." };
 }
@@ -183,7 +184,7 @@ export async function createOrganization(formData: FormData): Promise<void> {
   await assertCountLimit(supabase, ctx.tenantId, "organizations", "organizações participantes", partners ?? 0);
 
   const { error } = await supabase.rpc("create_partner_organization", { p_tenant_id: ctx.tenantId, p_name: name, p_role_kind: kind });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   revalidatePath("/usuarios");
 }

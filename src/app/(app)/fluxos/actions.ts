@@ -1,5 +1,6 @@
 "use server";
 
+import { publicDbMessage } from "@/lib/errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -168,7 +169,7 @@ export async function deleteWorkflowField(fieldId: string, workflowId: string): 
 
   const supabase = await createClient();
   const { error } = await supabase.from("workflow_fields").delete().eq("id", fieldId).eq("tenant_id", ctx.tenantId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicDbMessage(error) };
   revalidatePath(`/fluxos/${workflowId}`);
   return { ok: true };
 }
@@ -272,7 +273,7 @@ export async function saveDraft(versionId: string, payload: SavePayload): Promis
     p_nodes: payload.nodes as unknown as Json,
     p_edges: payload.edges as unknown as Json,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicDbMessage(error) };
   revalidatePath("/fluxos");
   return { ok: true };
 }
@@ -320,7 +321,7 @@ export async function publishVersion(versionId: string, releaseNote: string): Pr
     p_validation: { checked_at: new Date().toISOString(), warnings: issues } as unknown as Json,
     p_release_note: releaseNote.trim() || undefined,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicDbMessage(error) };
 
   revalidatePath("/fluxos");
   return { ok: true };

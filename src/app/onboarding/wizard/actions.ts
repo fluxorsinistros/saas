@@ -1,5 +1,6 @@
 "use server";
 
+import { publicDbMessage } from "@/lib/errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -90,7 +91,7 @@ export async function inviteUserStep(formData: FormData): Promise<void> {
   await assertCountLimit(supabase, ctx.tenantId, "users", "usuários", activeUsers ?? 0);
 
   const { error } = await supabase.rpc("add_tenant_member", { p_tenant_id: ctx.tenantId, p_email: email });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   await advanceStep(ctx.tenantId, 6);
   revalidatePath("/onboarding/wizard");

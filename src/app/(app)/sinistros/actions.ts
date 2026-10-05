@@ -1,5 +1,6 @@
 "use server";
 
+import { publicDbMessage } from "@/lib/errors";
 import { revalidatePath } from "next/cache";
 import { assertCountLimit } from "@/lib/limits";
 import { redirect } from "next/navigation";
@@ -562,7 +563,7 @@ export async function createClaimAndCycle(
       .select("id, claim_number")
       .single();
     if (!error) claim = data;
-    else if (error.code !== "23505") throw new Error(error.message);
+    else if (error.code !== "23505") throw new Error(publicDbMessage(error));
   }
   if (!claim) throw new Error("Não foi possível gerar um número de sinistro único. Tente de novo.");
 

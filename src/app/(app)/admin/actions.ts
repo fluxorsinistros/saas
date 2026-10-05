@@ -1,5 +1,6 @@
 "use server";
 
+import { publicDbMessage } from "@/lib/errors";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -56,7 +57,7 @@ export async function updatePlan(formData: FormData): Promise<void> {
     claim_price: money(formData, "claim_price"),
   };
   const { error } = await supabase.from("plans").update(next).eq("id", planId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   await writeAudit(supabase, null, "plan.updated", "plan", planId, { next });
   revalidatePath("/admin", "layout");
@@ -89,11 +90,11 @@ export async function savePlanLimits(formData: FormData): Promise<void> {
 
   if (toSet.length) {
     const { error } = await supabase.from("plan_limits").upsert(toSet, { onConflict: "plan_id,limit_key" });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(publicDbMessage(error));
   }
   if (toClear.length) {
     const { error } = await supabase.from("plan_limits").delete().eq("plan_id", planId).in("limit_key", toClear);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(publicDbMessage(error));
   }
 
   await writeAudit(supabase, null, "plan_limit.set", "plan", planId, {
@@ -106,7 +107,7 @@ export async function removePlanLimit(limitId: string): Promise<void> {
   await requirePlatformAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("plan_limits").delete().eq("id", limitId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   revalidatePath("/admin", "layout");
 }
 
@@ -120,7 +121,7 @@ export async function assignContract(formData: FormData): Promise<void> {
   const { error } = await supabase
     .from("tenant_contracts")
     .upsert({ tenant_id: tenantId, plan_id: planId, status: "active" }, { onConflict: "tenant_id" });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   await writeAudit(supabase, null, "contract.assigned", "tenant", tenantId, { next: { plan_id: planId } });
   revalidatePath("/admin", "layout");
@@ -188,7 +189,7 @@ export async function addTenantUser(_prev: ActionState, formData: FormData): Pro
       p_phone: String(formData.get("phone") ?? "").trim() || null,
       p_cpf: String(formData.get("cpf") ?? "").trim() || null,
     });
-    if (e) return { ok: false, message: e.message };
+    if (e) return { ok: false, message: publicDbMessage(e) };
     await applyOrganization(supabase, tenantId, email, formData);
     revalidatePath("/admin", "layout");
     return { ok: true, message: PW_MESSAGES[r as string] ?? "Usuário adicionado." };
@@ -203,7 +204,7 @@ export async function addTenantUser(_prev: ActionState, formData: FormData): Pro
     p_phone: String(formData.get("phone") ?? "").trim() || null,
     p_cpf: String(formData.get("cpf") ?? "").trim() || null,
   });
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
   await applyOrganization(supabase, tenantId, email, formData);
   revalidatePath("/admin", "layout");
 
@@ -244,7 +245,7 @@ export async function setUserPassword(_prev: ActionState, formData: FormData): P
   if (password.length < 8) return { ok: false, message: "A senha precisa ter pelo menos 8 caracteres." };
 
   const { error } = await supabase.rpc("admin_set_user_password", { p_user_id: userId, p_password: password });
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
 
   await writeAudit(supabase, null, "user.password_set_by_platform", "user", userId);
   return { ok: true, message: "Senha alterada. Combine com a pessoa como ela vai receber a nova senha." };
@@ -259,7 +260,7 @@ export async function setMemberActive(_prev: ActionState, formData: FormData): P
   if (!membershipId) return { ok: false, message: "Usuário não informado." };
   // Volta como mensagem: a regra "a conta precisa manter um Administrador ativo" é checada pelo banco
   const { error } = await supabase.rpc("admin_set_member_active", { p_membership_id: membershipId, p_active: active });
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
   revalidatePath("/admin", "layout");
   return { ok: true, message: active ? "Usuário reativado." : "Usuário inativado." };
 }
@@ -271,7 +272,7 @@ export async function revokeTenantAccess(formData: FormData): Promise<void> {
   const inviteId = String(formData.get("invite_id") ?? "") || undefined;
   if (!inviteId) return;
   const { error } = await supabase.rpc("admin_revoke_tenant_access", { p_invite_id: inviteId });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   revalidatePath("/admin", "layout");
 }
 
@@ -294,7 +295,7 @@ export async function updateContractOverrides(formData: FormData): Promise<void>
   }
 
   const { error } = await supabase.from("tenant_contracts").update({ overrides: overrides as Json }).eq("id", contractId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   await writeAudit(supabase, null, "contract.overrides_updated", "tenant_contract", contractId, { next: overrides as Json });
   revalidatePath("/admin", "layout");
@@ -315,7 +316,7 @@ export async function setTenantStatus(formData: FormData): Promise<void> {
       ? { status, suspended_at: new Date().toISOString(), suspension_reason: reason || null }
       : { status, suspended_at: null, suspension_reason: null };
   const { error } = await supabase.from("tenants").update(next).eq("id", tenantId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   await writeAudit(supabase, null, status === "suspended" ? "tenant.suspended" : "tenant.reactivated", "tenant", tenantId, {
     next: { status, reason: reason || null },
@@ -323,7 +324,7 @@ export async function setTenantStatus(formData: FormData): Promise<void> {
   revalidatePath("/admin", "layout");
 }
 
-const LOGO_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" };
+const LOGO_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 const LOGO_MAX_BYTES = 1024 * 1024;
 
 // Nome, subtítulo e logo do produto (aparecem no menu, no login e no título da aba).
@@ -343,11 +344,11 @@ export async function savePlatformBranding(formData: FormData): Promise<void> {
   const file = formData.get("logo");
   if (file instanceof File && file.size > 0) {
     const ext = LOGO_TYPES[file.type];
-    if (!ext) throw new Error("Logo precisa ser PNG, JPG, WEBP ou SVG.");
+    if (!ext) throw new Error("Logo precisa ser PNG, JPG ou WEBP.");
     if (file.size > LOGO_MAX_BYTES) throw new Error("Logo grande demais: máximo de 1 MB.");
     const path = `platform/logo-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("branding").upload(path, file, { contentType: file.type });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(publicDbMessage(error));
     if (logoPath) await supabase.storage.from("branding").remove([logoPath]);
     logoPath = path;
   } else if (formData.get("remove_logo") === "on" && logoPath) {
@@ -359,7 +360,7 @@ export async function savePlatformBranding(formData: FormData): Promise<void> {
     .from("platform_settings")
     .update({ product_name: name, tagline, logo_path: logoPath, updated_by: user?.id ?? null })
     .eq("id", true);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   await writeAudit(supabase, null, "platform.branding_updated", "platform", "settings", { next: { name, tagline, logo: !!logoPath } });
   revalidatePath("/", "layout");
@@ -377,7 +378,7 @@ export async function setWhiteLabel(formData: FormData): Promise<void> {
 
   const next = { white_label_enabled: enabled, white_label_surcharge_pct: pct };
   const { error } = await supabase.from("tenant_contracts").update(next).eq("id", contractId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
 
   await writeAudit(supabase, null, "contract.white_label_updated", "tenant_contract", contractId, { next });
   revalidatePath("/admin", "layout");
@@ -391,7 +392,7 @@ export async function renameTenant(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim();
   if (!tenantId || !name) throw new Error("O nome da conta é obrigatório.");
   const { error } = await supabase.from("tenants").update({ name }).eq("id", tenantId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   await writeAudit(supabase, null, "tenant.renamed", "tenant", tenantId, { next: { name } });
   revalidatePath("/admin", "layout");
 }
@@ -432,11 +433,11 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
   const file = formData.get("logo");
   if (file instanceof File && file.size > 0) {
     const ext = LOGO_TYPES[file.type];
-    if (!ext) return { ok: false, message: "Logo precisa ser PNG, JPG, WEBP ou SVG." };
+    if (!ext) return { ok: false, message: "Logo precisa ser PNG, JPG ou WEBP." };
     if (file.size > LOGO_MAX_BYTES) return { ok: false, message: "Logo grande demais: máximo de 1 MB." };
     const path = `tenants/${tenantId}/logo-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("branding").upload(path, file, { contentType: file.type });
-    if (error) return { ok: false, message: error.message };
+    if (error) return { ok: false, message: publicDbMessage(error) };
     if (logoPath) await supabase.storage.from("branding").remove([logoPath]);
     logoPath = path;
   } else if (formData.get("remove_logo") === "on" && logoPath) {
@@ -465,7 +466,7 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
   }
 
   const { error } = await supabase.from("tenants").update({ settings: next as Json }).eq("id", tenantId);
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
   await writeAudit(supabase, null, "tenant.branding_updated", "tenant", tenantId, { next: { name: name || null, color: color || null, logo: !!logoPath } });
   revalidatePath("/admin", "layout");
   revalidatePath("/", "layout");
@@ -509,7 +510,7 @@ export async function saveTenantSlaSettings(_prev: ActionState, formData: FormDa
   };
 
   const { error } = await supabase.from("tenants").update({ settings: next as Json }).eq("id", tenantId);
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: publicDbMessage(error) };
 
   await writeAudit(supabase, null, "tenant.sla_updated", "tenant", tenantId, {
     next: { default_calendar_id: defaultCalendarId, warning_threshold_pct: warningPct, critical_threshold_pct: criticalPct },

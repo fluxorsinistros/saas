@@ -494,7 +494,7 @@ export function TenantEmpresaTab({ tenant, contract, membersCount, companyIconUr
                   id="company_icon_input"
                   name="company_icon"
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  accept="image/png,image/jpeg,image/webp"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -506,7 +506,7 @@ export function TenantEmpresaTab({ tenant, contract, membersCount, companyIconUr
                   <span className="text-brand underline underline-offset-2">Clique para escolher</span> ou arraste a imagem aqui
                 </div>
                 <p className="mt-1 text-xs text-slate-400">
-                  Formatos aceitos: PNG, SVG, WEBP ou JPG (redimensionado e otimizado automaticamente)
+                  Formatos aceitos: PNG, WEBP ou JPG (redimensionado e otimizado automaticamente)
                 </p>
               </div>
 

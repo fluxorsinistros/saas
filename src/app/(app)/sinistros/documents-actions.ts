@@ -1,5 +1,6 @@
 "use server";
 
+import { publicDbMessage } from "@/lib/errors";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -196,7 +197,7 @@ export async function finalizeDocumentUpload(
     });
     if (error) {
       await supabase.storage.from("documents").remove([path]);
-      return { ok: false, error: error.message };
+      return { ok: false, error: publicDbMessage(error) };
     }
   }
 

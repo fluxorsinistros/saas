@@ -1,5 +1,6 @@
 "use server";
 
+import { publicDbMessage } from "@/lib/errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -24,7 +25,7 @@ export async function createGroup(formData: FormData) {
     name,
     description: String(formData.get("description") ?? "").trim() || null,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   redirect("/grupos");
 }
 
@@ -40,7 +41,7 @@ export async function updateGroup(formData: FormData) {
     .update({ name, description: String(formData.get("description") ?? "").trim() || null })
     .eq("id", id)
     .eq("tenant_id", ctx.tenantId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   revalidatePath("/grupos");
   revalidatePath(`/grupos/${id}`);
   redirect(`/grupos/${id}`);
@@ -57,7 +58,7 @@ export async function updateGroupScreens(formData: FormData) {
   const hidden = SCREENS.map((s) => s.key).filter((key) => !visible.has(key));
   const supabase = await createClient();
   const { error } = await supabase.from("groups").update({ hidden_screens: hidden }).eq("id", id).eq("tenant_id", ctx.tenantId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   revalidatePath("/grupos");
   revalidatePath(`/grupos/${id}`);
   redirect(`/grupos/${id}?aba=telas`);
@@ -74,7 +75,7 @@ export async function updateGroupActions(formData: FormData) {
   const disabled = GROUP_ACTIONS.map((a) => a.key).filter((key) => !allowed.has(key));
   const supabase = await createClient();
   const { error } = await supabase.from("groups").update({ disabled_actions: disabled }).eq("id", id).eq("tenant_id", ctx.tenantId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   revalidatePath("/grupos");
   revalidatePath(`/grupos/${id}`);
   revalidatePath("/sinistros");
@@ -89,7 +90,7 @@ export async function toggleGroup(formData: FormData) {
   const next = formData.get("status") === "active" ? "inactive" : "active";
   const supabase = await createClient();
   const { error } = await supabase.from("groups").update({ status: next }).eq("id", id).eq("tenant_id", ctx.tenantId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(publicDbMessage(error));
   revalidatePath("/grupos");
   revalidatePath(`/grupos/${id}`);
 }

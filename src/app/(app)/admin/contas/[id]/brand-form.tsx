@@ -61,13 +61,13 @@ export function TenantBrandForm({
       </div>
       <div className="min-w-[220px] flex-1">
         <label htmlFor="brand_logo" className="mb-1 block text-[12px] font-medium text-slate-600">
-          Logo (PNG, JPG, WEBP ou SVG, até 1 MB)
+          Logo (PNG, JPG ou WEBP, até 1 MB)
         </label>
         <input
           id="brand_logo"
           name="logo"
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          accept="image/png,image/jpeg,image/webp"
           className={`${input} file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[12px]`}
         />
         {logoUrl && (

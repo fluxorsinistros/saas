@@ -1,3 +1,4 @@
+import { publicDbMessage } from "@/lib/errors";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/platform-admin";
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     p_limit: 10000,
     p_offset: 0,
   });
-  if (error) return new NextResponse(error.message, { status: 500 });
+  if (error) return new NextResponse(publicDbMessage(error), { status: 500 });
 
   const header = ["Nome", "E-mail", "Empresa", "Tipo", "Organização", "Grupos", "Situação"].map(cell).join(";");
   const lines = (rows ?? []).map((u) =>
