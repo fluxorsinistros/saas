@@ -5,7 +5,6 @@ import { CheckCircle2, ClipboardList, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
-import { completeActivity } from "../sinistros/actions";
 
 export const metadata: Metadata = { title: "Minhas tarefas" };
 
@@ -74,7 +73,7 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
       <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Minhas tarefas</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
-          Atividades em aberto nos grupos aos quais você pertence, de todos os sinistros.
+          Atividades em aberto no grupo em que você atua, de todos os sinistros. Abra o sinistro para conferir os dados e concluir a etapa.
         </p>
 
         <div className="mt-5 flex gap-1 border-b border-slate-200">
@@ -101,11 +100,12 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
                   </div>
                 </Link>
                 {activity.status === "in_progress" ? (
-                  <form action={completeActivity.bind(null, activity.id)}>
-                    <button className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600">
-                      Concluir
-                    </button>
-                  </form>
+                  <Link
+                    href={`/sinistros/${claim.id}#etapa-${activity.stage_instance_id}`}
+                    className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600"
+                  >
+                    Abrir
+                  </Link>
                 ) : (
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Não iniciada</span>
                 )}

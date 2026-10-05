@@ -7,7 +7,8 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { requireGroupAccess, requirePermission } from "@/lib/permissions";
+import { isTenantAdmin, requireGroupAccess, requirePermission } from "@/lib/permissions";
+import { UNDO_WINDOW_MINUTES } from "@/lib/undo";
 import { isActionAllowedForMember } from "@/lib/group-actions";
 import { addBusinessMinutes } from "@/lib/sla";
 import { loadGraph } from "@/lib/workflow/load-graph";
@@ -396,7 +397,11 @@ async function advance(
     if (r.node_id) loopMax[r.node_id] = (r.config as { max_count?: number } | null)?.max_count;
   }
 
-  const { data: passRows } = await supabase.from("stage_instances").select("node_id").eq("claim_cycle_id", cycleId);
+  const { data: passRows } = await supabase
+    .from("stage_instances")
+    .select("node_id")
+    .eq("claim_cycle_id", cycleId)
+    .neq("status", "cancelled");
   const loopPassCounts: Record<string, number> = {};
   for (const row of passRows ?? []) loopPassCounts[row.node_id] = (loopPassCounts[row.node_id] ?? 0) + 1;
 
@@ -1084,4 +1089,115 @@ export async function cancelPendingItem(pendingItemId: string, claimId: string):
   await supabase.from("pending_items").update({ status: "cancelled" }).eq("id", pendingItemId);
   await writeAudit(supabase, ctx.tenantId, "pending_item.cancelled", "pending_item", pendingItemId);
   revalidatePath(`/sinistros/${claimId}`);
+}
+
+// Desfaz a conclusão da ÚLTIMA etapa concluída (clique sem querer). Não apaga história: a etapa seguinte é marcada
+// como cancelada (fica no histórico), a etapa desfeita volta a "em andamento" e tudo vai para a trilha de auditoria
+// com o motivo. Recusa quando já há trabalho feito depois, ramos paralelos ou convergência — nesses casos o fluxo
+// segue e a correção é por Reabrir ciclo / Descartar, que exigem motivo e permissão própria.
+export async function undoActivityCompletion(activityInstanceId: string, formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.execute");
+  const supabase = await createClient();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!reason) throw new Error("Informe o motivo para desfazer.");
+
+  const { data: activity } = await supabase
+    .from("activity_instances")
+    .select("id, status, stage_instance_id, group_id, completed_at, completed_by")
+    .eq("id", activityInstanceId)
+    .single();
+  if (!activity) throw new Error("Atividade não encontrada.");
+  if (activity.status !== "completed") throw new Error("Esta etapa não está concluída.");
+
+  const admin = await isTenantAdmin(ctx.userId, ctx.tenantId);
+  if (!admin) {
+    const minutes = activity.completed_at ? (Date.now() - new Date(activity.completed_at).getTime()) / 60000 : Infinity;
+    if (activity.completed_by !== ctx.userId) throw new Error("Só quem concluiu a etapa (ou um Administrador) pode desfazer.");
+    if (minutes > UNDO_WINDOW_MINUTES) throw new Error(`O prazo de ${UNDO_WINDOW_MINUTES} minutos para desfazer já passou. Peça a um Administrador.`);
+    await requireGroupAccess(ctx, activity.group_id);
+  }
+
+  const { data: stage } = await supabase
+    .from("stage_instances")
+    .select("id, node_id, claim_cycle_id, branch_instance_id, status, exited_at")
+    .eq("id", activity.stage_instance_id)
+    .single();
+  if (!stage || stage.status !== "completed" || !stage.exited_at) throw new Error("Etapa não encontrada ou já reaberta.");
+  if (stage.branch_instance_id) throw new Error("Esta etapa está num ramo paralelo e não pode ser desfeita por aqui.");
+
+  const { data: cycle } = await supabase
+    .from("claim_cycles")
+    .select("id, claim_id, status, workflow_version_id")
+    .eq("id", stage.claim_cycle_id)
+    .single();
+  if (!cycle) throw new Error("Ciclo não encontrado.");
+  if (["blocked", "discarded", "cancelled", "archived"].includes(cycle.status)) {
+    throw new Error(`Este ciclo não permite desfazer (status atual: ${cycle.status}).`);
+  }
+
+  // Etapas criadas logo depois da conclusão (as sucessoras) — nenhuma pode ter trabalho concluído.
+  const graph = await loadGraph(supabase, cycle.workflow_version_id);
+  const { data: later } = await supabase
+    .from("stage_instances")
+    .select("id, node_id, status, entered_at")
+    .eq("claim_cycle_id", cycle.id)
+    .neq("id", stage.id)
+    .neq("status", "cancelled")
+    .gte("entered_at", stage.exited_at)
+    .order("entered_at", { ascending: true });
+  const successors = later ?? [];
+  const laterIds = successors.map((x) => x.id);
+  const { data: laterActs } = laterIds.length
+    ? await supabase.from("activity_instances").select("stage_instance_id, status").in("stage_instance_id", laterIds)
+    : { data: [] as { stage_instance_id: string; status: string }[] };
+  const { data: laterDecisions } = laterIds.length
+    ? await supabase.from("decisions").select("id, stage_instance_id, selected_option").in("stage_instance_id", laterIds)
+    : { data: [] as { id: string; stage_instance_id: string | null; selected_option: string | null }[] };
+
+  for (const sx of successors) {
+    const type = graph.nodes.find((n) => n.id === sx.node_id)?.type;
+    if (type === "parallel_split" || type === "join") {
+      throw new Error("A etapa seguinte é um paralelo/convergência e não pode ser desfeita por aqui.");
+    }
+    if (type !== "end" && sx.status === "completed") {
+      throw new Error("A etapa seguinte já foi concluída. Desfaça primeiro a mais recente.");
+    }
+    if ((laterActs ?? []).some((a) => a.stage_instance_id === sx.id && a.status === "completed")) {
+      throw new Error("A etapa seguinte já foi concluída. Desfaça primeiro a mais recente.");
+    }
+  }
+  if ((laterDecisions ?? []).some((d) => d.selected_option)) throw new Error("Uma decisão já foi tomada depois desta etapa. Desfaça primeiro a mais recente.");
+
+  const now = new Date().toISOString();
+  // 1) sucessoras: canceladas (ficam no histórico); o que era só derivado delas (decisão sem resposta, relógio de SLA) sai
+  const hadEnd = successors.some((sx) => graph.nodes.find((n) => n.id === sx.node_id)?.type === "end");
+  if (laterIds.length) {
+    await supabase.from("activity_instances").update({ status: "cancelled" }).in("stage_instance_id", laterIds);
+    await supabase.from("decisions").delete().in("stage_instance_id", laterIds).is("selected_option", null);
+    await supabase.from("sla_tracking").delete().in("stage_instance_id", laterIds);
+    await supabase.from("stage_instances").update({ status: "cancelled", exited_at: now }).in("id", laterIds);
+  }
+  if (hadEnd || cycle.status === "completed") {
+    await supabase.from("claim_cycles").update({ status: "in_progress", completed_at: null }).eq("id", cycle.id);
+  }
+
+  // 2) a etapa desfeita volta a andar; o relógio de SLA dela continua de onde estava (desfazer não zera prazo)
+  await supabase.from("stage_instances").update({ status: "in_progress", exited_at: null }).eq("id", stage.id);
+  await supabase
+    .from("activity_instances")
+    .update({ status: "in_progress", completed_at: null, completed_by: null })
+    .eq("id", activity.id);
+  await supabase.from("sla_tracking").update({ status: "on_track", completed_at: null }).eq("stage_instance_id", stage.id).eq("status", "completed");
+
+  const node = graph.nodes.find((n) => n.id === stage.node_id);
+  await writeAudit(supabase, ctx.tenantId, "activity.completion_undone", "activity_instance", activity.id, {
+    reason,
+    previous: { completed_at: activity.completed_at, completed_by: activity.completed_by },
+    next: { node_name: node?.name, cancelled_stages: laterIds.length, by_admin: admin },
+  });
+
+  revalidatePath(`/sinistros/${cycle.claim_id}`);
+  revalidatePath("/sinistros");
+  revalidatePath("/tarefas");
 }

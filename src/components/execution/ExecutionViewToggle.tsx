@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { GitBranch, List, History, DollarSign, FileText } from "lucide-react";
+import { GitBranch, List, History, DollarSign, FileText, ClipboardList } from "lucide-react";
 
 const STORAGE_KEY = "sinistro-execution-view";
 
-type Mode = "timeline" | "graph" | "history" | "financial" | "documents";
+type Mode = "timeline" | "graph" | "history" | "financial" | "documents" | "data";
 
 // Documento 5 §15: alternância entre as visões do processo (linha do tempo, grafo, histórico, financeiro e documentos)
 // é preferência do usuário, guardada no navegador — nunca dado de configuração do tenant.
@@ -18,6 +18,8 @@ export function ExecutionViewToggle({
   financialCount,
   documents,
   documentsCount,
+  data,
+  dataCount,
 }: {
   timeline: ReactNode;
   graph: ReactNode;
@@ -27,6 +29,8 @@ export function ExecutionViewToggle({
   financialCount?: number;
   documents?: ReactNode;
   documentsCount?: number;
+  data?: ReactNode;
+  dataCount?: number;
 }) {
   const [mode, setMode] = useState<Mode>("timeline");
   const [hydrated, setHydrated] = useState(false);
@@ -36,7 +40,7 @@ export function ExecutionViewToggle({
     // montado, uma vez só, é um efeito legítimo de sincronizar com um sistema externo ao React.
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      const validModes: Mode[] = ["timeline", "graph", "history", "financial", "documents"];
+      const validModes: Mode[] = ["timeline", "graph", "history", "financial", "documents", "data"];
       if (validModes.includes(saved as Mode)) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage só existe no cliente; sincroniza uma vez após montar
         setMode(saved as Mode);
@@ -143,6 +147,26 @@ export function ExecutionViewToggle({
             )}
           </button>
         )}
+        {data && (
+          <button
+            type="button"
+            onClick={() => choose("data")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
+              mode === "data" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <ClipboardList className="size-3.5" /> Dados
+            {typeof dataCount === "number" && dataCount > 0 && (
+              <span
+                className={`ml-0.5 rounded-full px-1.5 py-0.2 text-xs font-semibold ${
+                  mode === "data" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {dataCount}
+              </span>
+            )}
+          </button>
+        )}
       </div>
       {!hydrated || mode === "timeline"
         ? timeline
@@ -154,7 +178,9 @@ export function ExecutionViewToggle({
               ? (financial ?? timeline)
               : mode === "documents"
                 ? (documents ?? timeline)
-                : timeline}
+                : mode === "data"
+                  ? (data ?? timeline)
+                  : timeline}
     </div>
   );
 }

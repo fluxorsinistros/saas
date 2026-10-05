@@ -1,3 +1,5 @@
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { UNDO_WINDOW_MINUTES } from "@/lib/undo";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -15,6 +17,7 @@ import {
   cancelPendingItem,
   chooseDecision,
   completeActivity,
+  undoActivityCompletion,
   createPendingItem,
   decideDuplicate,
   discardCycle,
@@ -262,10 +265,14 @@ export default async function ClaimPage({
   const { data: activities } = stageIds.length
     ? await supabase
         .from("activity_instances")
-        .select("id, stage_instance_id, status, group_id, started_at, completed_at")
+        .select("id, stage_instance_id, status, group_id, started_at, completed_at, completed_by")
         .in("stage_instance_id", stageIds)
     : { data: [] as never[] };
 
+  // Só a ÚLTIMA etapa concluída pode ser desfeita (de trás para frente) — ver undoActivityCompletion.
+  const lastDoneStageId = [...(stages ?? [])]
+    .filter((st) => st.status === "completed" && (activities ?? []).some((a) => a.stage_instance_id === st.id && a.status === "completed"))
+    .sort((a, b) => (b.exited_at ?? "").localeCompare(a.exited_at ?? ""))[0]?.id;
   const activityByStage = new Map((activities ?? []).map((a) => [a.stage_instance_id, a]));
   const decisionByStage = new Map((decisions ?? []).filter((d) => d.stage_instance_id).map((d) => [d.stage_instance_id as string, d]));
 
@@ -371,6 +378,34 @@ export default async function ClaimPage({
     : { data: [] as { id: string; full_name: string | null; email: string }[] };
 
   const actorNameMap = new Map((actorProfiles ?? []).map((p) => [p.id, p.full_name || p.email]));
+
+  // Aba "Dados": todos os campos do catálogo do fluxo, com o valor preenchido (ou "Não preenchido") e onde cada um é pedido.
+  const fieldWhere = new Map<string, string[]>();
+  for (const n of graph.nodes) {
+    if (n.type !== "start" && n.type !== "stage") continue;
+    for (const k of n.config.field_keys ?? []) {
+      fieldWhere.set(k, [...(fieldWhere.get(k) ?? []), n.type === "start" ? "Abertura" : n.name]);
+    }
+  }
+  const dataRows = (workflowFields ?? []).map((f) => {
+    const raw = customFields[f.key];
+    const filled = raw !== undefined && raw !== null && String(raw) !== "";
+    const href = f.field_type === "attachment" && filled ? (attachmentUrlByPath.get(raw) ?? null) : null;
+    const display = !filled
+      ? "Não preenchido"
+      : f.field_type === "boolean"
+        ? raw === "true"
+          ? "Sim"
+          : "Não"
+        : f.field_type === "person"
+          ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
+          : f.field_type === "date"
+            ? new Date(`${raw}T00:00:00`).toLocaleDateString("pt-BR")
+            : f.field_type === "attachment"
+              ? "Arquivo anexado"
+              : String(raw);
+    return { key: f.key, label: f.label, required: f.required, where: fieldWhere.get(f.key) ?? [], filled, href, display };
+  });
 
   const blockedReason = auditLogs?.find((a) => a.action === "cycle.blocked")?.reason;
 
@@ -746,6 +781,73 @@ export default async function ClaimPage({
                 )}
               </div>
             }
+            dataCount={dataRows.filter((r) => r.filled).length}
+            data={
+              <div className="space-y-4">
+                <section className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Sinistro</h3>
+                  <dl className="grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
+                    <div className="flex gap-1.5">
+                      <dt className="text-slate-500">Número:</dt>
+                      <dd className="font-medium text-slate-900">{claim.claim_number}</dd>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <dt className="text-slate-500">Fluxo:</dt>
+                      <dd className="font-medium text-slate-900">
+                        {workflow?.name ?? "—"} · v{version?.version_number}
+                      </dd>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <dt className="text-slate-500">Aberto em:</dt>
+                      <dd className="font-medium text-slate-900">{new Date(claim.created_at).toLocaleDateString("pt-BR")}</dd>
+                    </div>
+                    {claim.occurred_at && (
+                      <div className="flex gap-1.5">
+                        <dt className="text-slate-500">Data do evento:</dt>
+                        <dd className="font-medium text-slate-900">{new Date(claim.occurred_at).toLocaleDateString("pt-BR")}</dd>
+                      </div>
+                    )}
+                    {claim.declared_value !== null && claim.declared_value !== undefined && (
+                      <div className="flex gap-1.5">
+                        <dt className="text-slate-500">Valor declarado:</dt>
+                        <dd className="font-medium text-slate-900">{currency.format(Number(claim.declared_value))}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h3 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Campos do fluxo</h3>
+                  <p className="mb-3 text-xs text-slate-500">
+                    Tudo o que foi preenchido neste sinistro, na abertura e em cada etapa. Os campos sem valor aparecem como &ldquo;Não preenchido&rdquo;.
+                  </p>
+                  {dataRows.length === 0 ? (
+                    <p className="text-[13px] text-slate-500">Este fluxo não tem campos personalizados.</p>
+                  ) : (
+                    <dl className="divide-y divide-slate-100 text-[13px]">
+                      {dataRows.map((r) => (
+                        <div key={r.key} className="grid gap-x-4 gap-y-0.5 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                          <dt className="text-slate-600">
+                            {r.label}
+                            {r.required && <span className="text-rose-600"> *</span>}
+                            {r.where.length > 0 && <span className="block text-xs text-slate-400">Pedido em: {r.where.join(", ")}</span>}
+                          </dt>
+                          <dd className={r.filled ? "font-medium text-slate-900" : "text-slate-400"}>
+                            {r.href ? (
+                              <a href={r.href} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                                Ver arquivo
+                              </a>
+                            ) : (
+                              r.display
+                            )}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </section>
+              </div>
+            }
             documentsCount={(documents ?? []).length}
             documents={
               <div className="space-y-4">
@@ -872,7 +974,7 @@ export default async function ClaimPage({
                   )
                 : null;
               return (
-                <li key={stage.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                <li key={stage.id} id={`etapa-${stage.id}`} className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -1040,21 +1142,60 @@ export default async function ClaimPage({
                             </div>
                           )}
                           <div className="flex justify-end">
-                            <button className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+                            <ConfirmSubmit
+                              title={`Concluir a etapa "${node?.name ?? ""}"?`}
+                              description={
+                                <>
+                                  Sinistro <span className="font-medium">{claim.claim_number}</span>. Confira os dados desta etapa antes de seguir.
+                                </>
+                              }
+                              confirmLabel="Concluir etapa"
+                              className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600"
+                            >
                               Concluir
-                            </button>
+                            </ConfirmSubmit>
                           </div>
                         </form>
                       ) : activity.status === "in_progress" && cycle.status === "discarded" ? (
                         <span className="text-[12px] text-slate-500">Ciclo descartado</span>
                       ) : activity.status === "in_progress" ? (
                         <span className="text-[12px] text-slate-500">Sem permissão para concluir</span>
+                      ) : activity.status === "cancelled" ? (
+                        <span className="text-[12px] text-slate-500">Desfeita (conclusão anterior desfeita)</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
                           <CheckCircle2 className="size-3.5" /> Concluída
                         </span>
                       )}
                     </div>
+                    {activity.status === "completed" &&
+                      stage.id === lastDoneStageId &&
+                      perms.has("claim.execute") &&
+                      !["discarded", "blocked", "cancelled", "archived"].includes(cycle.status) &&
+                      (isAdmin ||
+                        (activity.completed_by === ctx.userId &&
+                          !!activity.completed_at &&
+                          Date.now() - new Date(activity.completed_at).getTime() <= UNDO_WINDOW_MINUTES * 60000 &&
+                          canActOnGroup(activity.group_id))) && (
+                        <details className="mt-2">
+                          <summary className="inline-flex cursor-pointer list-none text-[12px] font-medium text-slate-500 hover:text-slate-700">
+                            Concluí sem querer — desfazer
+                          </summary>
+                          <form
+                            action={undoActivityCompletion.bind(null, activity.id)}
+                            className="mt-2 flex max-w-md items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3"
+                          >
+                            <input name="reason" required placeholder="Motivo para desfazer" className={`${input} text-[12px]`} />
+                            <button className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-amber-700">
+                              Desfazer
+                            </button>
+                          </form>
+                          <p className="mt-1 text-xs text-slate-500">
+                            A etapa volta a ficar em andamento e o motivo fica registrado.
+                            {!isAdmin && ` Quem concluiu pode desfazer por até ${UNDO_WINDOW_MINUTES} minutos, enquanto a seguinte não for concluída.`}
+                          </p>
+                        </details>
+                      )}
                     {activity.status === "completed" && stageFields.some((f) => customFields[f.key]) && (
                       <dl className="mt-2.5 grid gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-[12px] sm:grid-cols-2">
                         {stageFields
@@ -1175,9 +1316,19 @@ export default async function ClaimPage({
                         <div className="mt-2 flex flex-wrap gap-2">
                           {((decision.options as string[]) ?? []).map((opt) => (
                             <form key={opt} action={chooseDecision.bind(null, decision.id, opt, "")}>
-                              <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-700 transition hover:border-brand/40 hover:bg-brand/[0.03]">
+                              <ConfirmSubmit
+                                title={`Escolher "${opt}"?`}
+                                description={
+                                  <>
+                                    Decisão: <span className="font-medium">{decision.question}</span> (sinistro {claim.claim_number}). O fluxo segue pelo
+                                    caminho escolhido.
+                                  </>
+                                }
+                                confirmLabel="Confirmar decisão"
+                                className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-700 transition hover:border-brand/40 hover:bg-brand/[0.03]"
+                              >
                                 {opt}
-                              </button>
+                              </ConfirmSubmit>
                             </form>
                           ))}
                         </div>
@@ -1227,6 +1378,6 @@ function StageBadge({ status }: { status: string }) {
       : status === "in_progress"
         ? "bg-sky-50 text-sky-700 ring-sky-200"
         : "bg-slate-100 text-slate-600 ring-slate-200";
-  const label = status === "completed" ? "Concluída" : status === "in_progress" ? "Em andamento" : status;
+  const label = status === "completed" ? "Concluída" : status === "in_progress" ? "Em andamento" : status === "cancelled" ? "Desfeita" : status;
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}>{label}</span>;
 }
