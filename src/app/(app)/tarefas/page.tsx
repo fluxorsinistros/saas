@@ -1,3 +1,4 @@
+import { StageSlaBadge } from "@/components/StageSlaBadge";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -30,8 +31,8 @@ export default async function TarefasPage() {
 
   const stageIds = [...new Set((activities ?? []).map((a) => a.stage_instance_id))];
   const { data: stages } = stageIds.length
-    ? await supabase.from("stage_instances").select("id, node_id, claim_cycle_id").in("id", stageIds)
-    : { data: [] as { id: string; node_id: string; claim_cycle_id: string }[] };
+    ? await supabase.from("stage_instances").select("id, node_id, claim_cycle_id, entered_at").in("id", stageIds)
+    : { data: [] as { id: string; node_id: string; claim_cycle_id: string; entered_at: string }[] };
   const stageById = new Map((stages ?? []).map((s) => [s.id, s]));
 
   const cycleIds = [...new Set((stages ?? []).map((s) => s.claim_cycle_id))];
@@ -48,8 +49,8 @@ export default async function TarefasPage() {
 
   const nodeIds = [...new Set((stages ?? []).map((s) => s.node_id))];
   const { data: nodes } = nodeIds.length
-    ? await supabase.from("workflow_nodes").select("id, name, node_type").in("id", nodeIds)
-    : { data: [] as { id: string; name: string; node_type: string }[] };
+    ? await supabase.from("workflow_nodes").select("id, name, node_type, config").in("id", nodeIds)
+    : { data: [] as { id: string; name: string; node_type: string; config: unknown }[] };
   const nodeById = new Map((nodes ?? []).map((n) => [n.id, n]));
 
   const { data: groups } = await supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId);
@@ -62,7 +63,14 @@ export default async function TarefasPage() {
       const claim = cycle ? claimById.get(cycle.claim_id) : undefined;
       const node = stage ? nodeById.get(stage.node_id) : undefined;
       if (!stage || !cycle || !claim || !node || cycle.status === "blocked" || cycle.status === "completed") return null;
-      return { activity: a, claim, node, };
+      const cfg = (node.config ?? {}) as { sla_minutes?: number };
+      return {
+        activity: a,
+        claim,
+        node,
+        enteredAt: stage.entered_at,
+        slaMinutes: typeof cfg.sla_minutes === "number" && cfg.sla_minutes > 0 ? cfg.sla_minutes : undefined,
+      };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
@@ -82,7 +90,7 @@ export default async function TarefasPage() {
           </div>
         ) : (
           <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            {rows.map(({ activity, claim, node }) => (
+            {rows.map(({ activity, claim, node, enteredAt, slaMinutes }) => (
               <li key={activity.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
                 <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   {NODE_META[node.node_type as NodeType]?.label ?? node.node_type}
@@ -93,6 +101,7 @@ export default async function TarefasPage() {
                     {claim.claim_number} · {groupName.get(activity.group_id ?? "") ?? "—"}
                   </div>
                 </Link>
+                {activity.status === "in_progress" && <StageSlaBadge enteredAt={enteredAt} slaMinutes={slaMinutes} />}
                 {activity.status === "in_progress" ? (
                   <Link
                     href={`/sinistros/${claim.id}#etapa-${activity.stage_instance_id}`}

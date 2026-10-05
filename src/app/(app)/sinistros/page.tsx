@@ -5,7 +5,7 @@ import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, Plus, RotateCc
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
-import { formatDuration } from "@/lib/format";
+import { computeSla, formatDuration } from "@/lib/format";
 import { SinistrosFilterBar } from "./SinistrosFilterBar";
 
 export const metadata: Metadata = { title: "Sinistros" };
@@ -55,29 +55,6 @@ function formatDurationBetween(startIso: string | null | undefined, endIso: stri
   const diffMs = Math.max(0, end - start);
   const diffMin = Math.floor(diffMs / 60_000);
   return formatDuration(diffMin);
-}
-
-function computeSla(startedAtIso: string | null | undefined, slaMinutes: number | undefined) {
-  if (!startedAtIso || !slaMinutes || slaMinutes <= 0) return null;
-  const now = Date.now();
-  const start = new Date(startedAtIso).getTime();
-  const slaMs = slaMinutes * 60_000;
-  const elapsedMs = Math.max(0, now - start);
-  const remainingMs = slaMs - elapsedMs;
-  const pct = Math.round((elapsedMs / slaMs) * 100);
-  const isBreached = remainingMs <= 0;
-  const diffMinutes = Math.round(Math.abs(remainingMs) / 60_000);
-  const formattedRemaining = isBreached
-    ? `estourado há ${formatDuration(diffMinutes)}`
-    : `restam ${formatDuration(diffMinutes)}`;
-
-  return {
-    pct,
-    isBreached,
-    isAtRisk: !isBreached && pct >= 75,
-    formattedRemaining,
-    formattedLimit: formatDuration(slaMinutes),
-  };
 }
 
 function computeProcessProgress(
