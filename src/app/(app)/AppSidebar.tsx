@@ -176,6 +176,7 @@ export function AppSidebar({
                     id="tenant"
                     name="tenant_id"
                     defaultValue={tenantId}
+                    onChange={(e) => e.currentTarget.form?.requestSubmit()}
                     className="w-full truncate bg-transparent text-[13px] font-medium text-white outline-none cursor-pointer"
                   >
                     {tenants.map((t) => (
@@ -186,7 +187,7 @@ export function AppSidebar({
                   </select>
                 </div>
               </div>
-              <button className="mt-1 w-full text-left text-xs text-slate-400 hover:text-white">Trocar empresa</button>
+              <p className="mt-1 text-xs text-slate-400">Escolha a empresa para trocar</p>
             </form>
           ) : (
             <div className="rounded-lg border border-navy-700 bg-navy-800 p-2.5">

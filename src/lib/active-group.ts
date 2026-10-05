@@ -6,7 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 // Um Operador pode pertencer a vários grupos, mas atua em UM por vez (cada grupo tem telas e ações próprias).
 // O grupo ativo vive num cookie por empresa e só vale se a pessoa ainda for membro dele; sem escolha, vale o
 // primeiro grupo (por nome). Administrador não é limitado por grupo — para ele isto não restringe nada.
-export const ACTIVE_GROUP_COOKIE = "active_group";
+const ACTIVE_GROUP_COOKIE = "active_group";
+
+// Um cookie por empresa: os grupos da pessoa são dali, e trocar de empresa nunca pode herdar o grupo de outra.
+export function activeGroupCookieName(tenantId: string) {
+  return `${ACTIVE_GROUP_COOKIE}_${tenantId}`;
+}
 
 export type MemberGroup = { id: string; name: string; hidden_screens: string[]; disabled_actions: string[] };
 
@@ -16,10 +21,6 @@ export type MemberGroups = {
   groups: MemberGroup[];
   active: MemberGroup | null;
 };
-
-export function activeGroupCookieValue(tenantId: string, groupId: string) {
-  return `${tenantId}:${groupId}`;
-}
 
 export const getMemberGroups = cache(async (userId: string, tenantId: string): Promise<MemberGroups> => {
   const supabase = await createClient();
@@ -45,8 +46,7 @@ export const getMemberGroups = cache(async (userId: string, tenantId: string): P
     .map((g) => ({ id: g.id, name: g.name, hidden_screens: g.hidden_screens ?? [], disabled_actions: g.disabled_actions ?? [] }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
-  const saved = (await cookies()).get(ACTIVE_GROUP_COOKIE)?.value ?? "";
-  const [savedTenant, savedGroup] = saved.split(":");
-  const active = (savedTenant === tenantId ? groups.find((g) => g.id === savedGroup) : undefined) ?? groups[0] ?? null;
+  const saved = (await cookies()).get(activeGroupCookieName(tenantId))?.value ?? "";
+  const active = groups.find((g) => g.id === saved) ?? groups[0] ?? null;
   return { membershipId: membership.id, isAdmin, groups, active };
 });
