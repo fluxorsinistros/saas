@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import {
   FIELD_TYPE_LABEL,
   JOIN_RULE_HELP,
@@ -35,6 +35,7 @@ export function NodeInspector({
   onCreateField,
   onUpdateField,
   onDeleteField,
+  onMoveField,
   readOnly,
   outgoing,
   autoFocusName,
@@ -51,6 +52,7 @@ export function NodeInspector({
   onCreateField?: (formData: FormData) => Promise<FieldResult>;
   onUpdateField?: (fieldId: string, formData: FormData) => Promise<FieldResult>;
   onDeleteField?: (fieldId: string, key: string) => Promise<ActionResult>;
+  onMoveField?: (fieldId: string, direction: "up" | "down") => Promise<unknown>;
   readOnly: boolean;
   outgoing: FlowEdge[];
   autoFocusName?: boolean;
@@ -160,6 +162,7 @@ export function NodeInspector({
           onCreateField={onCreateField}
           onUpdateField={onUpdateField}
           onDeleteField={onDeleteField}
+          onMoveField={onMoveField}
           onToggle={(key, checked) => {
             const current = new Set(data.config.field_keys ?? []);
             if (checked) current.add(key);
@@ -423,6 +426,7 @@ function FieldsSection({
   onCreateField,
   onUpdateField,
   onDeleteField,
+  onMoveField,
   onCreated,
 }: {
   fields: WorkflowField[];
@@ -432,6 +436,7 @@ function FieldsSection({
   onCreateField: (formData: FormData) => Promise<FieldResult>;
   onUpdateField?: (fieldId: string, formData: FormData) => Promise<FieldResult>;
   onDeleteField?: (fieldId: string, key: string) => Promise<ActionResult>;
+  onMoveField?: (fieldId: string, direction: "up" | "down") => Promise<unknown>;
   onCreated: (field: { key: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -465,7 +470,7 @@ function FieldsSection({
       )}
       {fields.length > 0 && (
         <ul className="mb-2 space-y-1.5">
-          {fields.map((f) =>
+          {fields.map((f, idx) =>
             editingId === f.id && onUpdateField ? (
               <li key={f.id}>
                 <EditFieldForm field={f} onSave={(fd) => onUpdateField(f.id, fd)} onDone={() => setEditingId(null)} />
@@ -485,6 +490,30 @@ function FieldsSection({
                   {f.required && <span className="ml-1 text-xs font-medium text-rose-600">obrigatório</span>}
                   {f.is_unique && <span className="ml-1 text-xs font-medium text-violet">único</span>}
                 </label>
+                {!readOnly && onMoveField && fields.length > 1 && (
+                  <span className="flex shrink-0 flex-col">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => void onMoveField(f.id, "up")}
+                      className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-brand disabled:opacity-25 disabled:hover:bg-transparent"
+                      aria-label={`Subir o campo ${f.label}`}
+                      title="Subir na ordem"
+                    >
+                      <ChevronUp className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === fields.length - 1}
+                      onClick={() => void onMoveField(f.id, "down")}
+                      className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-brand disabled:opacity-25 disabled:hover:bg-transparent"
+                      aria-label={`Descer o campo ${f.label}`}
+                      title="Descer na ordem"
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </button>
+                  </span>
+                )}
                 {!readOnly && onUpdateField && (
                   <button
                     type="button"

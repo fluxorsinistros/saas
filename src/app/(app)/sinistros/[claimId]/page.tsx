@@ -232,7 +232,8 @@ export default async function ClaimPage({
     supabase.from("workflows").select("name").eq("id", version!.workflow_id).single(),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, position")
+      .order("position")
       .eq("workflow_id", version!.workflow_id),
   ]);
 
@@ -1048,6 +1049,7 @@ export default async function ClaimPage({
                     const stageFields = (node?.config.field_keys ?? [])
                       .map((k) => fieldByKey.get(k))
                       .filter((f): f is NonNullable<typeof f> => !!f);
+                    stageFields.sort((x, y) => x.position - y.position);
                     return (
                     <>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">

@@ -48,11 +48,12 @@ export type FieldResult =
         default_value: string | null;
         min_length: number | null;
         max_length: number | null;
+        position: number;
       };
     }
   | { ok: false; error: string };
 
-const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length";
+const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, position";
 
 // Tamanho mínimo/máximo (só texto e texto longo): vazio = sem limite.
 function readLengths(formData: FormData, fieldType: string): { min_length: number | null; max_length: number | null } | { error: string } {
@@ -114,9 +115,18 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   if ("error" in lengths) return { ok: false, error: lengths.error };
 
   const supabase = await createClient();
+  // campo novo entra no fim da ordem
+  const { data: lastField } = await supabase
+    .from("workflow_fields")
+    .select("position")
+    .eq("workflow_id", workflowId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   const { data, error } = await supabase
     .from("workflow_fields")
     .insert({
+      position: (lastField?.position ?? 0) + 1,
       tenant_id: ctx.tenantId,
       workflow_id: workflowId,
       key,
@@ -199,6 +209,41 @@ export async function deleteWorkflowField(fieldId: string, workflowId: string): 
   if (error) return { ok: false, error: publicDbMessage(error) };
   revalidatePath(`/fluxos/${workflowId}`);
   return { ok: true };
+}
+
+// Sobe/desce um campo na ordem do catálogo. Renumera tudo de 1..N para a ordem nunca ficar com buracos ou empates.
+export async function moveWorkflowField(
+  fieldId: string,
+  workflowId: string,
+  direction: "up" | "down",
+): Promise<{ ok: true; order: string[] } | { ok: false; error: string }> {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
+
+  const supabase = await createClient();
+  const { data: rows, error } = await supabase
+    .from("workflow_fields")
+    .select("id, position")
+    .eq("workflow_id", workflowId)
+    .eq("tenant_id", ctx.tenantId)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error || !rows) return { ok: false, error: error ? publicDbMessage(error) : "Campos não encontrados." };
+
+  const ids = rows.map((r) => r.id);
+  const from = ids.indexOf(fieldId);
+  if (from < 0) return { ok: false, error: "Campo não encontrado." };
+  const to = direction === "up" ? from - 1 : from + 1;
+  if (to < 0 || to >= ids.length) return { ok: true, order: ids };
+  [ids[from], ids[to]] = [ids[to], ids[from]];
+
+  for (let i = 0; i < ids.length; i++) {
+    if (rows.find((r) => r.id === ids[i])?.position === i + 1) continue;
+    const { error: upErr } = await supabase.from("workflow_fields").update({ position: i + 1 }).eq("id", ids[i]).eq("tenant_id", ctx.tenantId);
+    if (upErr) return { ok: false, error: publicDbMessage(upErr) };
+  }
+  revalidatePath(`/fluxos/${workflowId}`);
+  return { ok: true, order: ids };
 }
 
 export type PublishDiff = {

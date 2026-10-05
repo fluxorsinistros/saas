@@ -2800,6 +2800,7 @@ export type Database = {
           max_length: number | null
           min_length: number | null
           options: Json | null
+          position: number
           required: boolean
           tenant_id: string
           workflow_id: string
@@ -2815,6 +2816,7 @@ export type Database = {
           max_length?: number | null
           min_length?: number | null
           options?: Json | null
+          position?: number
           required?: boolean
           tenant_id: string
           workflow_id: string
@@ -2830,6 +2832,7 @@ export type Database = {
           max_length?: number | null
           min_length?: number | null
           options?: Json | null
+          position?: number
           required?: boolean
           tenant_id?: string
           workflow_id?: string

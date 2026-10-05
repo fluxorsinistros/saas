@@ -47,6 +47,7 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
         .select("id, key, label, field_type, options, required, default_value, min_length, max_length")
         .eq("workflow_id", workflow.id)
         .in("key", fieldKeys)
+        .order("position")
     : { data: [] as { id: string; key: string; label: string; field_type: string; options: unknown; required: boolean; default_value: string | null; min_length: number | null; max_length: number | null }[] };
 
   const needsPeople = (fields ?? []).some((f) => f.field_type === "person");

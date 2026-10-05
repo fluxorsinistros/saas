@@ -46,7 +46,8 @@ export default async function WorkflowPage({
     supabase.from("sla_calendars").select("id, name").eq("tenant_id", ctx.tenantId).order("name"),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, position")
+      .order("position")
       .eq("workflow_id", workflowId)
       .order("created_at"),
   ]);

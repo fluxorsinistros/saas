@@ -58,6 +58,7 @@ import {
   createWorkflowField,
   deleteWorkflowField,
   getPublishDiff,
+  moveWorkflowField,
   publishVersion,
   saveDraft,
   updateWorkflowField,
@@ -218,6 +219,19 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
       if (res.ok) {
         const updated = { ...res.field, field_type: res.field.field_type as WorkflowField["field_type"] };
         setFields((fs) => fs.map((f) => (f.id === fieldId ? updated : f)));
+      }
+      return res;
+    },
+    [workflow.id],
+  );
+  const handleMoveField = useCallback(
+    async (fieldId: string, direction: "up" | "down") => {
+      const res = await moveWorkflowField(fieldId, workflow.id, direction);
+      if (res.ok) {
+        setFields((fs) => {
+          const byId = new Map(fs.map((f) => [f.id, f]));
+          return res.order.map((id, i) => ({ ...byId.get(id)!, position: i + 1 })).filter((f) => f.id);
+        });
       }
       return res;
     },
@@ -917,6 +931,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   onCreateField={handleCreateField}
                   onUpdateField={handleUpdateField}
                   onDeleteField={handleDeleteField}
+                  onMoveField={handleMoveField}
                   readOnly={readOnly}
                   autoFocusName={pendingIds.has(selectedNode.id)}
                   outgoing={edges.filter((e) => e.source === selectedNode.id)}

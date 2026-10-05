@@ -29,6 +29,7 @@ export type WorkflowField = {
   default_value: string | null;
   min_length: number | null;
   max_length: number | null;
+  position: number;
 };
 
 export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
