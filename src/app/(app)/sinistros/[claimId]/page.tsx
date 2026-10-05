@@ -1177,7 +1177,7 @@ export default async function ClaimPage({
                     stageFields.sort((x, y) => x.position - y.position);
                     return (
                     <>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
                       <span className="text-[12px] text-slate-500">
                         Grupo:{" "}
                         <span className="font-medium text-slate-700">
@@ -1188,6 +1188,52 @@ export default async function ClaimPage({
                           )}
                         </span>
                       </span>
+                    {stage.status === "completed" && stage.exited_at && node?.type !== "end" && (() => {
+                      const limit = node ? slaOf(node) : undefined;
+                      const took = Math.max(0, Math.round((new Date(stage.exited_at).getTime() - new Date(stage.entered_at).getTime()) / 60000));
+                      const late = limit ? took > limit : false;
+                      return (
+                        <span
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                              !limit ? "border-slate-200 bg-slate-50 text-slate-600" : late ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            }`}
+                          >
+                            {!limit
+                              ? `Levou ${formatDuration(took)} (sem prazo definido)`
+                              : late
+                                ? `Fora do prazo • estourou em ${formatDuration(took - limit)} (levou ${formatDuration(took)} de ${formatDuration(limit)})`
+                                : `No prazo • levou ${formatDuration(took)} de ${formatDuration(limit)}`}
+                          </span>
+                      );
+                    })()}
+                    {activity.status === "completed" &&
+                      stage.id === lastDoneStageId &&
+                      perms.has("claim.execute") &&
+                      !["discarded", "blocked", "cancelled", "archived"].includes(cycle.status) &&
+                      (isAdmin ||
+                        (activity.completed_by === ctx.userId &&
+                          !!activity.completed_at &&
+                          Date.now() - new Date(activity.completed_at).getTime() <= UNDO_WINDOW_MINUTES * 60000 &&
+                          canActOnGroup(activity.group_id))) && (
+                        <details className="[&[open]]:basis-full">
+                          <summary className="inline-flex cursor-pointer list-none text-[12px] font-medium text-slate-500 hover:text-slate-700">
+                            Concluí sem querer — desfazer
+                          </summary>
+                          <form
+                            action={undoActivityCompletion.bind(null, activity.id)}
+                            className="mt-2 flex max-w-md items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3"
+                          >
+                            <input name="reason" required placeholder="Motivo para desfazer" className={`${input} text-[12px]`} />
+                            <button className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-amber-700">
+                              Desfazer
+                            </button>
+                          </form>
+                          <p className="mt-1 text-xs text-slate-500">
+                            A etapa volta a ficar em andamento e o motivo fica registrado.
+                            {!isAdmin && ` Quem concluiu pode desfazer por até ${UNDO_WINDOW_MINUTES} minutos, enquanto a seguinte não for concluída.`}
+                          </p>
+                        </details>
+                      )}
                       {activity.status === "in_progress" &&
                       cycle.status !== "discarded" &&
                       perms.has("claim.execute") &&
@@ -1304,65 +1350,17 @@ export default async function ClaimPage({
                           </div>
                         </form>
                       ) : activity.status === "in_progress" && cycle.status === "discarded" ? (
-                        <span className="text-[12px] text-slate-500">Ciclo descartado</span>
+                        <span className="ml-auto text-[12px] text-slate-500">Ciclo descartado</span>
                       ) : activity.status === "in_progress" ? (
-                        <span className="text-[12px] text-slate-500">Sem permissão para concluir</span>
+                        <span className="ml-auto text-[12px] text-slate-500">Sem permissão para concluir</span>
                       ) : activity.status === "cancelled" ? (
-                        <span className="text-[12px] text-slate-500">Desfeita (conclusão anterior desfeita)</span>
+                        <span className="ml-auto text-[12px] text-slate-500">Desfeita (conclusão anterior desfeita)</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
+                        <span className="ml-auto inline-flex items-center gap-1 text-[12px] text-emerald-700">
                           <CheckCircle2 className="size-3.5" /> Concluída
                         </span>
                       )}
                     </div>
-                    {stage.status === "completed" && stage.exited_at && node?.type !== "end" && (() => {
-                      const limit = node ? slaOf(node) : undefined;
-                      const took = Math.max(0, Math.round((new Date(stage.exited_at).getTime() - new Date(stage.entered_at).getTime()) / 60000));
-                      const late = limit ? took > limit : false;
-                      return (
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
-                          <span
-                            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
-                              !limit ? "border-slate-200 bg-slate-50 text-slate-600" : late ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            }`}
-                          >
-                            {!limit
-                              ? `Levou ${formatDuration(took)} (sem prazo definido)`
-                              : late
-                                ? `Fora do prazo • estourou em ${formatDuration(took - limit)} (levou ${formatDuration(took)} de ${formatDuration(limit)})`
-                                : `No prazo • levou ${formatDuration(took)} de ${formatDuration(limit)}`}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    {activity.status === "completed" &&
-                      stage.id === lastDoneStageId &&
-                      perms.has("claim.execute") &&
-                      !["discarded", "blocked", "cancelled", "archived"].includes(cycle.status) &&
-                      (isAdmin ||
-                        (activity.completed_by === ctx.userId &&
-                          !!activity.completed_at &&
-                          Date.now() - new Date(activity.completed_at).getTime() <= UNDO_WINDOW_MINUTES * 60000 &&
-                          canActOnGroup(activity.group_id))) && (
-                        <details className="mt-2">
-                          <summary className="inline-flex cursor-pointer list-none text-[12px] font-medium text-slate-500 hover:text-slate-700">
-                            Concluí sem querer — desfazer
-                          </summary>
-                          <form
-                            action={undoActivityCompletion.bind(null, activity.id)}
-                            className="mt-2 flex max-w-md items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3"
-                          >
-                            <input name="reason" required placeholder="Motivo para desfazer" className={`${input} text-[12px]`} />
-                            <button className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-amber-700">
-                              Desfazer
-                            </button>
-                          </form>
-                          <p className="mt-1 text-xs text-slate-500">
-                            A etapa volta a ficar em andamento e o motivo fica registrado.
-                            {!isAdmin && ` Quem concluiu pode desfazer por até ${UNDO_WINDOW_MINUTES} minutos, enquanto a seguinte não for concluída.`}
-                          </p>
-                        </details>
-                      )}
                     {activity.status === "completed" && stageFields.some((f) => customFields[f.key]) && (
                       <dl className="mt-2.5 grid gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-[12px] sm:grid-cols-2">
                         {stageFields
