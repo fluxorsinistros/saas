@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Users } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
@@ -83,6 +83,7 @@ export function AppSidebar({
   // Abaixo de md o menu é uma gaveta: fechada some, aberta sempre expandida (a preferência de recolher é só do desktop).
   const [drawerOpen, setDrawerOpen] = useState(false);
   const collapsed = desktopCollapsed && !drawerOpen;
+  const router = useRouter();
   const [groupOpen, setGroupOpen] = useState(false);
   const canPickGroup = groups.length > 1;
   const activeGroupName = groups.find((g) => g.id === activeGroupId)?.name ?? groups[0]?.name ?? "";
@@ -279,6 +280,7 @@ export function AppSidebar({
             action={async (fd) => {
               await switchGroup(fd);
               setGroupOpen(false);
+              router.refresh();
             }}
             onClick={(e) => e.stopPropagation()}
             role="dialog"
