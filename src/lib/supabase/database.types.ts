@@ -2797,6 +2797,8 @@ export type Database = {
           is_unique: boolean
           key: string
           label: string
+          max_length: number | null
+          min_length: number | null
           options: Json | null
           required: boolean
           tenant_id: string
@@ -2810,6 +2812,8 @@ export type Database = {
           is_unique?: boolean
           key: string
           label: string
+          max_length?: number | null
+          min_length?: number | null
           options?: Json | null
           required?: boolean
           tenant_id: string
@@ -2823,6 +2827,8 @@ export type Database = {
           is_unique?: boolean
           key?: string
           label?: string
+          max_length?: number | null
+          min_length?: number | null
           options?: Json | null
           required?: boolean
           tenant_id?: string

@@ -555,6 +555,12 @@ function FieldsSection({
           {fieldType !== "attachment" && (
             <input name="default_value" placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
           )}
+          {(fieldType === "text" || fieldType === "textarea") && (
+            <div className="grid grid-cols-2 gap-2">
+              <input name="min_length" type="number" min={1} max={5000} placeholder="Mín. de caracteres" className={`${input} bg-white`} />
+              <input name="max_length" type="number" min={1} max={5000} placeholder="Máx. de caracteres" className={`${input} bg-white`} />
+            </div>
+          )}
           <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
             <input type="checkbox" name="required" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
             Obrigatório — bloqueia &quot;Concluir&quot; até preencher
@@ -631,6 +637,28 @@ function EditFieldForm({
       )}
       {field.field_type !== "attachment" && (
         <input name="default_value" defaultValue={field.default_value ?? ""} placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
+      )}
+      {(field.field_type === "text" || field.field_type === "textarea") && (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            name="min_length"
+            type="number"
+            min={1}
+            max={5000}
+            defaultValue={field.min_length ?? ""}
+            placeholder="Mín. de caracteres"
+            className={`${input} bg-white`}
+          />
+          <input
+            name="max_length"
+            type="number"
+            min={1}
+            max={5000}
+            defaultValue={field.max_length ?? ""}
+            placeholder="Máx. de caracteres"
+            className={`${input} bg-white`}
+          />
+        </div>
       )}
       <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
         <input

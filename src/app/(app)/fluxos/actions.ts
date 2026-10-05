@@ -46,11 +46,29 @@ export type FieldResult =
         required: boolean;
         is_unique: boolean;
         default_value: string | null;
+        min_length: number | null;
+        max_length: number | null;
       };
     }
   | { ok: false; error: string };
 
-const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value";
+const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length";
+
+// Tamanho mínimo/máximo (só texto e texto longo): vazio = sem limite.
+function readLengths(formData: FormData, fieldType: string): { min_length: number | null; max_length: number | null } | { error: string } {
+  if (fieldType !== "text" && fieldType !== "textarea") return { min_length: null, max_length: null };
+  const parse = (name: string) => {
+    const raw = String(formData.get(name) ?? "").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= 1 && n <= 5000 ? n : NaN;
+  };
+  const min = parse("min_length");
+  const max = parse("max_length");
+  if (Number.isNaN(min) || Number.isNaN(max)) return { error: "Tamanho precisa ser um número inteiro entre 1 e 5000." };
+  if (min !== null && max !== null && min > max) return { error: "O tamanho mínimo não pode ser maior que o máximo." };
+  return { min_length: min, max_length: max };
+}
 
 // Campo personalizado "estilo SHARP" (Documento 1): o cliente cria quantos quiser, sem migração
 // nova — isso só grava uma linha de catálogo. A chave vira o identificador estável em
@@ -92,6 +110,8 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   if (defaultValue && fieldType === "select" && !options?.includes(defaultValue)) {
     return { ok: false, error: "O valor padrão precisa ser uma das opções da lista." };
   }
+  const lengths = readLengths(formData, fieldType);
+  if ("error" in lengths) return { ok: false, error: lengths.error };
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -106,6 +126,8 @@ export async function createWorkflowField(workflowId: string, formData: FormData
       required,
       is_unique: isUnique,
       default_value: defaultValue,
+      min_length: lengths.min_length,
+      max_length: lengths.max_length,
     })
     .select(FIELD_SELECT)
     .single();
@@ -148,10 +170,12 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
   if (defaultValue && existing.field_type === "select" && !options?.includes(defaultValue)) {
     return { ok: false, error: "O valor padrão precisa ser uma das opções da lista." };
   }
+  const lengths = readLengths(formData, existing.field_type);
+  if ("error" in lengths) return { ok: false, error: lengths.error };
 
   const { data, error } = await supabase
     .from("workflow_fields")
-    .update({ label, options, required, is_unique: isUnique, default_value: defaultValue })
+    .update({ label, options, required, is_unique: isUnique, default_value: defaultValue, min_length: lengths.min_length, max_length: lengths.max_length })
     .eq("id", fieldId)
     .eq("tenant_id", ctx.tenantId)
     .select(FIELD_SELECT)

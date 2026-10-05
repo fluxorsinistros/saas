@@ -1,5 +1,6 @@
 "use server";
 
+import { lengthError } from "@/lib/field-rules";
 import { publicDbMessage } from "@/lib/errors";
 import { revalidatePath } from "next/cache";
 import { assertCountLimit } from "@/lib/limits";
@@ -640,10 +641,10 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   const { data: fieldDefs } = startFieldKeys.length
     ? await supabase
         .from("workflow_fields")
-        .select("key, label, field_type, required, is_unique")
+        .select("key, label, field_type, required, is_unique, min_length, max_length")
         .eq("workflow_id", workflowId)
         .in("key", startFieldKeys)
-    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean }[] };
+    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null }[] };
   const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
   const patch: Record<string, string> = {};
@@ -664,6 +665,10 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   for (const def of fieldDefs ?? []) {
     const hasValue = def.field_type === "attachment" ? attachments.some((a) => a.key === def.key) : !!patch[def.key];
     if (def.required && !hasValue) throw new Error(`O campo "${def.label}" é obrigatório.`);
+  }
+  for (const def of fieldDefs ?? []) {
+    const err = patch[def.key] ? lengthError(def, patch[def.key]) : null;
+    if (err) throw new Error(err);
   }
   for (const def of fieldDefs ?? []) {
     if (!def.is_unique || !patch[def.key]) continue;
@@ -741,10 +746,10 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     const { data: fieldDefs } = versionRow
       ? await supabase
           .from("workflow_fields")
-          .select("key, label, field_type, required, is_unique")
+          .select("key, label, field_type, required, is_unique, min_length, max_length")
           .eq("workflow_id", versionRow.workflow_id)
           .in("key", stageFieldKeys)
-      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean }[] };
+      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null }[] };
     const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
     const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
@@ -768,6 +773,10 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
 
     for (const def of fieldDefs ?? []) {
       if (def.required && !merged[def.key]) throw new Error(`O campo "${def.label}" é obrigatório.`);
+    }
+    for (const def of fieldDefs ?? []) {
+      const err = patch[def.key] ? lengthError(def, patch[def.key]) : null;
+      if (err) throw new Error(err);
     }
     for (const def of fieldDefs ?? []) {
       if (!def.is_unique || !patch[def.key]) continue;

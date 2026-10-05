@@ -27,6 +27,8 @@ export type WorkflowField = {
   required: boolean;
   is_unique: boolean;
   default_value: string | null;
+  min_length: number | null;
+  max_length: number | null;
 };
 
 export const FIELD_TYPE_LABEL: Record<FieldType, string> = {

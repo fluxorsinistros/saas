@@ -44,10 +44,10 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
   const { data: fields } = fieldKeys.length
     ? await supabase
         .from("workflow_fields")
-        .select("id, key, label, field_type, options, required, default_value")
+        .select("id, key, label, field_type, options, required, default_value, min_length, max_length")
         .eq("workflow_id", workflow.id)
         .in("key", fieldKeys)
-    : { data: [] as { id: string; key: string; label: string; field_type: string; options: unknown; required: boolean; default_value: string | null }[] };
+    : { data: [] as { id: string; key: string; label: string; field_type: string; options: unknown; required: boolean; default_value: string | null; min_length: number | null; max_length: number | null }[] };
 
   const needsPeople = (fields ?? []).some((f) => f.field_type === "person");
   let memberOptions: { id: string; name: string }[] = [];
@@ -114,7 +114,7 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
                       ))}
                     </select>
                   ) : f.field_type === "textarea" ? (
-                    <textarea id={`field-${f.key}`} name={`field_${f.key}`} rows={3} required={f.required} defaultValue={f.default_value ?? ""} className={input} />
+                    <textarea id={`field-${f.key}`} name={`field_${f.key}`} rows={3} required={f.required} minLength={f.min_length ?? undefined} maxLength={f.max_length ?? undefined} defaultValue={f.default_value ?? ""} className={input} />
                   ) : f.field_type === "attachment" ? (
                     <input id={`field-${f.key}`} name={`field_${f.key}`} type="file" required={f.required} className={input} />
                   ) : (
@@ -123,6 +123,8 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
                       name={`field_${f.key}`}
                       type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
                       required={f.required}
+                      minLength={f.field_type === "text" ? (f.min_length ?? undefined) : undefined}
+                      maxLength={f.field_type === "text" ? (f.max_length ?? undefined) : undefined}
                       defaultValue={f.default_value ?? ""}
                       className={input}
                     />

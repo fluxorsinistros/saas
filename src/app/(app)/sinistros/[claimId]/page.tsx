@@ -221,7 +221,7 @@ export default async function ClaimPage({
     supabase.from("workflows").select("name").eq("id", version!.workflow_id).single(),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length")
       .eq("workflow_id", version!.workflow_id),
   ]);
 
@@ -1133,6 +1133,8 @@ export default async function ClaimPage({
                                       name={`field_${f.key}`}
                                       type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
                                       required={f.required}
+                                      minLength={f.field_type === "text" ? (f.min_length ?? undefined) : undefined}
+                                      maxLength={f.field_type === "text" ? (f.max_length ?? undefined) : undefined}
                                       defaultValue={customFields[f.key] ?? f.default_value ?? ""}
                                       className={`${input} text-[13px]`}
                                     />
