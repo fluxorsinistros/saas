@@ -567,7 +567,7 @@ export default async function ClaimPage({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
+      <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <Link href="/sinistros" className="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800">
           <ArrowLeft className="size-4" /> Sinistros
         </Link>
@@ -1049,7 +1049,7 @@ export default async function ClaimPage({
                       canActOnGroup(activity.group_id) ? (
                         <form action={completeActivity.bind(null, activity.id)} className="w-full space-y-2.5">
                           {stageFields.length > 0 && (
-                            <div className="grid gap-2.5 sm:grid-cols-2">
+                            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                               {stageFields.map((f) => (
                                 <div key={f.key}>
                                   <label htmlFor={`field-${f.key}`} className="mb-1 block text-[12px] font-medium text-slate-600">
