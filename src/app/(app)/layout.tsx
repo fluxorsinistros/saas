@@ -61,7 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         hiddenScreens={hiddenScreens}
         brand={own?.brand ?? brand}
         currentTheme={ctx.theme}
-        groups={tenantAdmin ? [] : memberGroups.groups.map((g) => ({ id: g.id, name: g.name }))}
+        groups={tenantAdmin ? [] : memberGroups.groups.map((g) => ({ id: g.id, name: g.name, icon: g.icon, color: g.color }))}
         activeGroupId={memberGroups.active?.id ?? null}
       />
       <main className="min-w-0 flex-1 h-full overflow-hidden pt-12 md:pt-0">{children}</main>

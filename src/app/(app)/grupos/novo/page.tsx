@@ -1,3 +1,4 @@
+import { GroupAppearancePicker } from "@/components/GroupAppearancePicker";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -43,6 +44,7 @@ export default async function NewGroupPage() {
             </label>
             <input id="description" name="description" className={input} />
           </div>
+          <GroupAppearancePicker />
           <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
             Criar grupo
           </button>

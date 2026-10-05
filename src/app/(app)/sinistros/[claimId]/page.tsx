@@ -1,3 +1,4 @@
+import { GroupChip } from "@/lib/group-icons";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { UNDO_WINDOW_MINUTES } from "@/lib/undo";
 import { getMemberGroups } from "@/lib/active-group";
@@ -208,7 +209,7 @@ export default async function ClaimPage({
       .eq("claim_cycle_id", cycle.id)
       .order("entered_at", { ascending: false }),
     supabase.from("decisions").select("id, stage_instance_id, question, options, selected_option, decided_at").eq("claim_cycle_id", cycle.id),
-    supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId),
+    supabase.from("groups").select("id, name, icon, color").eq("tenant_id", ctx.tenantId),
     supabase
       .from("documents")
       .select("id, status, is_required, document_type_id, requested_at")
@@ -321,6 +322,7 @@ export default async function ClaimPage({
     pendingByActivity.set(p.activity_instance_id, [...(pendingByActivity.get(p.activity_instance_id) ?? []), p]);
   }
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
+  const groupMeta = new Map((groups ?? []).map((g) => [g.id, g]));
 
   // SLA (Documento 4): relógio por etapa, status calculado ao vivo (sem esperar o scheduler
   // periódico do §7, ainda não implementado). Pausa em aberto (sla_pauses.resumed_at is null)
@@ -1054,7 +1056,14 @@ export default async function ClaimPage({
                     <>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                       <span className="text-[12px] text-slate-500">
-                        Grupo: <span className="font-medium text-slate-700">{groupName.get(activity.group_id ?? "") ?? "—"}</span>
+                        Grupo:{" "}
+                        <span className="font-medium text-slate-700">
+                          {activity.group_id && groupMeta.get(activity.group_id) ? (
+                            <GroupChip name={groupMeta.get(activity.group_id)!.name} icon={groupMeta.get(activity.group_id)!.icon} color={groupMeta.get(activity.group_id)!.color} />
+                          ) : (
+                            "—"
+                          )}
+                        </span>
                       </span>
                       {activity.status === "in_progress" &&
                       cycle.status !== "discarded" &&

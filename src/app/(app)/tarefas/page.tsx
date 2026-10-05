@@ -1,3 +1,4 @@
+import { GroupChip } from "@/lib/group-icons";
 import { StageSlaBadge } from "@/components/StageSlaBadge";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
@@ -53,8 +54,8 @@ export default async function TarefasPage() {
     : { data: [] as { id: string; name: string; node_type: string; config: unknown }[] };
   const nodeById = new Map((nodes ?? []).map((n) => [n.id, n]));
 
-  const { data: groups } = await supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId);
-  const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
+  const { data: groups } = await supabase.from("groups").select("id, name, icon, color").eq("tenant_id", ctx.tenantId);
+  const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
 
   const rows = (activities ?? [])
     .map((a) => {
@@ -98,7 +99,14 @@ export default async function TarefasPage() {
                 <Link href={`/sinistros/${claim.id}`} className="min-w-0 flex-1">
                   <div className="truncate text-[14px] font-medium text-slate-900 hover:underline">{node.name}</div>
                   <div className="truncate text-[12px] text-slate-500">
-                    {claim.claim_number} · {groupName.get(activity.group_id ?? "") ?? "—"}
+                    {claim.claim_number} ·{" "}
+                    {activity.group_id && groupById.get(activity.group_id) ? (
+                      <span className="inline-flex translate-y-[3px] items-center">
+                        <GroupChip name={groupById.get(activity.group_id)!.name} icon={groupById.get(activity.group_id)!.icon} color={groupById.get(activity.group_id)!.color} />
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </div>
                 </Link>
                 {activity.status === "in_progress" && <StageSlaBadge enteredAt={enteredAt} slaMinutes={slaMinutes} />}

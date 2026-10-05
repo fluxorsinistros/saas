@@ -1,3 +1,4 @@
+import { GroupChip } from "@/lib/group-icons";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -57,7 +58,7 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
 
   let query = supabase
     .from("groups")
-    .select("id, name, description, status, group_members(count)", { count: "exact" })
+    .select("id, name, description, status, icon, color, group_members(count)", { count: "exact" })
     .eq("tenant_id", ctx.tenantId);
   if (q) query = query.ilike("name", `%${q}%`);
   if (statusFilter) query = query.eq("status", statusFilter);
@@ -188,7 +189,9 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
                         <span className="flex size-8 items-center justify-center text-xs text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{g.name}</td>
+                    <td className="px-3 py-2.5 font-medium text-slate-900">
+                      <GroupChip name={g.name} icon={g.icon} color={g.color} />
+                    </td>
                     <td className="px-3 py-2.5 text-slate-600">{g.description || <span className="text-slate-400">—</span>}</td>
                     <td className="px-3 py-2.5 text-slate-600">
                       {members} membro{members === 1 ? "" : "s"}

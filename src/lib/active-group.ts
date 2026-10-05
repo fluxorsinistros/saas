@@ -13,7 +13,7 @@ export function activeGroupCookieName(tenantId: string) {
   return `${ACTIVE_GROUP_COOKIE}_${tenantId}`;
 }
 
-export type MemberGroup = { id: string; name: string; hidden_screens: string[]; disabled_actions: string[] };
+export type MemberGroup = { id: string; name: string; icon: string | null; color: string | null; hidden_screens: string[]; disabled_actions: string[] };
 
 export type MemberGroups = {
   membershipId: string | null;
@@ -38,12 +38,12 @@ export const getMemberGroups = cache(async (userId: string, tenantId: string): P
   );
   const { data: rows } = await supabase
     .from("group_members")
-    .select("groups(id, name, status, hidden_screens, disabled_actions)")
+    .select("groups(id, name, icon, color, status, hidden_screens, disabled_actions)")
     .eq("membership_id", membership.id);
   const groups = (rows ?? [])
     .map((r) => r.groups as unknown as (MemberGroup & { status: string }) | null)
     .filter((g): g is MemberGroup & { status: string } => !!g && g.status === "active")
-    .map((g) => ({ id: g.id, name: g.name, hidden_screens: g.hidden_screens ?? [], disabled_actions: g.disabled_actions ?? [] }))
+    .map((g) => ({ id: g.id, name: g.name, icon: g.icon ?? null, color: g.color ?? null, hidden_screens: g.hidden_screens ?? [], disabled_actions: g.disabled_actions ?? [] }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   const saved = (await cookies()).get(activeGroupCookieName(tenantId))?.value ?? "";

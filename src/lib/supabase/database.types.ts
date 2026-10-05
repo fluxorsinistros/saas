@@ -1137,9 +1137,11 @@ export type Database = {
       groups: {
         Row: {
           created_at: string
+          color: string | null
           description: string | null
           disabled_actions: string[]
           hidden_screens: string[]
+          icon: string | null
           id: string
           name: string
           status: string
@@ -1148,9 +1150,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          color?: string | null
           description?: string | null
           disabled_actions?: string[]
           hidden_screens?: string[]
+          icon?: string | null
           id?: string
           name: string
           status?: string
@@ -1159,9 +1163,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          color?: string | null
           description?: string | null
           disabled_actions?: string[]
           hidden_screens?: string[]
+          icon?: string | null
           id?: string
           name?: string
           status?: string

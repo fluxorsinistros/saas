@@ -1,3 +1,4 @@
+import { GroupChip } from "@/lib/group-icons";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -125,14 +126,14 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   const { isAdmin, active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
   // Operador atua num grupo por vez (o ativo na sessão); só ele aparece e vale nos filtros.
   const myGroupsFull = activeGroup ? [activeGroup] : [];
-  const myGroups = myGroupsFull.map((g) => ({ id: g.id, name: g.name }));
+  const myGroups = myGroupsFull.map((g) => ({ id: g.id, name: g.name, icon: g.icon, color: g.color }));
   // Restrição adicional do grupo sobre claim.formalize (Documento 1 §32 + aba "Ações" do grupo):
   // Administrador nunca é afetado; Operador precisa do grupo ativo liberar a ação.
   const canFormalize = isAdmin || myGroupsFull.some((g) => !g.disabled_actions.includes("claim.formalize"));
 
   const { data: allGroups } = isAdmin
-    ? await supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name")
-    : { data: [] as { id: string; name: string }[] };
+    ? await supabase.from("groups").select("id, name, icon, color").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name")
+    : { data: [] as { id: string; name: string; icon: string | null; color: string | null }[] };
   const groupOptions = isAdmin ? allGroups ?? [] : myGroups;
 
   const sp = await searchParams;
@@ -258,6 +259,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   const totalSlaByVersion = new Map<string, number>();
   const fieldLabelByWorkflowKey = new Map<string, string>();
   let groupNameById = new Map<string, string>();
+  let groupMetaById = new Map<string, { icon: string | null; color: string | null }>();
   let visibleClaims: typeof claims = [];
   const CLAIM_FETCH_CAP = 300;
   let capped = false;
@@ -373,6 +375,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       groupsByCycle.get(cycleId)!.add(a.group_id);
     }
     groupNameById = new Map(groupOptions.map((g) => [g.id, g.name]));
+    groupMetaById = new Map(groupOptions.map((g) => [g.id, { icon: g.icon, color: g.color }]));
 
     visibleClaims = claims.filter((c) => {
       const cycle = currentCycleByClaim.get(c.id);
@@ -739,8 +742,10 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                               <div className="flex items-center gap-1.5 text-slate-500">
                                 <Users className="size-3.5 text-slate-500" />
                                 <span>Aguardando:</span>
-                                <span className="font-semibold text-slate-800 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded text-xs">
-                                  {activeGroups.join(", ")}
+                                <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-slate-800 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded text-xs">
+                                  {[...(groupsByCycle.get(cycle?.id ?? "") ?? [])].map((gid) => (
+                                    <GroupChip key={gid} name={groupNameById.get(gid) ?? "—"} icon={groupMetaById.get(gid)?.icon} color={groupMetaById.get(gid)?.color} />
+                                  ))}
                                 </span>
                               </div>
                             )}

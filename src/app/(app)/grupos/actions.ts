@@ -9,6 +9,7 @@ import { requirePermission } from "@/lib/permissions";
 import { assertCountLimit } from "@/lib/limits";
 import { SCREENS } from "@/lib/screens";
 import { GROUP_ACTIONS } from "@/lib/group-actions";
+import { normalizeGroupColor, normalizeGroupIcon } from "@/lib/group-icons";
 
 // Grupos entram no mesmo guard de Usuários (não têm código de permissão próprio no catálogo —
 // quem administra pessoas administra as unidades operacionais que elas pertencem).
@@ -24,6 +25,8 @@ export async function createGroup(formData: FormData) {
     tenant_id: ctx.tenantId,
     name,
     description: String(formData.get("description") ?? "").trim() || null,
+    icon: normalizeGroupIcon(formData.get("icon")),
+    color: normalizeGroupColor(formData.get("color")),
   });
   if (error) throw new Error(publicDbMessage(error));
   redirect("/grupos");
@@ -38,7 +41,12 @@ export async function updateGroup(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("groups")
-    .update({ name, description: String(formData.get("description") ?? "").trim() || null })
+    .update({
+      name,
+      description: String(formData.get("description") ?? "").trim() || null,
+      icon: normalizeGroupIcon(formData.get("icon")),
+      color: normalizeGroupColor(formData.get("color")),
+    })
     .eq("id", id)
     .eq("tenant_id", ctx.tenantId);
   if (error) throw new Error(publicDbMessage(error));

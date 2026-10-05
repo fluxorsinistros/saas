@@ -1,5 +1,6 @@
 "use client";
 
+import { GroupIcon } from "@/lib/group-icons";
 import { useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Users } from "lucide-react";
@@ -23,7 +24,7 @@ type Props = {
   platformMode?: boolean;
   currentTheme?: "light" | "dark";
   /** Grupos do Operador (só quando há mais de um a escolher) e o que está ativo agora. */
-  groups?: { id: string; name: string }[];
+  groups?: { id: string; name: string; icon?: string | null; color?: string | null }[];
   activeGroupId?: string | null;
 };
 
@@ -86,7 +87,8 @@ export function AppSidebar({
   const router = useRouter();
   const [groupOpen, setGroupOpen] = useState(false);
   const canPickGroup = groups.length > 1;
-  const activeGroupName = groups.find((g) => g.id === activeGroupId)?.name ?? groups[0]?.name ?? "";
+  const activeGroupData = groups.find((g) => g.id === activeGroupId) ?? groups[0];
+  const activeGroupName = activeGroupData?.name ?? "";
 
   return (
     <>
@@ -221,7 +223,7 @@ export function AppSidebar({
                 collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
               }`}
             >
-              <Users className="size-4 shrink-0 text-cyan" />
+              <GroupIcon icon={activeGroupData?.icon} color={activeGroupData?.color} className="size-6" iconClassName="size-3.5" />
               {!collapsed && (
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs text-slate-400">Atuando no grupo</span>
@@ -237,7 +239,7 @@ export function AppSidebar({
                 collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
               }`}
             >
-              <Users className="size-4 shrink-0 text-cyan" />
+              <GroupIcon icon={activeGroupData?.icon} color={activeGroupData?.color} className="size-6" iconClassName="size-3.5" />
               {!collapsed && (
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs text-slate-400">Seu grupo</span>
