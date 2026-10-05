@@ -57,6 +57,7 @@ const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, 
 // claims.custom_fields, então nunca muda depois de criada (só o rótulo pode).
 export async function createWorkflowField(workflowId: string, formData: FormData): Promise<FieldResult> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
 
   const label = String(formData.get("label") ?? "").trim();
@@ -120,6 +121,7 @@ export async function createWorkflowField(workflowId: string, formData: FormData
 // chave, no formato daquele tipo.
 export async function updateWorkflowField(fieldId: string, workflowId: string, formData: FormData): Promise<FieldResult> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
 
   const label = String(formData.get("label") ?? "").trim();
@@ -165,6 +167,7 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
 // config.field_keys simplesmente param de mostrá-la (filtro já existente ignora campo inexistente).
 export async function deleteWorkflowField(fieldId: string, workflowId: string): Promise<ActionResult> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
 
   const supabase = await createClient();
@@ -185,7 +188,8 @@ export type PublishDiff = {
 
 // Alimenta o diálogo de confirmação de publicação (crítica de design P1: publicar precisa dizer o que muda).
 export async function getPublishDiff(versionId: string): Promise<PublishDiff | { error: string }> {
-  await getTenantContext();
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.publish");
   const supabase = await createClient();
 
   const { data: version, error: vErr } = await supabase
@@ -266,6 +270,7 @@ export async function createWorkflow(formData: FormData) {
 
 export async function saveDraft(versionId: string, payload: SavePayload): Promise<ActionResult> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
   const supabase = await createClient();
   const { error } = await supabase.rpc("save_workflow_draft", {
@@ -281,6 +286,7 @@ export async function saveDraft(versionId: string, payload: SavePayload): Promis
 // A validação roda de novo aqui sobre o que está gravado: o navegador não é fonte de verdade (Documento 1 §56).
 export async function publishVersion(versionId: string, releaseNote: string): Promise<ActionResult> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.publish");
   if (!(await hasPermission(ctx, "workflow.publish"))) return { ok: false, error: "Você não tem permissão para publicar fluxos." };
   const supabase = await createClient();
 
@@ -329,6 +335,7 @@ export async function publishVersion(versionId: string, releaseNote: string): Pr
 
 export async function createNewVersion(versionId: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_draft_from_version", { p_version_id: versionId });
