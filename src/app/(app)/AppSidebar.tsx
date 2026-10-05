@@ -187,7 +187,6 @@ export function AppSidebar({
                   </select>
                 </div>
               </div>
-              <p className="mt-1 text-xs text-slate-400">Escolha a empresa para trocar</p>
             </form>
           ) : (
             <div className="rounded-lg border border-navy-700 bg-navy-800 p-2.5">
@@ -210,25 +209,43 @@ export function AppSidebar({
         </div>
       )}
 
-      {canPickGroup && (
+      {groups.length > 0 && (
         <div className={`mt-3 ${collapsed ? "flex justify-center px-2" : "px-3"}`}>
-          <button
-            type="button"
-            onClick={() => setGroupOpen(true)}
-            title={`Grupo atual: ${activeGroupName} — clique para trocar`}
-            aria-label={`Grupo atual: ${activeGroupName}. Trocar grupo`}
-            className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 text-left transition hover:border-navy-600 ${
-              collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
-            }`}
-          >
-            <Users className="size-4 shrink-0 text-cyan" />
-            {!collapsed && (
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs text-slate-400">Atuando no grupo</span>
-                <span className="block truncate text-[13px] font-medium text-white">{activeGroupName}</span>
-              </span>
-            )}
-          </button>
+          {canPickGroup ? (
+            <button
+              type="button"
+              onClick={() => setGroupOpen(true)}
+              title={`Grupo atual: ${activeGroupName} — clique para trocar`}
+              aria-label={`Grupo atual: ${activeGroupName}. Trocar grupo`}
+              className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 text-left transition hover:border-navy-600 ${
+                collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
+              }`}
+            >
+              <Users className="size-4 shrink-0 text-cyan" />
+              {!collapsed && (
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs text-slate-400">Atuando no grupo</span>
+                  <span className="block truncate text-[13px] font-medium text-white">{activeGroupName}</span>
+                </span>
+              )}
+            </button>
+          ) : (
+            // Um grupo só: sempre visível, mas não é botão — quem tem um único grupo não troca.
+            <div
+              title={`Seu grupo: ${activeGroupName}`}
+              className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 ${
+                collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
+              }`}
+            >
+              <Users className="size-4 shrink-0 text-cyan" />
+              {!collapsed && (
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs text-slate-400">Seu grupo</span>
+                  <span className="block truncate text-[13px] font-medium text-white">{activeGroupName}</span>
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
