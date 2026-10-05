@@ -1,23 +1,21 @@
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, ClipboardList, Users } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 
 export const metadata: Metadata = { title: "Minhas tarefas" };
 
-// Documento 5 §13 distingue "minhas tarefas" de "da minha equipe" por quem já tocou a atividade.
-// O motor desta fatia não atribui atividade a uma pessoa (§5.3: responsável é o grupo, não a
-// pessoa) — então as duas abas coincidem por enquanto. A 3ª aba ("Todas") mostra o tenant inteiro.
-export default async function TarefasPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const { view } = await searchParams;
-  const scope = view === "all" ? "all" : "mine";
+// Quem vê o quê: o Administrador controla a empresa e vê as tarefas de TODOS os grupos; o Operador vê só as do grupo
+// em que está atuando agora. Isso é decidido aqui, no servidor — não existe parâmetro de endereço que amplie a lista.
+export default async function TarefasPage() {
   const ctx = await getTenantContext();
   const supabase = await createClient();
 
-  const { active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
+  const { isAdmin, active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
+  const scope = isAdmin ? "all" : "mine";
   const myGroupIds = activeGroup ? [activeGroup.id] : [];
 
   let query = supabase
@@ -71,16 +69,12 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
-        <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Minhas tarefas</h1>
+        <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">{isAdmin ? "Tarefas da empresa" : "Minhas tarefas"}</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-500">
-          Atividades em aberto no grupo em que você atua, de todos os sinistros. Abra o sinistro para conferir os dados e concluir a etapa.
+          {isAdmin
+            ? "Atividades em aberto em todos os grupos da empresa. Abra o sinistro para conferir os dados e concluir a etapa."
+            : `Atividades em aberto no grupo em que você atua${activeGroup ? ` (${activeGroup.name})` : ""}. Abra o sinistro para conferir os dados e concluir a etapa.`}
         </p>
-
-        <div className="mt-5 flex gap-1 border-b border-slate-200">
-          <Tab href="/tarefas" active={scope === "mine"} icon={<Users className="size-3.5" />} label="Meus grupos" />
-          <Tab href="/tarefas?view=all" active={scope === "all"} icon={<ClipboardList className="size-3.5" />} label="Todas" />
-        </div>
-
         {rows.length === 0 ? (
           <div className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <CheckCircle2 className="mx-auto size-8 text-slate-300" />
@@ -115,19 +109,5 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
         )}
       </div>
     </div>
-  );
-}
-
-function Tab({ href, active, icon, label }: { href: string; active: boolean; icon: React.ReactNode; label: string }) {
-  return (
-    <Link
-      href={href}
-      className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] font-medium transition ${
-        active ? "border-brand text-brand" : "border-transparent text-slate-500 hover:text-slate-800"
-      }`}
-    >
-      {icon}
-      {label}
-    </Link>
   );
 }
