@@ -261,7 +261,7 @@ export default async function TorreDeControlePage({
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Torre de Controle</h1>
-        <p className="mt-1 max-w-xl text-[14px] text-slate-600">
+        <p className="mt-1 max-w-xl text-[14px] text-slate-700">
           Onde está o gargalo, agora — não uma foto de ontem.
           {!isAdmin && ` Você vê só os sinistros do seu grupo${activeGroup ? ` (${activeGroup.name})` : ""}.`}
         </p>

@@ -79,7 +79,7 @@ export default async function TarefasPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-narrow px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">{isAdmin ? "Tarefas da empresa" : "Minhas tarefas"}</h1>
-        <p className="mt-1 max-w-xl text-[14px] text-slate-600">
+        <p className="mt-1 max-w-xl text-[14px] text-slate-700">
           {isAdmin
             ? "Atividades em aberto em todos os grupos da empresa. Abra o sinistro para conferir os dados e concluir a etapa."
             : `Atividades em aberto no grupo em que você atua${activeGroup ? ` (${activeGroup.name})` : ""}. Abra o sinistro para conferir os dados e concluir a etapa.`}

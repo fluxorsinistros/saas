@@ -73,7 +73,7 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
             <ArrowLeft className="size-3.5" /> Sinistros
           </Link>
           <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-slate-900">Novo sinistro — {workflow.name}</h1>
-          <p className="mt-1 max-w-xl text-[14px] text-slate-600">
+          <p className="mt-1 max-w-xl text-[14px] text-slate-700">
             {(fields ?? []).length === 0
               ? "Este fluxo não pede nenhum campo na abertura — formalize e preencha o que for preciso nas próprias etapas."
               : "Campos definidos no elemento Início deste fluxo."}

@@ -25,7 +25,7 @@ export default async function NewUserPage() {
             <ArrowLeft className="size-3.5" /> Usuários
           </Link>
           <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-slate-900">Novo usuário</h1>
-          <p className="mt-1 max-w-xl text-[14px] text-slate-600">
+          <p className="mt-1 max-w-xl text-[14px] text-slate-700">
             Escolha a empresa e o tipo de acesso. Quem já tem conta entra na hora; quem ainda não tem recebe um convite para criar a senha.
            
           </p>

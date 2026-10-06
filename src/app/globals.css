@@ -392,10 +392,16 @@ body[data-theme="dark"] {
    Regras de desempenho: desfoque só no menu e em poucos painéis grandes; nunca em cada linha de uma lista.
    ========================================================================== */
 :root {
+  /* Cores da referência: #124B92 (canto superior esquerdo, sob o menu) até #BEC1D2 (canto inferior direito).
+     O trecho escuro fica restrito à faixa do menu; a área de conteúdo começa clara para o texto escuro ter contraste. */
   --app-bg:
-    radial-gradient(900px 560px at 6% -6%, rgba(96, 150, 235, 0.55), transparent 62%),
-    radial-gradient(820px 520px at 100% 0%, rgba(196, 218, 250, 0.75), transparent 58%),
-    linear-gradient(135deg, #c6daf4 0%, #dce8f9 38%, #eff4fc 72%, #f6f9fe 100%);
+    radial-gradient(760px 480px at 100% 100%, rgba(190, 193, 210, 0.9), transparent 70%),
+    linear-gradient(105deg, #124b92 0%, #5a88c6 12%, #c3d3ec 21%, #d6deef 56%, #bec1d2 100%);
+}
+@media (max-width: 767px) {
+  :root {
+    --app-bg: linear-gradient(160deg, #a9c1e3 0%, #c9d7ee 38%, #bec1d2 100%);
+  }
 }
 
 /* Menu lateral: vidro azul. As cores "navy" viram brancos translúcidos só dentro do menu. */
@@ -403,7 +409,7 @@ body[data-theme="dark"] {
   --color-navy: transparent;
   --color-navy-800: rgba(255, 255, 255, 0.13);
   --color-navy-700: rgba(255, 255, 255, 0.2);
-  background-image: linear-gradient(180deg, rgba(30, 76, 188, 0.95) 0%, rgba(44, 98, 214, 0.92) 55%, rgba(56, 112, 222, 0.9) 100%);
+  background-image: linear-gradient(180deg, rgba(18, 75, 146, 0.95) 0%, rgba(32, 94, 176, 0.92) 55%, rgba(48, 108, 194, 0.9) 100%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   backdrop-filter: blur(18px) saturate(150%);
   box-shadow: 10px 0 40px rgba(34, 78, 190, 0.18), inset -1px 0 0 rgba(255, 255, 255, 0.28);

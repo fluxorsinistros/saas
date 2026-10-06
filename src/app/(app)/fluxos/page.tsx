@@ -25,7 +25,7 @@ export default async function FluxosPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Fluxos</h1>
-            <p className="mt-1 max-w-xl text-[14px] text-slate-600">
+            <p className="mt-1 max-w-xl text-[14px] text-slate-700">
               Desenhe os processos de sinistro: etapas, decisões, ramos paralelos, convergências e SLAs. Cada publicação gera
               uma versão imutável.
             </p>

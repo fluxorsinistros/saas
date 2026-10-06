@@ -28,7 +28,7 @@ export default async function DashboardPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Dashboard</h1>
-        <p className="mt-1 max-w-xl text-[14px] text-slate-600">
+        <p className="mt-1 max-w-xl text-[14px] text-slate-700">
           {isAdmin ? "Visão geral da empresa." : `Visão do seu grupo${active ? ` (${active.name})` : ""}.`} Para agir agora, use a{" "}
           <Link href="/torre-de-controle" className="text-brand hover:underline">
             Torre de Controle

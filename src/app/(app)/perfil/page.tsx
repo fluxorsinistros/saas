@@ -22,7 +22,7 @@ export default async function PerfilPage() {
       <div className="mx-auto page-narrow space-y-6 px-4 py-6 md:px-8 md:py-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Meu perfil</h1>
-          <p className="mt-1 max-w-xl text-[14px] text-slate-600">
+          <p className="mt-1 max-w-xl text-[14px] text-slate-700">
             A foto é opcional e vale em todas as empresas em que você atua. Ela aparece ao lado do seu nome no menu e nos históricos.
             Só quem divide uma empresa com você consegue vê-la.
           </p>
