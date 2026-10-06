@@ -8,6 +8,7 @@ import { getHiddenScreensForMember } from "@/lib/screens";
 import { getMemberGroups } from "@/lib/active-group";
 import { signedAvatarUrls } from "@/lib/avatars";
 import { AppSidebar } from "./AppSidebar";
+import { AppBackdrop } from "@/components/AppBackdrop";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [admin, brand] = await Promise.all([isPlatformAdmin(), getPlatformBrand()]);
@@ -24,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const theme = (cookieStore.get("app_theme")?.value as "light" | "dark") || "light";
     return (
       <div className={`flex h-screen h-[100dvh] w-full overflow-hidden ${theme === "dark" ? "dark" : ""}`} data-theme={theme}>
+        <AppBackdrop />
         <AppSidebar
           platformMode
           tenantId=""
@@ -58,6 +60,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className={`flex h-screen h-[100dvh] w-full overflow-hidden ${ctx.theme === "dark" ? "dark" : ""}`} data-theme={ctx.theme} style={themeVars}>
+      <AppBackdrop />
       <AppSidebar
         tenantId={ctx.tenantId}
         tenantName={ctx.tenantName}

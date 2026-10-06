@@ -392,16 +392,8 @@ body[data-theme="dark"] {
    Regras de desempenho: desfoque só no menu e em poucos painéis grandes; nunca em cada linha de uma lista.
    ========================================================================== */
 :root {
-  /* UMA imagem de fundo para a tela inteira (menu + dados): #3067AD no canto superior esquerdo até #BEC1D2 no inferior
-     direito, com formas desfocadas. O menu NÃO tem fundo próprio: é um vidro azul mais escuro por cima desta imagem. */
-  --app-bg:
-    radial-gradient(135vw 230px at 0% 0%, rgba(48, 103, 173, 0.98), rgba(48, 103, 173, 0.55) 55%, transparent 100%),
-    radial-gradient(34vw 38vh at 30% 34%, rgba(96, 142, 210, 0.55), transparent 72%),
-    radial-gradient(30vw 34vh at 8% 70%, rgba(120, 165, 225, 0.5), transparent 72%),
-    radial-gradient(38vw 42vh at 72% 56%, rgba(150, 178, 226, 0.5), transparent 72%),
-    radial-gradient(44vw 46vh at 100% 100%, rgba(196, 199, 216, 1), transparent 72%),
-    radial-gradient(34vw 36vh at 22% 100%, rgba(214, 218, 236, 0.85), transparent 72%),
-    linear-gradient(150deg, #3067ad 0%, #6f98cf 24%, #a9bde0 52%, #bec1d2 100%);
+  /* O fundo de verdade (uma só imagem para menu + dados) é o <AppBackdrop />; aqui fica só a cor de segurança. */
+  --app-bg: #bec1d2;
 }
 
 /* Menu lateral: vidro azul. As cores "navy" viram brancos translúcidos só dentro do menu. */
@@ -414,15 +406,11 @@ body[data-theme="dark"] {
   background-color: transparent;
   background-image: linear-gradient(180deg, rgba(18, 75, 143, 0.84) 0%, rgba(18, 75, 143, 0.62) 50%, rgba(18, 75, 143, 0.42) 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.4);
-  -webkit-backdrop-filter: blur(26px) saturate(150%);
-  backdrop-filter: blur(26px) saturate(150%);
-  box-shadow: 10px 0 40px rgba(34, 78, 190, 0.18), inset -1px 0 0 rgba(255, 255, 255, 0.28);
+    box-shadow: 10px 0 40px rgba(34, 78, 190, 0.18), inset -1px 0 0 rgba(255, 255, 255, 0.28);
 }
 /* Faixa de baixo (tema, e-mail, sair): vidro azul mais escuro para o texto branco continuar legível sobre a base clara */
 .sidebar-glass [data-sidebar-footer] {
   background: linear-gradient(180deg, rgba(18, 75, 143, 0) 0%, rgba(18, 75, 143, 0.74) 38%, rgba(18, 75, 143, 0.8) 100%);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
 }
 .sidebar-glass .text-slate-300 { color: rgba(255, 255, 255, 0.94); }
 .sidebar-glass .text-slate-400 { color: rgba(255, 255, 255, 0.96); }
@@ -438,8 +426,6 @@ body[data-theme="dark"] {
 /* Cartões e painéis de vidro */
 .glass-card {
   background: rgba(255, 255, 255, 0.66);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
   border: 1px solid rgba(255, 255, 255, 0.78);
   border-radius: 20px;
   box-shadow: 0 10px 34px rgba(31, 63, 130, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.85);
@@ -497,3 +483,54 @@ body[data-theme="dark"] {
 /* Títulos de seção em caixa-alta que ficam direto sobre o fundo (ex.: "EXECUÇÃO E DETALHES"): azul-marinho legível no degradê */
 .app-content-bg h2.uppercase { color: #0f2747; }
 :is(.dark, [data-theme="dark"]) .app-content-bg h2.uppercase { color: #94a3b8; }
+
+/* ==========================================================================
+   FUNDO ANIMADO (AppBackdrop): degradê #3067AD -> #BEC1D2 + manchas desfocadas em movimento lento
+   ========================================================================== */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: linear-gradient(150deg, #3067ad 0%, #6f98cf 28%, #a9bde0 58%, #bec1d2 100%);
+  pointer-events: none;
+}
+/* faixa azul forte no topo: garante o contraste do título e da descrição (brancos) em qualquer ponto da animação */
+.app-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(135vw 230px at 0% 0%, rgba(48, 103, 173, 0.95), rgba(48, 103, 173, 0.5) 55%, transparent 100%);
+}
+.app-backdrop-blobs {
+  position: absolute;
+  inset: 0;
+  filter: blur(48px);
+}
+.app-blob {
+  position: absolute;
+  display: block;
+  width: 80vmax;
+  height: 80vmax;
+  top: calc(50% - 40vmax);
+  left: calc(50% - 40vmax);
+  mix-blend-mode: hard-light;
+  opacity: 0.9;
+  will-change: transform;
+}
+.app-blob-1 { background: radial-gradient(circle at center, rgba(18, 75, 143, 0.8) 0, rgba(18, 75, 143, 0) 50%) no-repeat; transform-origin: center center; animation: app-move-vertical 34s ease infinite; }
+.app-blob-2 { background: radial-gradient(circle at center, rgba(110, 152, 215, 0.8) 0, rgba(110, 152, 215, 0) 50%) no-repeat; transform-origin: calc(50% - 360px); animation: app-move-circle 24s reverse infinite; }
+.app-blob-3 { background: radial-gradient(circle at center, rgba(214, 220, 240, 0.85) 0, rgba(214, 220, 240, 0) 50%) no-repeat; transform-origin: calc(50% + 380px); animation: app-move-circle 46s linear infinite; }
+.app-blob-4 { background: radial-gradient(circle at center, rgba(48, 103, 173, 0.7) 0, rgba(48, 103, 173, 0) 50%) no-repeat; transform-origin: calc(50% - 220px); animation: app-move-horizontal 44s ease infinite; opacity: 0.7; }
+.app-blob-5 { background: radial-gradient(circle at center, rgba(190, 193, 210, 0.9) 0, rgba(190, 193, 210, 0) 50%) no-repeat; transform-origin: calc(50% - 900px) calc(50% + 500px); animation: app-move-circle 28s ease infinite; }
+
+@keyframes app-move-circle { 0% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
+@keyframes app-move-vertical { 0% { transform: translateY(-40%); } 50% { transform: translateY(40%); } 100% { transform: translateY(-40%); } }
+@keyframes app-move-horizontal { 0% { transform: translateX(-40%) translateY(-8%); } 50% { transform: translateX(40%) translateY(8%); } 100% { transform: translateX(-40%) translateY(-8%); } }
+
+/* menos movimento / celular: fundo parado (economiza bateria) */
+@media (prefers-reduced-motion: reduce), (max-width: 767px) {
+  .app-blob { animation: none; }
+}
+/* tema escuro: o fundo animado não aparece */
+:is(.dark, [data-theme="dark"]) .app-backdrop { display: none; }
