@@ -24,7 +24,7 @@ body {
 }
 
 body {
-  background: var(--app-bg, var(--color-canvas));
+  background: var(--color-canvas);
   background-attachment: fixed;
   color: #0f172a;
   transition: background-color 200ms ease, color 200ms ease;
@@ -392,9 +392,10 @@ body[data-theme="dark"] {
    VISUAL "VIDRO" (versão 1 clara): fundo em degradê, menu translúcido e cartões de vidro.
    Regras de desempenho: desfoque só no menu e em poucos painéis grandes; nunca em cada linha de uma lista.
    ========================================================================== */
-:root {
-  /* O fundo de verdade (uma só imagem para menu + dados) é o <AppBackdrop />; aqui fica só a cor de segurança. */
-  --app-bg: #bec1d2;
+/* O fundo de verdade (uma só imagem para menu + dados) é o <AppBackdrop />; a cor de segurança abaixo vale só nas telas do app
+   (as que têm o degradê). Telas públicas, como o login, mantêm o fundo claro padrão (--color-canvas). */
+body:has(.app-backdrop) {
+  background: #bec1d2;
 }
 
 /* Menu lateral: vidro azul. As cores "navy" viram brancos translúcidos só dentro do menu. */
