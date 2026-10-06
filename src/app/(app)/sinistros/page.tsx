@@ -2,13 +2,14 @@ import { GroupChip } from "@/lib/group-icons";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, ArrowDown, ArrowUp, LayoutGrid, RotateCcw, SearchX, Table2, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, RotateCcw, SearchX, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
 import { computeProcessProgress, computeSla, formatDuration } from "@/lib/format";
 import { SinistrosFilterBar } from "./SinistrosFilterBar";
 import { FormalizeButton } from "./FormalizeButton";
+import { ListControls } from "./ListControls";
 
 export const metadata: Metadata = { title: "Sinistros" };
 
@@ -446,16 +447,6 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     if (agrupar && (i === 0 || shownClaims[i - 1].g.key !== g.key)) listItems.push({ kind: "header", key: g.key, count: groupCounts.get(g.key) ?? 0 });
     listItems.push({ kind: "claim", claim: c });
   });
-  const paramsWith = (over: Record<string, string>) => {
-    const base = Object.fromEntries(Object.entries(sp).filter(([, v]) => typeof v === "string") as [string, string][]);
-    delete base.pagina;
-    const qs = new URLSearchParams({ ...base, searched: "1", ...over });
-    for (const [k, v] of [...qs.entries()]) if (v === "") qs.delete(k);
-    return `/sinistros?${qs.toString()}`;
-  };
-  const seg = (active: boolean) =>
-    `inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition ${active ? "bg-selected text-white" : "text-slate-700 hover:bg-white/60"}`;
-
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
@@ -504,50 +495,14 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
         </div>
 
         {searched && visibleClaims.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-slate-700">
-            <div className="flex items-center gap-1.5" role="group" aria-label="Forma de exibição">
-              <span className="font-medium">Ver como</span>
-              <Link href={paramsWith({ visao: "" })} scroll={false} className={seg(visao === "cartoes")}>
-                <LayoutGrid className="size-3.5" /> Cartões
-              </Link>
-              <Link href={paramsWith({ visao: "tabela" })} scroll={false} className={seg(visao === "tabela")}>
-                <Table2 className="size-3.5" /> Tabela
-              </Link>
-            </div>
-            <div className="flex items-center gap-1.5" role="group" aria-label="Agrupar por">
-              <span className="font-medium">Agrupar por</span>
-              {([["", "Nenhum"], ["situacao", "Situação"], ["grupo", "Grupo"], ["fluxo", "Fluxo"]] as const).map(([v, label]) => (
-                <Link key={v} href={paramsWith({ agrupar: v })} scroll={false} className={seg(agrupar === v)}>
-                  {label}
-                </Link>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5" role="group" aria-label="Ordenar por">
-              <span className="font-medium">Ordenar por</span>
-              {([["criacao", "Data de criação"], ["situacao", "Situação"], ["grupo", "Grupo"], ["fluxo", "Fluxo"]] as const).map(([v, label]) => (
-                <Link key={v} href={paramsWith({ ordem: v === "criacao" ? "" : v, dir: "" })} scroll={false} className={seg(ordem === v)}>
-                  {label}
-                </Link>
-              ))}
-              <Link
-                href={paramsWith({ ordem: ordem === "criacao" ? "" : ordem, dir: dir === "asc" ? "desc" : "asc" })}
-                scroll={false}
-                className={seg(false)}
-                title="Inverter a ordem"
-              >
-                {dir === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
-                {ordem === "criacao" ? (dir === "desc" ? "Mais recentes" : "Mais antigos") : dir === "asc" ? "A a Z" : "Z a A"}
-              </Link>
-            </div>
-            <div className="flex items-center gap-1.5" role="group" aria-label="Quantidade por vez">
-              <span className="font-medium">Mostrar</span>
-              {[10, 30, 50].map((n) => (
-                <Link key={n} href={paramsWith({ por: n === 10 ? "" : String(n) })} scroll={false} className={seg(PAGE_SIZE === n)}>
-                  {n}
-                </Link>
-              ))}
-            </div>
-          </div>
+          <ListControls
+            visao={visao}
+            agrupar={agrupar}
+            ordem={ordem}
+            dir={dir}
+            por={PAGE_SIZE}
+            base={Object.fromEntries(Object.entries(sp).filter(([, v]) => typeof v === "string")) as Record<string, string>}
+          />
         )}
 
         {!searched ? (
