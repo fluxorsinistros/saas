@@ -419,15 +419,15 @@ body[data-theme="dark"] {
 /* Item ativo do menu: pílula de vidro clara com brilho */
 .sidebar-active {
   background: rgba(255, 255, 255, 0.26);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 8px 22px rgba(12, 36, 120, 0.38);
+  box-shadow: 0 8px 22px rgba(12, 36, 120, 0.3);
 }
 
 /* Cartões e painéis de vidro */
 .glass-card {
   background: rgba(255, 255, 255, 0.66);
-  border: 1px solid rgba(255, 255, 255, 0.78);
+  border: 0;
   border-radius: 20px;
-  box-shadow: 0 10px 34px rgba(31, 63, 130, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 36px rgba(31, 63, 130, 0.12);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-card { background: rgba(255, 255, 255, 0.92); }
@@ -533,3 +533,21 @@ body[data-theme="dark"] {
 }
 /* tema escuro: o fundo animado não aparece */
 :is(.dark, [data-theme="dark"]) .app-backdrop { display: none; }
+
+/* ==========================================================================
+   SEM BORDAS (como na referência): a separação vem da transparência, da cor e de sombras suaves — nunca de linhas.
+   Vale para o tema claro; campos de preenchimento (input/select) mantêm borda porque precisam parecer clicáveis.
+   ========================================================================== */
+.sidebar-glass [class*="border-navy"],
+.sidebar-glass .border-t { border-color: transparent; }
+.app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
+.app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+  border-color: transparent;
+  box-shadow: 0 12px 34px rgba(31, 63, 130, 0.12);
+}
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+  box-shadow: none;
+}
+:is(.dark, [data-theme="dark"]) .sidebar-glass [class*="border-navy"],
+:is(.dark, [data-theme="dark"]) .sidebar-glass .border-t { border-color: #1b2640; }
