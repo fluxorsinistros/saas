@@ -401,16 +401,15 @@ body[data-theme="dark"] {
   --color-navy: transparent;
   --color-navy-800: rgba(255, 255, 255, 0.13);
   --color-navy-700: rgba(255, 255, 255, 0.2);
-  /* O fundo do menu é o MESMO da tela, visto através de um vidro azul mais escuro e fosco: as formas desfocadas da imagem
-     continuam aparecendo por trás, só que mais escuras no lado esquerdo. */
+  /* O menu NÃO tem fundo próprio: é o mesmo fundo da tela visto por um vidro azul mais escuro. A tinta é mais forte à
+     esquerda e some aos poucos para a direita, então a borda do menu se mistura com o fundo (sem linha nem sombra). */
   background-color: transparent;
-  background-image: linear-gradient(180deg, rgba(18, 75, 143, 0.84) 0%, rgba(18, 75, 143, 0.62) 50%, rgba(18, 75, 143, 0.42) 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.4);
-    box-shadow: 10px 0 40px rgba(34, 78, 190, 0.18), inset -1px 0 0 rgba(255, 255, 255, 0.28);
+  background-image:
+    linear-gradient(90deg, rgba(10, 56, 120, 0.7) 0%, rgba(18, 75, 143, 0.58) 62%, rgba(18, 75, 143, 0.28) 100%);
 }
 /* Faixa de baixo (tema, e-mail, sair): vidro azul mais escuro para o texto branco continuar legível sobre a base clara */
 .sidebar-glass [data-sidebar-footer] {
-  background: linear-gradient(180deg, rgba(18, 75, 143, 0) 0%, rgba(18, 75, 143, 0.74) 38%, rgba(18, 75, 143, 0.8) 100%);
+  background: linear-gradient(180deg, rgba(18, 75, 143, 0) 0%, rgba(18, 75, 143, 0.5) 45%, rgba(18, 75, 143, 0.58) 100%);
 }
 .sidebar-glass .text-slate-300 { color: rgba(255, 255, 255, 0.94); }
 .sidebar-glass .text-slate-400 { color: rgba(255, 255, 255, 0.96); }
