@@ -262,7 +262,7 @@ export function AppSidebar({
         <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} isAdmin={isAdmin} platformOnly={platformMode} hiddenScreens={hiddenScreens} />
       </nav>
 
-      <div className={`shrink-0 border-t border-navy-700 bg-navy py-3 space-y-1 ${collapsed ? "px-2" : "px-3"}`}>
+      <div data-sidebar-footer className={`shrink-0 border-t border-navy-700 bg-navy py-3 space-y-1 ${collapsed ? "px-2" : "px-3"}`}>
         {/* Alternador Rápido de Tema (Claro / Escuro) */}
         <form action={toggleQuickTheme.bind(null, currentTheme, tenantId)}>
           <button

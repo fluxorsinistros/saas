@@ -409,10 +409,25 @@ body[data-theme="dark"] {
   --color-navy: transparent;
   --color-navy-800: rgba(255, 255, 255, 0.13);
   --color-navy-700: rgba(255, 255, 255, 0.2);
-  background-image: linear-gradient(180deg, rgba(18, 75, 146, 0.95) 0%, rgba(32, 94, 176, 0.92) 55%, rgba(48, 108, 194, 0.9) 100%);
+  /* Fundo do menu: não é um degradê reto. Por baixo do vidro há "formas desfocadas" (manchas de luz e de sombra, como um
+     fundo fora de foco), em cima de um degradê vertical de #124B8F (topo) a #C8CBDA (base). */
+  background-color: #124b8f;
+  background-image:
+    radial-gradient(230px 190px at 24% 9%, rgba(130, 178, 240, 0.5), transparent 72%),
+    radial-gradient(250px 230px at 92% 30%, rgba(10, 52, 112, 0.55), transparent 74%),
+    radial-gradient(240px 210px at 8% 52%, rgba(120, 165, 225, 0.42), transparent 72%),
+    radial-gradient(270px 240px at 88% 70%, rgba(214, 220, 238, 0.7), transparent 72%),
+    radial-gradient(300px 230px at 20% 96%, rgba(222, 224, 238, 0.85), transparent 72%),
+    linear-gradient(180deg, #124b8f 0%, #2d62a8 52%, #8da8d0 80%, #c8cbda 100%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   backdrop-filter: blur(18px) saturate(150%);
   box-shadow: 10px 0 40px rgba(34, 78, 190, 0.18), inset -1px 0 0 rgba(255, 255, 255, 0.28);
+}
+/* Faixa de baixo (tema, e-mail, sair): vidro azul mais escuro para o texto branco continuar legível sobre a base clara */
+.sidebar-glass [data-sidebar-footer] {
+  background: linear-gradient(180deg, rgba(18, 75, 143, 0) 0%, rgba(18, 75, 143, 0.74) 38%, rgba(18, 75, 143, 0.8) 100%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 .sidebar-glass .text-slate-300 { color: rgba(255, 255, 255, 0.94); }
 .sidebar-glass .text-slate-400 { color: rgba(255, 255, 255, 0.96); }
@@ -454,6 +469,7 @@ body[data-theme="dark"] {
   backdrop-filter: none;
   box-shadow: none;
 }
+:is(.dark, [data-theme="dark"]) .sidebar-glass [data-sidebar-footer] { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 :is(.dark, [data-theme="dark"]) .sidebar-glass .text-slate-300 { color: #cbd5e1; }
 :is(.dark, [data-theme="dark"]) .sidebar-glass .text-slate-400 { color: #94a3b8; }
 :is(.dark, [data-theme="dark"]) .sidebar-glass .text-slate-500 { color: #94a3b8; }
