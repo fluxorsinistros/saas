@@ -840,11 +840,11 @@ export default async function ClaimPage({
                         const has = raw !== undefined && raw !== "";
                         const n = has ? Number(raw) : null;
                         const tone = it.tone === "sign" && n !== null ? (n < 0 ? "text-rose-700" : "text-emerald-700") : "text-slate-900";
-                        const editable = canEditFinancial && f.field_type !== "calculated";
+                        const editable = canEditFinancial && f.field_type !== "calculated" && it.mode !== "view";
                         return (
                           <div key={f.key}>
                             <label htmlFor={`fin-${f.key}`} className="mb-1 block text-xs text-slate-500">
-                              {f.label}
+                              {it.label || f.label}
                               {f.field_type === "calculated" && " (calculado)"}
                             </label>
                             {editable ? (
@@ -876,7 +876,7 @@ export default async function ClaimPage({
                       ) : (
                         <span />
                       )}
-                      {canEditFinancial && panelItems.some(({ f }) => f.field_type !== "calculated") && (
+                      {canEditFinancial && panelItems.some(({ f, it }) => f.field_type !== "calculated" && it.mode !== "view") && (
                         <button className="rounded-lg bg-brand px-4 py-1.5 text-[13px] font-medium text-white hover:bg-brand-600 cursor-pointer">Salvar valores</button>
                       )}
                     </div>

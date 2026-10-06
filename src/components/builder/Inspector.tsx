@@ -665,7 +665,7 @@ function FieldsSection({
 }
 
 // Fórmula de um campo calculado: o texto usa as chaves dos campos numéricos do fluxo. Os botões inserem a chave no cursor.
-function FormulaInput({ fields, defaultValue = "", defaultFormat = "money", selfKey }: { fields: WorkflowField[]; defaultValue?: string; defaultFormat?: string; selfKey?: string }) {
+export function FormulaInput({ fields, defaultValue = "", defaultFormat = "money", selfKey }: { fields: WorkflowField[]; defaultValue?: string; defaultFormat?: string; selfKey?: string }) {
   const [text, setText] = useState(defaultValue);
   const usable = fields.filter((f) => ["number", "money", "percent", "calculated"].includes(f.field_type) && f.key !== selfKey);
   return (

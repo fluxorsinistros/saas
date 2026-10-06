@@ -31,7 +31,7 @@ export async function saveFinancialFields(claimId: string, formData: FormData): 
     supabase.from("workflows").select("financial_panel").eq("id", version.workflow_id).single(),
     supabase.from("workflow_fields").select("key, label, field_type, min_value, max_value").eq("workflow_id", version.workflow_id),
   ]);
-  const panelKeys = new Set(readPanel(workflow?.financial_panel).map((i) => i.key));
+  const panelKeys = new Set(readPanel(workflow?.financial_panel).filter((i) => i.mode !== "view").map((i) => i.key));
   const defs = (fields ?? []).filter((f) => panelKeys.has(f.key) && VALUE_FIELD_TYPES.includes(f.field_type));
 
   const current = (claim.custom_fields ?? {}) as Record<string, string>;

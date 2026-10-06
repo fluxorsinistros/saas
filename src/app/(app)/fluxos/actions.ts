@@ -1,7 +1,7 @@
 "use server";
 
 import { publicDbMessage } from "@/lib/errors";
-import { validateFormula } from "@/lib/formula";
+import { parseFormula, validateFormula } from "@/lib/formula";
 import { PANEL_FIELD_TYPES, PANEL_MAX_ITEMS, readPanel } from "@/lib/financial-panel";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -120,10 +120,13 @@ export async function saveFinancialPanel(workflowId: string, rawItems: unknown):
   const supabase = await createClient();
   const { data: fields } = await supabase.from("workflow_fields").select("key, field_type").eq("workflow_id", workflowId);
   const typeByKey = new Map((fields ?? []).map((f) => [f.key, f.field_type]));
+  const typeFor = (k: string) => typeByKey.get(k) ?? "";
   for (const it of items) {
     if (!PANEL_FIELD_TYPES.includes(typeByKey.get(it.key) ?? "")) return { ok: false, error: `"${it.key}" não é um campo numérico deste fluxo.` };
   }
-  const { error } = await supabase.from("workflows").update({ financial_panel: items as unknown as Json }).eq("id", workflowId).eq("tenant_id", ctx.tenantId);
+  // calculado é sempre informativo
+  const clean = items.map((i) => (typeFor(i.key) === "calculated" ? { ...i, mode: "view" as const } : i));
+  const { error } = await supabase.from("workflows").update({ financial_panel: clean as unknown as Json }).eq("id", workflowId).eq("tenant_id", ctx.tenantId);
   if (error) return { ok: false, error: publicDbMessage(error) };
   revalidatePath(`/fluxos/${workflowId}/financeiro`);
   return { ok: true };
@@ -285,8 +288,22 @@ export async function deleteWorkflowField(fieldId: string, workflowId: string): 
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
 
   const supabase = await createClient();
+  const { data: target } = await supabase.from("workflow_fields").select("key, label").eq("id", fieldId).eq("tenant_id", ctx.tenantId).maybeSingle();
+  if (target) {
+    // um campo usado na fórmula de outro não pode sumir: a conta quebraria em silêncio
+    const { data: calcs } = await supabase.from("workflow_fields").select("label, formula").eq("workflow_id", workflowId).eq("field_type", "calculated");
+    const user = (calcs ?? []).find((f) => f.formula && parseFormula(f.formula).ok && (parseFormula(f.formula) as { refs: string[] }).refs.includes(target.key));
+    if (user) return { ok: false, error: `"${target.label}" é usado na fórmula de "${user.label}". Edite ou exclua esse campo primeiro.` };
+  }
   const { error } = await supabase.from("workflow_fields").delete().eq("id", fieldId).eq("tenant_id", ctx.tenantId);
   if (error) return { ok: false, error: publicDbMessage(error) };
+  if (target) {
+    // tira o campo do painel financeiro do fluxo, se estava lá
+    const { data: wf } = await supabase.from("workflows").select("financial_panel").eq("id", workflowId).maybeSingle();
+    const kept = readPanel(wf?.financial_panel).filter((i) => i.key !== target.key);
+    await supabase.from("workflows").update({ financial_panel: kept as unknown as Json }).eq("id", workflowId).eq("tenant_id", ctx.tenantId);
+    revalidatePath(`/fluxos/${workflowId}/financeiro`);
+  }
   revalidatePath(`/fluxos/${workflowId}`);
   return { ok: true };
 }
