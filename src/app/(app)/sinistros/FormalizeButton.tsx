@@ -44,13 +44,18 @@ export function FormalizeButton({ options }: { options: { id: string; name: stri
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[3px]" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
           <form
             onSubmit={confirm}
             role="dialog"
             aria-modal="true"
             aria-labelledby="formalize-title"
-            style={{ background: "#fff" }}
+            style={{
+              background: "rgba(255, 255, 255, 0.9)",
+              WebkitBackdropFilter: "blur(22px) saturate(130%)",
+              backdropFilter: "blur(22px) saturate(130%)",
+              boxShadow: "0 30px 80px rgba(8, 20, 50, 0.45), 0 8px 24px rgba(8, 20, 50, 0.25)",
+            }}
             className="w-full max-w-md rounded-2xl p-5 shadow-2xl"
           >
             <h2 id="formalize-title" className="text-[16px] font-semibold text-slate-900">
