@@ -748,7 +748,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                           aria-valuemin={0}
                           aria-valuemax={100}
                           aria-valuenow={progressStats.pct}
-                          className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-900/10"
+                          className="progress-track h-1.5 w-20 overflow-hidden rounded-full"
                         >
                           <span className={`block h-full rounded-full ${progressStats.pct === 100 ? "bg-emerald-600" : "bg-brand"}`} style={{ width: `${progressStats.pct}%` }} />
                         </span>

@@ -465,7 +465,7 @@ body[data-theme="dark"] {
 :is(.dark, [data-theme="dark"]) .glass-card {
   background: rgba(17, 24, 39, 0.62);
   border-color: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 /* Painel de dados: sem fundo próprio, a imagem de fundo é uma só, da tela inteira (ver --app-bg). A faixa azul forte do
@@ -554,8 +554,9 @@ body[data-theme="dark"] {
 }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
-  background: #111827;
-  box-shadow: none;
+  /* um pouco translúcido e com sombra de sobreposição, como no tema claro */
+  background: rgba(20, 29, 46, 0.8);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 :is(.dark, [data-theme="dark"]) .sidebar-glass [class*="border-navy"],
 :is(.dark, [data-theme="dark"]) .sidebar-glass .border-t { border-color: #1b2640; }
@@ -663,3 +664,19 @@ body[data-theme="dark"] {
 }
 /* Números em tabelas e listas alinham em coluna */
 .tabular { font-variant-numeric: tabular-nums; }
+
+/* Pop-ups (diálogos): vidro com pouca transparência e sombra de sobreposição nos dois temas */
+.dialog-glass {
+  background: rgba(255, 255, 255, 0.7);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(130%);
+  box-shadow: 0 30px 80px rgba(8, 20, 50, 0.45), 0 8px 24px rgba(8, 20, 50, 0.25);
+}
+:is(.dark, [data-theme="dark"]) .dialog-glass {
+  background: rgba(17, 24, 39, 0.82);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Trilho da barra de progresso: escuro translúcido no tema claro, claro translúcido no escuro */
+.progress-track { background: rgba(15, 30, 70, 0.12); }
+:is(.dark, [data-theme="dark"]) .progress-track { background: rgba(255, 255, 255, 0.16); }

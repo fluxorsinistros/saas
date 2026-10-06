@@ -75,13 +75,7 @@ export function FormalizeButton({ options }: { options: { id: string; name: stri
             role="dialog"
             aria-modal="true"
             aria-labelledby="formalize-title"
-            style={{
-              background: "rgba(255, 255, 255, 0.7)",
-              WebkitBackdropFilter: "blur(22px) saturate(130%)",
-              backdropFilter: "blur(22px) saturate(130%)",
-              boxShadow: "0 30px 80px rgba(8, 20, 50, 0.45), 0 8px 24px rgba(8, 20, 50, 0.25)",
-            }}
-            className="w-full max-w-md rounded-2xl p-5 shadow-2xl"
+            className="dialog-glass w-full max-w-md rounded-2xl p-5"
           >
             <h2 id="formalize-title" className="text-[16px] font-semibold text-slate-900">
               Formalizar sinistro
