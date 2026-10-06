@@ -7,8 +7,8 @@
   --color-navy: #0b1220;
   --color-navy-800: #111a2e;
   --color-navy-700: #1b2640;
-  --color-brand: #2563eb;
-  --color-brand-600: #1d4ed8;
+  --color-brand: #577bf8; /* cor dos botões e do estado selecionado */
+  --color-brand-600: #4768ea; /* passar o mouse */
   --color-selected: #577bf8; /* botão/aba no estado selecionado */
   --color-cyan: #22d3ee;
   --color-violet: #7c3aed;
@@ -605,3 +605,7 @@ body[data-theme="dark"] {
 :is(.dark, [data-theme="dark"]) .app-content-bg .bg-canvas { background-color: #090d16; }
 .app-content-bg .react-flow__minimap { background-color: rgba(255, 255, 255, 0.5) !important; border-color: transparent !important; }
 :is(.dark, [data-theme="dark"]) .app-content-bg .react-flow__minimap { background-color: #111827 !important; }
+
+/* Links e textos na cor da marca: um tom mais escuro do mesmo azul, para ler bem sobre o vidro claro */
+.app-content-bg .text-brand { color: #3652d0; }
+:is(.dark, [data-theme="dark"]) .app-content-bg .text-brand { color: #8fa8ff; }

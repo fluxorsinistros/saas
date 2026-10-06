@@ -23,7 +23,7 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
 
   const [previewName, setPreviewName] = useState(initialBrand.name ?? "");
   const [previewTagline, setPreviewTagline] = useState(initialBrand.tagline ?? "");
-  const [previewColor, setPreviewColor] = useState(initialBrand.color ?? "#2563eb");
+  const [previewColor, setPreviewColor] = useState(initialBrand.color ?? "#577bf8");
   const [logoPreview, setLogoPreview] = useState<string | null>(initialBrand.logoUrl ?? null);
 
   // Ressincroniza quando o servidor devolve a marca salva (ajuste durante o render, sem efeito).
@@ -155,7 +155,7 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
               <div className="flex items-center gap-3">
                 <input
                   type="color"
-                  value={previewColor.startsWith("#") && previewColor.length === 7 ? previewColor : "#2563eb"}
+                  value={previewColor.startsWith("#") && previewColor.length === 7 ? previewColor : "#577bf8"}
                   onChange={(e) => setPreviewColor(e.target.value)}
                   disabled={!whiteLabelEnabled}
                   className="size-10 cursor-pointer rounded-lg border border-slate-300 p-0.5"
@@ -166,13 +166,13 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                   name="brand_color"
                   value={previewColor}
                   onChange={(e) => setPreviewColor(e.target.value)}
-                  placeholder="#2563eb"
+                  placeholder="#577bf8"
                   maxLength={7}
                   disabled={!whiteLabelEnabled}
                   className={`${inputClass} w-36 font-mono uppercase`}
                 />
                 <div className="flex flex-wrap gap-1.5">
-                  {["#2563eb", "#0284c7", "#059669", "#7c3aed", "#d97706", "#dc2626"].map((preset) => (
+                  {["#577bf8", "#0284c7", "#059669", "#7c3aed", "#d97706", "#dc2626"].map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -212,7 +212,7 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
                 {pending ? "Salvando alterações…" : "Salvar Configurações de Marca"}
               </button>
 
-              {(initialBrand.name || initialBrand.logoUrl || (initialBrand.color && initialBrand.color.toLowerCase() !== "#2563eb")) && (
+              {(initialBrand.name || initialBrand.logoUrl || (initialBrand.color && initialBrand.color.toLowerCase() !== "#577bf8")) && (
                 <label className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-rose-600 cursor-pointer">
                   <input type="checkbox" name="reset_branding" disabled={!whiteLabelEnabled || pending} />
                   <span>Restaurar marca padrão da plataforma</span>

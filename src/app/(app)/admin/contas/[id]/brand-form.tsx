@@ -52,7 +52,7 @@ export function TenantBrandForm({
             id="brand_color"
             name="brand_color"
             defaultValue={color}
-            placeholder="#2563eb"
+            placeholder="#577bf8"
             maxLength={7}
             className={input}
           />

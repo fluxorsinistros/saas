@@ -446,7 +446,7 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
   }
 
   const resetAll = formData.get("reset_branding") === "on";
-  const isDefaultColor = !color || color.toLowerCase() === "#2563eb";
+  const isDefaultColor = !color || ["#2563eb", "#577bf8"].includes(color.toLowerCase());
   const hasCustomization = !resetAll && Boolean(name || tagline || logoPath || !isDefaultColor);
 
   const next: Record<string, Json> = { ...settings };
