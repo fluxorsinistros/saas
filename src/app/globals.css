@@ -426,7 +426,7 @@ body[data-theme="dark"] {
 .glass-card {
   /* Mesmo vidro do menu: uma tinta lisa e translúcida por cima do fundo, com desfoque suave — sem degradê, sem fio de luz
      e sem contorno. O fundo atravessa o cartão do mesmo jeito que atravessa o menu. */
-  background: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.33);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
   backdrop-filter: blur(16px) saturate(120%);
   border: 0;
@@ -548,7 +548,7 @@ body[data-theme="dark"] {
 .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
   border-color: transparent;
   /* mesmo vidro dos cartões do Dashboard (sem o desfoque do fundo, para listas longas não pesarem) */
-  background: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.59);
   box-shadow: 0 12px 32px rgba(20, 50, 110, 0.12);
 }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
