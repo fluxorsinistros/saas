@@ -680,3 +680,13 @@ body[data-theme="dark"] {
 /* Trilho da barra de progresso: escuro translúcido no tema claro, claro translúcido no escuro */
 .progress-track { background: rgba(15, 30, 70, 0.12); }
 :is(.dark, [data-theme="dark"]) .progress-track { background: rgba(255, 255, 255, 0.16); }
+
+/* Chips de ação sobre o fundo da página (ex.: "Descartar e reiniciar este ciclo"): legíveis nos dois temas */
+.action-chip { background: rgba(255, 255, 255, 0.85); color: #1e293b; }
+.action-chip:hover { background: #ffffff; color: #0f172a; }
+.action-chip-danger { color: #9f1239; }
+.action-chip-danger:hover { color: #881337; }
+:is(.dark, [data-theme="dark"]) .action-chip { background: rgba(255, 255, 255, 0.1); color: #e2e8f0; }
+:is(.dark, [data-theme="dark"]) .action-chip:hover { background: rgba(255, 255, 255, 0.18); color: #ffffff; }
+:is(.dark, [data-theme="dark"]) .action-chip-danger { background: rgba(244, 63, 94, 0.16); color: #fda4af; }
+:is(.dark, [data-theme="dark"]) .action-chip-danger:hover { background: rgba(244, 63, 94, 0.26); color: #ffe4e6; }
