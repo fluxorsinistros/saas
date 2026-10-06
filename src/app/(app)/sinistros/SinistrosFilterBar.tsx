@@ -85,7 +85,8 @@ export function SinistrosFilterBar({
       selectedSituacao
   );
 
-  const SITUACAO_LABEL: Record<string, string> = { aberto: "Aberto / Em andamento", pausado: "Pausado / Bloqueado", fechado: "Concluído / Fechado" };
+  const SITUACAO_LABEL: Record<string, string> = { aberto: "Abertos", pausado: "Bloqueados", fechado: "Fechados" };
+  const plural = (n: number) => `${n} ${n === 1 ? "sinistro" : "sinistros"}`;
   const summary: string[] = [];
   if (selectedWorkflow) summary.push(`Fluxo: ${workflows.find((w) => w.id === selectedWorkflow)?.name ?? selectedWorkflow}`);
   if (selectedStage) summary.push(`Etapa: ${selectedStage}`);
@@ -99,8 +100,8 @@ export function SinistrosFilterBar({
     {!expanded && (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
         <Filter className="size-4 shrink-0 text-brand" />
-        <span className="text-[13px] text-slate-700">
-          <strong className="font-semibold text-slate-900">{totalCount}</strong> sinistro(s)
+        <span className="text-[13px] text-slate-700" aria-live="polite">
+          <strong className="font-semibold text-slate-900">{plural(totalCount)}</strong>
         </span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
           {summary.length === 0 ? (
@@ -139,8 +140,8 @@ export function SinistrosFilterBar({
             )}
           </div>
           <div className="flex items-center gap-2 text-[12px] text-slate-500">
-            <span>
-              Encontrados: <strong className="font-semibold text-slate-800">{totalCount}</strong> sinistro(s)
+            <span aria-live="polite">
+              Encontrados: <strong className="font-semibold text-slate-800">{plural(totalCount)}</strong>
             </span>
             {searched && (
               <button
@@ -275,9 +276,9 @@ export function SinistrosFilterBar({
               className={selectClass}
             >
               <option value="">Todas</option>
-              <option value="aberto">Aberto / Em andamento</option>
-              <option value="pausado">Pausado / Bloqueado</option>
-              <option value="fechado">Concluído / Fechado</option>
+              <option value="aberto">Abertos</option>
+              <option value="pausado">Bloqueados</option>
+              <option value="fechado">Fechados</option>
             </select>
           </div>
         </div>
@@ -319,42 +320,6 @@ export function SinistrosFilterBar({
             </Link>
           </div>
 
-          {/* Tags de Resumo dos Filtros Ativos */}
-          {hasActiveFilters && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-              <span className="font-medium">Filtrando por:</span>
-              {selectedWorkflow && (
-                <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                  Fluxo: {workflows.find((w) => w.id === selectedWorkflow)?.name ?? selectedWorkflow}
-                </span>
-              )}
-              {selectedStage && (
-                <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                  Etapa: {selectedStage}
-                </span>
-              )}
-              {selectedGroup && selectedGroup !== "todos" && (
-                <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                  Grupo: {groups.find((g) => g.id === selectedGroup)?.name ?? selectedGroup}
-                </span>
-              )}
-              {selectedSlaEtapa && (
-                <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                  Prazo da etapa: {selectedSlaEtapa === "atrasado" ? "Atrasada" : "No Prazo"}
-                </span>
-              )}
-              {selectedSlaTotal && (
-                <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                  Prazo do fluxo: {selectedSlaTotal === "atrasado" ? "Atrasado" : "No Prazo"}
-                </span>
-              )}
-              {selectedSituacao && (
-                <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                  Situação: {selectedSituacao}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </form>
     </div>

@@ -11,15 +11,38 @@ export function FormalizeButton({ options }: { options: { id: string; name: stri
   const [flow, setFlow] = useState("");
   const [going, setGoing] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
+  const dialogRef = useRef<HTMLFormElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     selectRef.current?.focus();
+    const trigger = triggerRef.current;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      // foco preso no pop-up: Tab e Shift+Tab circulam só entre os controles dele
+      if (e.key === "Tab" && dialogRef.current) {
+        const items = [...dialogRef.current.querySelectorAll<HTMLElement>("select, button:not([disabled])")];
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      trigger?.focus(); // devolve o foco ao botão que abriu o pop-up
+    };
   }, [open]);
 
   function confirm(e: React.FormEvent) {
@@ -32,13 +55,14 @@ export function FormalizeButton({ options }: { options: { id: string; name: stri
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setFlow(options.length === 1 ? options[0].id : "");
           setGoing(false);
           setOpen(true);
         }}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600 max-md:fixed max-md:bottom-4 max-md:right-4 max-md:z-30 max-md:py-3 max-md:shadow-lg"
       >
         <Plus className="size-4" /> Formalizar sinistro
       </button>
@@ -46,6 +70,7 @@ export function FormalizeButton({ options }: { options: { id: string; name: stri
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[3px]" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
           <form
+            ref={dialogRef}
             onSubmit={confirm}
             role="dialog"
             aria-modal="true"
@@ -71,7 +96,7 @@ export function FormalizeButton({ options }: { options: { id: string; name: stri
               required
               value={flow}
               onChange={(e) => setFlow(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-[14px] text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className="mt-1 w-full rounded-lg border-0 px-3 py-2 text-[14px] outline-none"
             >
               <option value="">Selecione…</option>
               {options.map((w) => (

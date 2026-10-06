@@ -631,3 +631,35 @@ body[data-theme="dark"] {
 /* Botões de filtro/etapa no estado selecionado: a cor de seleção */
 .app-content-bg :is(button, a).bg-navy { background-color: #577bf8; }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(button, a).bg-navy { background-color: #0b1220; }
+
+/* ==========================================================================
+   URGÊNCIA DO PRAZO (SLA): três tokens semânticos calibrados para a paleta azul. Atrasado, em risco e no prazo.
+   Chips de vidro claro com texto escuro (contraste alto), sem borda e sem cor crua do Tailwind.
+   ========================================================================== */
+.sla-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sla-urgent { background: rgba(190, 18, 60, 0.14); color: #881337; }
+.sla-risk { background: rgba(217, 119, 6, 0.18); color: #78350f; }
+.sla-ok { background: rgba(21, 128, 61, 0.14); color: #14532d; }
+:is(.dark, [data-theme="dark"]) .sla-urgent { background: rgba(244, 63, 94, 0.18); color: #fda4af; }
+:is(.dark, [data-theme="dark"]) .sla-risk { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+:is(.dark, [data-theme="dark"]) .sla-ok { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+
+/* Foco visível em botões, links e campos do app: anel claro com contorno escuro, legível sobre vidro claro e escuro */
+.app-content-bg :is(button, a, select, input, textarea, summary):focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(15, 30, 70, 0.55);
+}
+/* Números em tabelas e listas alinham em coluna */
+.tabular { font-variant-numeric: tabular-nums; }

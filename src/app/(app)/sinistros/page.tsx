@@ -2,7 +2,7 @@ import { GroupChip } from "@/lib/group-icons";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, RotateCcw, SearchX, Users } from "lucide-react";
+import { Clock3, FileWarning, RotateCcw, SearchX } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -74,6 +74,7 @@ type SearchParams = {
   por?: string;
   ordem?: string;
   dir?: string;
+  q?: string;
 };
 
 export default async function SinistrosPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -126,8 +127,16 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   const PAGE_SIZE = [10, 30, 50].includes(Number(sp.por)) ? Number(sp.por) : 10;
   const visao = sp.visao === "tabela" ? "tabela" : "cartoes";
   // Classificação: padrão = data de criação, mais recentes primeiro.
-  const ordem = (["criacao", "situacao", "grupo", "fluxo"].includes(sp.ordem ?? "") ? sp.ordem : "criacao") as "criacao" | "situacao" | "grupo" | "fluxo";
-  const dir = sp.dir === "asc" ? "asc" : ordem === "criacao" ? "desc" : sp.dir === "desc" ? "desc" : "asc";
+  const ordem = (["criacao", "urgencia", "situacao", "grupo", "fluxo"].includes(sp.ordem ?? "") ? sp.ordem : "criacao") as
+    | "criacao"
+    | "urgencia"
+    | "situacao"
+    | "grupo"
+    | "fluxo";
+  // criação e urgência abrem do mais recente / mais urgente; as demais, de A a Z
+  const newestFirst = ordem === "criacao" || ordem === "urgencia";
+  const dir = sp.dir === "asc" ? "asc" : sp.dir === "desc" ? "desc" : newestFirst ? "desc" : "asc";
+  const busca = (sp.q ?? "").trim().slice(0, 60);
   const agrupar = ["situacao", "grupo", "fluxo"].includes(sp.agrupar ?? "") ? (sp.agrupar as "situacao" | "grupo" | "fluxo") : "";
   const page = Math.max(1, Number.parseInt(sp.pagina ?? "1", 10) || 1);
 
@@ -230,15 +239,17 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   let visibleClaims: typeof claims = [];
   const CLAIM_FETCH_CAP = 300;
   let capped = false;
+  let loadFailed = false;
 
   if (searched) {
-    const { data: claimRows } = await supabase
+    const { data: claimRows, error: claimsError } = await supabase
       .from("claims")
       .select("id, claim_number, status, created_at, custom_fields, claim_cycles(id, status, cycle_number, formalized_at, completed_at, workflow_version_id)")
       .eq("tenant_id", ctx.tenantId)
       .order("created_at", { ascending: false })
       .limit(CLAIM_FETCH_CAP);
     claims = claimRows ?? [];
+    loadFailed = Boolean(claimsError);
     capped = claims.length >= CLAIM_FETCH_CAP;
 
     // Identidade do sinistro na lista: os primeiros valores dos campos de abertura (placa, segurado...)
@@ -398,6 +409,14 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       return true;
     });
   }
+  if (busca) {
+    const needle = busca.toLowerCase();
+    visibleClaims = visibleClaims.filter(
+      (c) =>
+        c.claim_number.toLowerCase().includes(needle) ||
+        Object.values((c.custom_fields ?? {}) as Record<string, unknown>).some((v) => typeof v === "string" && v.toLowerCase().includes(needle)),
+    );
+  }
 
   // Agrupamento: cada sinistro ganha uma chave (situação, grupo responsável agora ou fluxo) e a lista sai ordenada por ela.
   const closedStatuses = ["completed", "cancelled", "discarded", "archived"];
@@ -419,8 +438,21 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     }
     return { key: "", order: 0 };
   };
+  // Urgência: a etapa em andamento com o maior consumo do prazo. Sinistro fechado ou sem prazo definido não tem urgência.
+  const urgencyOf = (c: (typeof visibleClaims)[number]) => {
+    const cycle = currentCycleByClaim.get(c.id);
+    const status = cycle?.status ?? c.status;
+    if (!cycle || closedStatuses.includes(status)) return null;
+    let worst: { sla: NonNullable<ReturnType<typeof computeSla>>; name: string } | null = null;
+    for (const st of stagesByCycle.get(cycle.id) ?? []) {
+      const sla = computeSla(st.entered_at, st.sla_minutes);
+      if (sla && (!worst || sla.pct > worst.sla.pct)) worst = { sla, name: st.name };
+    }
+    return worst;
+  };
   const sortValue = (c: (typeof visibleClaims)[number]): string | number => {
     const cycle = currentCycleByClaim.get(c.id);
+    if (ordem === "urgencia") return urgencyOf(c)?.sla.pct ?? -1;
     if (ordem === "criacao") return new Date(c.created_at).getTime();
     if (ordem === "situacao") return CYCLE_STATUS_LABEL[cycle?.status ?? c.status] ?? "";
     if (ordem === "grupo") return cycle ? ([...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id) ?? "").sort()[0] ?? "~") : "~";
@@ -453,12 +485,6 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Sinistros</h1>
-            {!searched && (
-              <p className="mt-1 max-w-xl text-[14px] text-slate-700">
-                Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido, mudanças futuras no fluxo não
-                afetam ciclos já abertos.
-              </p>
-            )}
           </div>
 
           {!perms.has("claim.formalize") || !canFormalize ? null : options.length === 0 ? (
@@ -501,15 +527,29 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
             ordem={ordem}
             dir={dir}
             por={PAGE_SIZE}
+            q={busca}
             base={Object.fromEntries(Object.entries(sp).filter(([, v]) => typeof v === "string")) as Record<string, string>}
           />
         )}
 
-        {!searched ? (
+        {searched && capped && (
+          <p className="mt-3 text-[12px] text-white">Mostrando só os {CLAIM_FETCH_CAP} sinistros mais recentes. Use os filtros para refinar.</p>
+        )}
+
+        {searched && loadFailed ? (
+          <div role="alert" className="mt-6 rounded-xl bg-white px-6 py-8 text-center">
+            <FileWarning className="mx-auto size-8 text-rose-700" />
+            <p className="mt-3 text-[15px] font-medium text-slate-900">Não foi possível carregar os sinistros agora.</p>
+            <p className="mt-1 text-[13px] text-slate-700">Tente de novo em instantes. Se continuar, avise o suporte.</p>
+            <Link href="/sinistros?searched=1" className="mt-4 inline-flex rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600">
+              Tentar de novo
+            </Link>
+          </div>
+        ) : !searched ? (
           <div className="mt-6 flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <SearchX className="mx-auto size-8 text-slate-300" />
-            <p className="text-[15px] font-medium text-slate-800">Clique em Filtrar para ver os sinistros</p>
-            <p className="max-w-sm text-[13px] text-slate-500">A lista não carrega sozinha ao abrir a tela.</p>
+            <p className="text-[15px] font-medium text-slate-800">Escolha os filtros e clique em Filtrar</p>
+            <p className="max-w-sm text-[13px] text-slate-600">Assim a lista abre rápida, mesmo com muitos sinistros.</p>
           </div>
         ) : !visibleClaims.length ? (
           <div className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
@@ -538,6 +578,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                   <th className="px-3 py-2.5">Identificação</th>
                   <th className="px-3 py-2.5">Fluxo</th>
                   <th className="px-3 py-2.5">Etapa atual</th>
+                  <th className="px-3 py-2.5">Prazo da etapa</th>
                   <th className="px-3 py-2.5">Grupo</th>
                   <th className="px-3 py-2.5">Progresso</th>
                   <th className="px-3 py-2.5">Situação</th>
@@ -549,7 +590,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                   if (it.kind === "header")
                     return (
                       <tr key={`h-${it.key}`} className="bg-slate-100/70">
-                        <td colSpan={8} className="px-3 py-2 text-[12px] font-semibold text-slate-800">
+                        <td colSpan={9} className="px-3 py-2 text-[12px] font-semibold text-slate-800">
                           {it.key} <span className="font-normal text-slate-600">({it.count})</span>
                         </td>
                       </tr>
@@ -572,7 +613,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                   );
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/70">
-                      <td className="px-3 py-2.5 font-semibold text-slate-900">
+                      <td className="tabular whitespace-nowrap px-3 py-2.5 font-semibold text-slate-900">
                         <Link href={`/sinistros/${c.id}`} className="hover:text-brand hover:underline">
                           {c.claim_number}
                         </Link>
@@ -580,8 +621,9 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                       <td className="px-3 py-2.5 text-slate-700">{idValues.length ? idValues.map((v) => v.value).join(" · ") : "-"}</td>
                       <td className="px-3 py-2.5 text-slate-700">{wfId ? (workflowById.get(wfId)?.name ?? "-") : "-"}</td>
                       <td className="px-3 py-2.5 text-slate-700">{stageNames.length ? stageNames.join(", ") : "-"}</td>
+                      <td className="px-3 py-2.5">{closedStatuses.includes(status) ? <span className="text-slate-600">-</span> : <SlaChip u={urgencyOf(c)} />}</td>
                       <td className="px-3 py-2.5 text-slate-700">{groupNames.length ? groupNames.join(", ") : "-"}</td>
-                      <td className="px-3 py-2.5 font-medium text-slate-800">{prog ? `${prog.pct}%` : "-"}</td>
+                      <td className="tabular px-3 py-2.5 font-medium text-slate-800">{prog ? `${prog.pct}%` : "-"}</td>
                       <td className="px-3 py-2.5">
                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${CYCLE_STATUS_STYLE[status] ?? "bg-slate-100 text-slate-600 ring-slate-200"}`}>
                           {CYCLE_STATUS_LABEL[status] ?? status}
@@ -622,7 +664,6 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
               const cycle = currentCycleByClaim.get(c.id);
               const status = cycle?.status ?? c.status;
               const isCompleted = status === "completed";
-              const isBlocked = status === "blocked";
               const activeGroups = cycle ? [...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id)).filter(Boolean) : [];
               const activeStages = cycle ? (stagesByCycle.get(cycle.id) ?? []) : [];
               const totalFlowSlaMinutes = cycle ? totalSlaByVersion.get(cycle.workflow_version_id) : undefined;
@@ -636,222 +677,90 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
               );
               const executionDuration = isCompleted ? formatDurationBetween(cycle?.formalized_at || c.created_at, cycle?.completed_at) : "";
 
+              const wfIdCard = cycle ? versionToWorkflow.get(cycle.workflow_version_id) : undefined;
+              const idValuesCard = Object.entries((c.custom_fields ?? {}) as Record<string, string>)
+                .map(([key, value]) => ({ label: wfIdCard ? fieldLabelByWorkflowKey.get(`${wfIdCard}:${key}`) : undefined, value }))
+                .filter((v): v is { label: string; value: string } => !!v.label && !!v.value)
+                .slice(0, 3);
+              const urgency = urgencyOf(c);
+              const flowAlert = totalFlowSla && (totalFlowSla.isBreached || totalFlowSla.isAtRisk) ? totalFlowSla : null;
+
               return (
-                <div
-                  key={c.id}
-                  className={`group rounded-xl border bg-white shadow-xs transition-all hover:shadow-md hover:border-slate-300 overflow-hidden ${
-                    isCompleted
-                      ? "border-slate-200 border-l-4 border-l-emerald-500"
-                      : isBlocked
-                        ? "border-rose-200 border-l-4 border-l-rose-500"
-                        : "border-slate-200 border-l-4 border-l-sky-500"
-                  }`}
-                >
-                  <Link href={`/sinistros/${c.id}`} className="block">
-                    {/* CABEÇALHO DO CARD */}
-                    <div
-                      className={`px-5 py-3 border-b flex flex-wrap sm:flex-nowrap items-center justify-between gap-4 ${
-                        isCompleted
-                          ? "bg-emerald-50/40 border-emerald-100/60"
-                          : isBlocked
-                            ? "bg-rose-50/40 border-rose-100/60"
-                            : "bg-slate-50/80 border-slate-100"
-                      }`}
+                <div key={c.id} className="group relative rounded-xl bg-white px-4 py-3 shadow-xs transition-shadow hover:shadow-md">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <Link
+                      href={`/sinistros/${c.id}`}
+                      className="tabular text-[15px] font-bold text-slate-900 transition-colors after:absolute after:inset-0 after:rounded-xl hover:text-brand"
                     >
-                      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                        <div
-                          className={`grid size-7 place-items-center rounded-md ${
-                            isCompleted
-                              ? "bg-emerald-100 text-emerald-700"
-                              : isBlocked
-                                ? "bg-rose-100 text-rose-700"
-                                : "bg-brand/10 text-brand"
-                          }`}
-                        >
-                          <FileWarning className="size-4" />
-                        </div>
-                        <span className="text-[15px] font-bold text-slate-900 group-hover:text-brand transition-colors">
-                          {c.claim_number}
-                        </span>
-                        {isCompleted ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                            <Clock3 className="size-3 text-emerald-700" />
-                            Duração total: {executionDuration}
+                      {c.claim_number}
+                    </Link>
+                    {idValuesCard.length > 0 && (
+                      <span className="text-[13px] text-slate-700">
+                        {idValuesCard.map((v, i) => (
+                          <span key={v.label} title={v.label}>
+                            {i > 0 && <span aria-hidden className="mx-1.5 text-slate-400">·</span>}
+                            {v.value}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[12px] text-slate-500">
-                            <Clock3 className="size-3 text-slate-500" />
-                            Criado há {formatRelativeDuration(c.created_at)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* GRÁFICO DE BARRA DE PROGRESSO DO PROCESSO */}
-                      {progressStats ? (
-                        <div className="flex flex-col gap-1 min-w-[150px] max-w-[240px] flex-1 px-2">
-                          <div className="flex items-center justify-between text-xs font-medium leading-none">
-                            <span className="text-slate-500">Progresso</span>
-                            <span
-                              className={`font-bold ${
-                                progressStats.pct === 100 ? "text-emerald-700" : "text-brand"
-                              }`}
-                            >
-                              {progressStats.pct}%
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden relative border border-slate-300/40">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${
-                                progressStats.pct === 100 ? "bg-emerald-500" : "bg-brand"
-                              }`}
-                              style={{ width: `${progressStats.pct}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-slate-500 leading-none">
-                            {progressStats.subtext}
-                          </span>
-                        </div>
-                      ) : null}
-
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
-                            CYCLE_STATUS_STYLE[status] ?? "bg-slate-100 text-slate-600 ring-slate-200"
-                          }`}
-                        >
-                          {CYCLE_STATUS_LABEL[status] ?? status}
-                        </span>
-                        <ChevronRight className="size-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-600" />
-                      </div>
-                    </div>
-
-                    {/* CORPO DO CARD */}
-                    <div className="p-4 space-y-3">
-                      {(() => {
-                        const wfId = cycle ? versionToWorkflow.get(cycle.workflow_version_id) : undefined;
-                        const values = Object.entries((c.custom_fields ?? {}) as Record<string, string>)
-                          .map(([key, value]) => ({ label: wfId ? fieldLabelByWorkflowKey.get(`${wfId}:${key}`) : undefined, value }))
-                          .filter((v): v is { label: string; value: string } => !!v.label && !!v.value)
-                          .slice(0, 3);
-                        return values.length ? (
-                          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
-                            {values.map((v) => (
-                              <div key={v.label} className="flex gap-1.5">
-                                <dt className="text-slate-500">{v.label}:</dt>
-                                <dd className="font-medium text-slate-900">{v.value}</dd>
-                              </div>
-                            ))}
-                          </dl>
-                        ) : null;
-                      })()}
+                        ))}
+                      </span>
+                    )}
+                    <div className="ml-auto flex items-center gap-2">
                       {isCompleted ? (
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-600">
-                          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
-                            <CheckCircle2 className="size-4 text-emerald-600" />
-                            Ciclo finalizado com sucesso
-                          </span>
-                          {totalFlowSlaMinutes ? (
-                            <span className="text-slate-500">
-                              • SLA previsto no fluxo:{" "}
-                              <strong className="font-semibold text-slate-800">
-                                {formatDuration(totalFlowSlaMinutes)}
-                              </strong>
-                            </span>
-                          ) : null}
-                          {cycle?.completed_at && (
-                            <span className="text-slate-500">
-                              • Encerrado há {formatRelativeDuration(cycle.completed_at)}
-                            </span>
-                          )}
-                        </div>
+                        <span className="sla-chip sla-ok" title="Tempo total do fluxo, da abertura ao encerramento.">
+                          Concluído em {executionDuration}
+                        </span>
                       ) : (
-                        <>
-                          {/* BLOCO DA ETAPA ATUAL */}
-                          {activeStages.length > 0 && (
-                            <div className="rounded-lg border border-slate-200/80 bg-slate-50/60 p-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2.5">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                                    Etapa Atual
-                                  </span>
-                                  {activeStages.map((st) => (
-                                    <div key={st.id} className="flex flex-wrap items-center gap-1.5">
-                                      <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-900">
-                                        <Layers className="size-3.5 text-brand" />
-                                        {st.name}
-                                      </span>
-                                      <span className="text-[12px] text-slate-500 font-normal">
-                                        (parado há {formatRelativeDuration(st.entered_at)})
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-
-                                {/* BADGE DO SLA DA ETAPA */}
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {activeStages.map((st) => {
-                                    const stageSla = computeSla(st.entered_at, st.sla_minutes);
-                                    if (!stageSla) return null;
-                                    return (
-                                      <span
-                                        key={st.id}
-                                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold border ${
-                                          stageSla.isBreached
-                                            ? "bg-rose-50 text-rose-700 border-rose-200"
-                                            : stageSla.isAtRisk
-                                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                        }`}
-                                      >
-                                        <Clock3 className="size-3.5" />
-                                        <span title="Prazo da etapa atual, contado desde que ela começou.">SLA da Etapa:</span> {stageSla.pct}% ({stageSla.formattedRemaining})
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* SLA TOTAL DO FLUXO E GRUPO RESPONSÁVEL */}
-                          <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5 text-[12px]">
-                            {totalFlowSla ? (
-                              <div className="flex items-center gap-2">
-                                <span title="Prazo para concluir o fluxo inteiro, contado desde a abertura do sinistro." className="font-medium text-slate-500">SLA Total do Fluxo:</span>
-                                <span
-                                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold border ${
-                                    totalFlowSla.isBreached
-                                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                                      : totalFlowSla.isAtRisk
-                                        ? "bg-amber-50 text-amber-700 border-amber-200"
-                                        : "bg-sky-50 text-sky-700 border-sky-200"
-                                  }`}
-                                >
-                                  <Clock3 className="size-3" />
-                                  {totalFlowSla.pct}% consumido • {totalFlowSla.formattedRemaining} (limite:{" "}
-                                  {totalFlowSla.formattedLimit})
-                                </span>
-                              </div>
-                            ) : (
-                              <div />
-                            )}
-
-                            {activeGroups.length > 0 && (
-                              <div className="flex items-center gap-1.5 text-slate-500">
-                                <Users className="size-3.5 text-slate-500" />
-                                <span>Aguardando:</span>
-                                <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-slate-800 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded text-xs">
-                                  {[...(groupsByCycle.get(cycle?.id ?? "") ?? [])].map((gid) => (
-                                    <GroupChip key={gid} name={groupNameById.get(gid) ?? "-"} icon={groupMetaById.get(gid)?.icon} color={groupMetaById.get(gid)?.color} />
-                                  ))}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </>
+                        <SlaChip u={urgency} />
                       )}
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                          CYCLE_STATUS_STYLE[status] ?? "bg-slate-100 text-slate-600 ring-slate-200"
+                        }`}
+                      >
+                        {CYCLE_STATUS_LABEL[status] ?? status}
+                      </span>
                     </div>
-                  </Link>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-slate-700">
+                    {!isCompleted &&
+                      activeStages.map((st) => (
+                        <span key={st.id}>
+                          Etapa <strong className="font-semibold text-slate-900">{st.name}</strong>, há {formatRelativeDuration(st.entered_at)}
+                        </span>
+                      ))}
+                    {!isCompleted && activeGroups.length > 0 && (
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        Aguardando
+                        {[...(groupsByCycle.get(cycle?.id ?? "") ?? [])].map((gid) => (
+                          <span key={gid} className="rounded bg-slate-900/[0.06] px-1.5 py-0.5 font-semibold text-slate-900">
+                            <GroupChip name={groupNameById.get(gid) ?? "-"} icon={groupMetaById.get(gid)?.icon} color={groupMetaById.get(gid)?.color} />
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    {isCompleted && cycle?.completed_at && <span>Encerrado há {formatRelativeDuration(cycle.completed_at)}</span>}
+                    {progressStats && (
+                      <span className="inline-flex items-center gap-1.5" title={progressStats.subtext}>
+                        <span
+                          role="progressbar"
+                          aria-label="Andamento do processo"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={progressStats.pct}
+                          className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-900/10"
+                        >
+                          <span className={`block h-full rounded-full ${progressStats.pct === 100 ? "bg-emerald-600" : "bg-brand"}`} style={{ width: `${progressStats.pct}%` }} />
+                        </span>
+                        <span className="tabular font-semibold text-slate-900">{progressStats.pct}%</span>
+                      </span>
+                    )}
+                    {flowAlert && (
+                      <span className={`sla-chip ${flowAlert.isBreached ? "sla-urgent" : "sla-risk"}`} title="Prazo para concluir o fluxo inteiro, contado desde a abertura.">
+                        Fluxo: {flowAlert.formattedRemaining}
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -868,14 +777,23 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                 Mostrar mais ({visibleClaims.length - page * PAGE_SIZE} restantes)
               </Link>
             )}
-            {capped && (
-              <p className="text-center text-[12px] text-slate-500">
-                Mostrando só os {CLAIM_FETCH_CAP} sinistros mais recentes. Use os filtros para refinar.
-              </p>
-            )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// Chip do prazo da etapa em andamento: atrasado, em risco ou no prazo (tokens .sla-*). Texto sempre diz o estado, a cor só reforça.
+function SlaChip({ u }: { u: { sla: { isBreached: boolean; isAtRisk: boolean; formattedRemaining: string }; name: string } | null }) {
+  if (!u) return <span className="text-[12px] text-slate-600">Sem prazo definido</span>;
+  const { sla } = u;
+  const tone = sla.isBreached ? "sla-urgent" : sla.isAtRisk ? "sla-risk" : "sla-ok";
+  const state = sla.isBreached ? "Atrasada" : sla.isAtRisk ? "Em risco" : "No prazo";
+  return (
+    <span className={`sla-chip ${tone}`} title={`Prazo da etapa "${u.name}", contado desde que ela começou.`}>
+      <Clock3 className="size-3.5 shrink-0" aria-hidden />
+      {state} · {sla.formattedRemaining}
+    </span>
   );
 }
