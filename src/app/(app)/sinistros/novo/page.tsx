@@ -44,11 +44,11 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
   const { data: fields } = fieldKeys.length
     ? await supabase
         .from("workflow_fields")
-        .select("id, key, label, field_type, options, required, default_value, min_length, max_length")
+        .select("id, key, label, field_type, options, required, default_value, min_length, max_length, min_value, max_value")
         .eq("workflow_id", workflow.id)
         .in("key", fieldKeys)
         .order("position")
-    : { data: [] as { id: string; key: string; label: string; field_type: string; options: unknown; required: boolean; default_value: string | null; min_length: number | null; max_length: number | null }[] };
+    : { data: [] as { id: string; key: string; label: string; field_type: string; options: unknown; required: boolean; default_value: string | null; min_value: number | null; max_value: number | null; min_length: number | null; max_length: number | null }[] };
 
   const needsPeople = (fields ?? []).some((f) => f.field_type === "person");
   let memberOptions: { id: string; name: string }[] = [];
@@ -84,7 +84,7 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
           <input type="hidden" name="workflow_id" value={workflow.id} />
           {(fields ?? []).length > 0 && (
             <div className="grid gap-4 sm:grid-cols-2">
-              {(fields ?? []).map((f) => (
+              {(fields ?? []).filter((f) => f.field_type !== "calculated").map((f) => (
                 <div key={f.id}>
                   <label htmlFor={`field-${f.key}`} className="mb-1 block text-[12px] font-medium text-slate-600">
                     {f.label}
@@ -122,7 +122,10 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
                     <input
                       id={`field-${f.key}`}
                       name={`field_${f.key}`}
-                      type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
+                      type={f.field_type === "number" || f.field_type === "money" || f.field_type === "percent" ? "number" : f.field_type === "date" ? "date" : "text"}
+                      step={f.field_type === "money" || f.field_type === "percent" ? "0.01" : f.field_type === "number" ? "any" : undefined}
+                      min={f.field_type === "percent" ? (f.min_value ?? 0) : (f.min_value ?? undefined)}
+                      max={f.field_type === "percent" ? (f.max_value ?? 100) : (f.max_value ?? undefined)}
                       required={f.required}
                       minLength={f.field_type === "text" ? (f.min_length ?? undefined) : undefined}
                       maxLength={f.field_type === "text" ? (f.max_length ?? undefined) : undefined}

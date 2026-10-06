@@ -489,7 +489,7 @@ function FieldsSection({
           {fields.map((f, idx) =>
             editingId === f.id && onUpdateField ? (
               <li key={f.id}>
-                <EditFieldForm field={f} onSave={(fd) => onUpdateField(f.id, fd)} onDone={() => setEditingId(null)} />
+                <EditFieldForm field={f} fields={fields} onSave={(fd) => onUpdateField(f.id, fd)} onDone={() => setEditingId(null)} />
               </li>
             ) : (
               <li key={f.id} className="flex items-center gap-2">
@@ -610,20 +610,29 @@ function FieldsSection({
           {fieldType === "select" && (
             <input name="options" required placeholder="Opções separadas por vírgula" className={`${input} bg-white`} />
           )}
-          {fieldType !== "attachment" && (
+          {fieldType !== "attachment" && fieldType !== "calculated" && (
             <input name="default_value" placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
           )}
+          {(fieldType === "number" || fieldType === "money" || fieldType === "percent") && (
+            <div className="grid grid-cols-2 gap-2">
+              <input name="min_value" inputMode="decimal" placeholder={fieldType === "percent" ? "Mínimo (%)" : "Valor mínimo"} className={`${input} bg-white`} />
+              <input name="max_value" inputMode="decimal" placeholder={fieldType === "percent" ? "Máximo (%)" : "Valor máximo"} className={`${input} bg-white`} />
+            </div>
+          )}
+          {fieldType === "calculated" && <FormulaInput fields={fields} />}
           {(fieldType === "text" || fieldType === "textarea") && (
             <div className="grid grid-cols-2 gap-2">
               <input name="min_length" type="number" min={1} max={5000} placeholder="Mín. de caracteres" className={`${input} bg-white`} />
               <input name="max_length" type="number" min={1} max={5000} placeholder="Máx. de caracteres" className={`${input} bg-white`} />
             </div>
           )}
-          <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
-            <input type="checkbox" name="required" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
-            Obrigatório, bloqueia &quot;Concluir&quot; até preencher
-          </label>
-          {fieldType !== "boolean" && fieldType !== "attachment" && (
+          {fieldType !== "calculated" && (
+            <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+              <input type="checkbox" name="required" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
+              Obrigatório, bloqueia &quot;Concluir&quot; até preencher
+            </label>
+          )}
+          {fieldType !== "boolean" && fieldType !== "attachment" && fieldType !== "calculated" && (
             <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
               <input type="checkbox" name="is_unique" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
               Não permitir duplicado entre sinistros
@@ -655,14 +664,59 @@ function FieldsSection({
   );
 }
 
+// Fórmula de um campo calculado: o texto usa as chaves dos campos numéricos do fluxo. Os botões inserem a chave no cursor.
+function FormulaInput({ fields, defaultValue = "", defaultFormat = "money", selfKey }: { fields: WorkflowField[]; defaultValue?: string; defaultFormat?: string; selfKey?: string }) {
+  const [text, setText] = useState(defaultValue);
+  const usable = fields.filter((f) => ["number", "money", "percent", "calculated"].includes(f.field_type) && f.key !== selfKey);
+  return (
+    <div className="space-y-1.5">
+      <input
+        name="formula"
+        required
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Ex.: valor_do_prejuizo + valor_da_franquia"
+        className={`${input} bg-white font-mono`}
+        spellCheck={false}
+        autoComplete="off"
+      />
+      {usable.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {usable.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              title={`Inserir ${f.key}`}
+              onClick={() => setText((t) => `${t}${t && !/[\s(+\-*/,]$/.test(t) ? " " : ""}${f.key}`)}
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500">Crie antes os campos numéricos (Número, Valor em R$ ou Porcentagem) que entram na conta.</p>
+      )}
+      <select name="default_value" defaultValue={defaultFormat} className={`${input} bg-white`} aria-label="Mostrar o resultado como">
+        <option value="money">Mostrar como valor em R$</option>
+        <option value="percent">Mostrar como porcentagem (%)</option>
+        <option value="number">Mostrar como número</option>
+      </select>
+      <p className="text-xs text-slate-500">Use + - * / e parênteses. Funções: min, max, abs, round. Campo vazio vale 0.</p>
+    </div>
+  );
+}
+
 // Só rótulo e opções (quando é lista) são editáveis, tipo e chave ficam travados porque
 // claims.custom_fields pode já ter valor gravado sob essa chave, no formato daquele tipo.
 function EditFieldForm({
   field,
+  fields,
   onSave,
   onDone,
 }: {
   field: WorkflowField;
+  fields: WorkflowField[];
   onSave: (formData: FormData) => Promise<FieldResult>;
   onDone: () => void;
 }) {
@@ -693,9 +747,28 @@ function EditFieldForm({
           className={`${input} bg-white`}
         />
       )}
-      {field.field_type !== "attachment" && (
+      {field.field_type !== "attachment" && field.field_type !== "calculated" && (
         <input name="default_value" defaultValue={field.default_value ?? ""} placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
       )}
+      {(field.field_type === "number" || field.field_type === "money" || field.field_type === "percent") && (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            name="min_value"
+            inputMode="decimal"
+            defaultValue={field.min_value ?? ""}
+            placeholder={field.field_type === "percent" ? "Mínimo (%)" : "Valor mínimo"}
+            className={`${input} bg-white`}
+          />
+          <input
+            name="max_value"
+            inputMode="decimal"
+            defaultValue={field.max_value ?? ""}
+            placeholder={field.field_type === "percent" ? "Máximo (%)" : "Valor máximo"}
+            className={`${input} bg-white`}
+          />
+        </div>
+      )}
+      {field.field_type === "calculated" && <FormulaInput fields={fields} defaultValue={field.formula ?? ""} defaultFormat={field.default_value ?? "money"} selfKey={field.key} />}
       {(field.field_type === "text" || field.field_type === "textarea") && (
         <div className="grid grid-cols-2 gap-2">
           <input
@@ -718,16 +791,18 @@ function EditFieldForm({
           />
         </div>
       )}
-      <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
-        <input
-          type="checkbox"
-          name="required"
-          defaultChecked={field.required}
-          className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30"
-        />
-        Obrigatório, bloqueia &quot;Concluir&quot; até preencher
-      </label>
-      {field.field_type !== "boolean" && field.field_type !== "attachment" && (
+      {field.field_type !== "calculated" && (
+        <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+          <input
+            type="checkbox"
+            name="required"
+            defaultChecked={field.required}
+            className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30"
+          />
+          Obrigatório, bloqueia &quot;Concluir&quot; até preencher
+        </label>
+      )}
+      {field.field_type !== "boolean" && field.field_type !== "attachment" && field.field_type !== "calculated" && (
         <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
           <input
             type="checkbox"

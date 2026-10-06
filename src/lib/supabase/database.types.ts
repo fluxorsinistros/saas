@@ -2808,6 +2808,9 @@ export type Database = {
           label: string
           max_length: number | null
           min_length: number | null
+          min_value: number | null
+          max_value: number | null
+          formula: string | null
           options: Json | null
           position: number
           required: boolean
@@ -2824,6 +2827,9 @@ export type Database = {
           label: string
           max_length?: number | null
           min_length?: number | null
+          min_value?: number | null
+          max_value?: number | null
+          formula?: string | null
           options?: Json | null
           position?: number
           required?: boolean
@@ -2840,6 +2846,9 @@ export type Database = {
           label?: string
           max_length?: number | null
           min_length?: number | null
+          min_value?: number | null
+          max_value?: number | null
+          formula?: string | null
           options?: Json | null
           position?: number
           required?: boolean

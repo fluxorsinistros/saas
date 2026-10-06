@@ -1,6 +1,6 @@
 "use server";
 
-import { lengthError } from "@/lib/field-rules";
+import { lengthError, valueError, VALUE_FIELD_TYPES } from "@/lib/field-rules";
 import { publicDbMessage } from "@/lib/errors";
 import { revalidatePath } from "next/cache";
 import { assertCountLimit } from "@/lib/limits";
@@ -641,10 +641,10 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   const { data: fieldDefs } = startFieldKeys.length
     ? await supabase
         .from("workflow_fields")
-        .select("key, label, field_type, required, is_unique, min_length, max_length")
+        .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value")
         .eq("workflow_id", workflowId)
         .in("key", startFieldKeys)
-    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null }[] };
+    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null }[] };
   const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
   const patch: Record<string, string> = {};
@@ -653,21 +653,22 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
     if (!k.startsWith("field_")) continue;
     const key = k.slice("field_".length);
     const def = defByKey.get(key);
-    if (!def) continue;
+    if (!def || def.field_type === "calculated") continue; // calculado nunca é gravado: vem da fórmula
     if (def.field_type === "attachment") {
       if (v instanceof File && v.size > 0) attachments.push({ key, file: v });
       continue;
     }
-    const value = String(v);
+    const value = VALUE_FIELD_TYPES.includes(def.field_type) ? String(v).trim().replace(",", ".") : String(v);
     if (value !== "") patch[key] = value;
   }
 
   for (const def of fieldDefs ?? []) {
+    if (def.field_type === "calculated") continue;
     const hasValue = def.field_type === "attachment" ? attachments.some((a) => a.key === def.key) : !!patch[def.key];
     if (def.required && !hasValue) throw new Error(`O campo "${def.label}" é obrigatório.`);
   }
   for (const def of fieldDefs ?? []) {
-    const err = patch[def.key] ? lengthError(def, patch[def.key]) : null;
+    const err = patch[def.key] ? (lengthError(def, patch[def.key]) ?? valueError(def, patch[def.key])) : null;
     if (err) throw new Error(err);
   }
   for (const def of fieldDefs ?? []) {
@@ -748,17 +749,17 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     const { data: fieldDefs } = versionRow
       ? await supabase
           .from("workflow_fields")
-          .select("key, label, field_type, required, is_unique, min_length, max_length")
+          .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value")
           .eq("workflow_id", versionRow.workflow_id)
           .in("key", stageFieldKeys)
-      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null }[] };
+      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null }[] };
     const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
     const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
     const patch: Record<string, string> = {};
     for (const [k, v] of fieldEntries) {
       const key = k.slice("field_".length);
-      if (readonlyKeys.has(key)) continue;
+      if (readonlyKeys.has(key) || defByKey.get(key)?.field_type === "calculated") continue;
       if (defByKey.get(key)?.field_type === "attachment") {
         if (!(v instanceof File) || v.size === 0) continue;
         const path = `${ctx.tenantId}/custom-fields/${cycle.claim_id}/${key}-${Date.now()}-${v.name}`;
@@ -766,7 +767,7 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
         if (!upErr) patch[key] = path;
         continue;
       }
-      const value = String(v);
+      const value = VALUE_FIELD_TYPES.includes(defByKey.get(key)?.field_type ?? "") ? String(v).trim().replace(",", ".") : String(v);
       if (value !== "") patch[key] = value;
     }
 
@@ -775,11 +776,11 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     const merged = { ...current, ...patch };
 
     for (const def of fieldDefs ?? []) {
-      if (readonlyKeys.has(def.key)) continue;
+      if (readonlyKeys.has(def.key) || def.field_type === "calculated") continue;
       if (def.required && !merged[def.key]) throw new Error(`O campo "${def.label}" é obrigatório.`);
     }
     for (const def of fieldDefs ?? []) {
-      const err = patch[def.key] ? lengthError(def, patch[def.key]) : null;
+      const err = patch[def.key] ? (lengthError(def, patch[def.key]) ?? valueError(def, patch[def.key])) : null;
       if (err) throw new Error(err);
     }
     for (const def of fieldDefs ?? []) {

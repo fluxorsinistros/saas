@@ -13,6 +13,8 @@ import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
 import { computeProcessProgress, computeSla, formatDuration, minutesSince } from "@/lib/format";
+import { computeCalculatedValues } from "@/lib/formula";
+import { formatNumberField, VALUE_FIELD_TYPES } from "@/lib/field-rules";
 import { StageSlaBadge } from "@/components/StageSlaBadge";
 import { getPermissionCodes } from "@/lib/permissions";
 import { ExecutionViewToggle } from "@/components/execution/ExecutionViewToggle";
@@ -236,7 +238,7 @@ export default async function ClaimPage({
     supabase.from("workflows").select("name").eq("id", version!.workflow_id).single(),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, position")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position")
       .order("position")
       .eq("workflow_id", version!.workflow_id),
   ]);
@@ -244,6 +246,12 @@ export default async function ClaimPage({
   // Campos personalizados (Documento 1, "estilo SHARP"): cada etapa pede um subconjunto do
   // catálogo do fluxo; os valores caem todos em claims.custom_fields, nunca por etapa.
   const fieldByKey = new Map((workflowFields ?? []).map((f) => [f.key, f]));
+  // Campos calculados: valor sai da fórmula, na leitura (nunca é gravado). viewFields = digitados + calculados.
+  const calcValues = computeCalculatedValues(workflowFields ?? [], customFields);
+  const viewFields: Record<string, string> = { ...customFields };
+  for (const [k, v] of Object.entries(calcValues)) if (v !== null) viewFields[k] = String(v);
+  // Número como a pessoa lê: R$ 1.234,50, 30%, 12,5.
+  const fmtValue = (f: { field_type: string }, raw: string) => (f.field_type === "calculated" || VALUE_FIELD_TYPES.includes(f.field_type) ? formatNumberField(f.field_type === "calculated" ? (f as { default_value?: string | null }).default_value || "number" : f.field_type, Number(raw)) : String(raw));
   const hasPersonField = (workflowFields ?? []).some((f) => f.field_type === "person");
   const hasAttachmentField = (workflowFields ?? []).some((f) => f.field_type === "attachment");
 
@@ -407,7 +415,7 @@ export default async function ClaimPage({
     }
   }
   const dataRows = (workflowFields ?? []).map((f) => {
-    const raw = customFields[f.key];
+    const raw = viewFields[f.key];
     const filled = raw !== undefined && raw !== null && String(raw) !== "";
     const href = f.field_type === "attachment" && filled ? (attachmentUrlByPath.get(raw) ?? null) : null;
     const display = !filled
@@ -422,7 +430,7 @@ export default async function ClaimPage({
             ? new Date(`${raw}T00:00:00`).toLocaleDateString("pt-BR")
             : f.field_type === "attachment"
               ? "Arquivo anexado"
-              : String(raw);
+              : fmtValue(f, raw);
     return { key: f.key, label: f.label, required: f.required, where: fieldWhere.get(f.key) ?? [], filled, href, display };
   });
 
@@ -1183,8 +1191,8 @@ export default async function ClaimPage({
                       .filter((f): f is NonNullable<typeof f> => !!f);
                     stageFields.sort((x, y) => x.position - y.position);
                     const readonlyKeys = new Set(node?.config.readonly_field_keys ?? []);
-                    const editableFields = stageFields.filter((f) => !readonlyKeys.has(f.key));
-                    const consultFields = stageFields.filter((f) => readonlyKeys.has(f.key));
+                    const editableFields = stageFields.filter((f) => !readonlyKeys.has(f.key) && f.field_type !== "calculated");
+                    const consultFields = stageFields.filter((f) => readonlyKeys.has(f.key) || f.field_type === "calculated");
                     return (
                     <>
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
@@ -1252,7 +1260,7 @@ export default async function ClaimPage({
                           {consultFields.length > 0 && (
                             <dl className="grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-[12px] sm:grid-cols-2 lg:grid-cols-3" aria-label="Campos só para consulta">
                               {consultFields.map((f) => {
-                                const raw = customFields[f.key];
+                                const raw = viewFields[f.key];
                                 const has = raw !== undefined && raw !== null && String(raw) !== "";
                                 const display = !has
                                   ? "-"
@@ -1264,7 +1272,7 @@ export default async function ClaimPage({
                                       ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
                                       : f.field_type === "date"
                                         ? new Date(`${raw}T00:00:00`).toLocaleDateString("pt-BR")
-                                        : String(raw);
+                                        : fmtValue(f, raw);
                                 return (
                                   <div key={f.key} className="flex gap-1.5">
                                     <dt className="text-slate-500">{f.label}:</dt>
@@ -1366,7 +1374,10 @@ export default async function ClaimPage({
                                     <input
                                       id={`field-${f.key}`}
                                       name={`field_${f.key}`}
-                                      type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
+                                      type={f.field_type === "number" || f.field_type === "money" || f.field_type === "percent" ? "number" : f.field_type === "date" ? "date" : "text"}
+                                      step={f.field_type === "money" || f.field_type === "percent" ? "0.01" : f.field_type === "number" ? "any" : undefined}
+                                      min={f.field_type === "percent" ? (f.min_value ?? 0) : (f.min_value ?? undefined)}
+                                      max={f.field_type === "percent" ? (f.max_value ?? 100) : (f.max_value ?? undefined)}
                                       required={f.required}
                                       minLength={f.field_type === "text" ? (f.min_length ?? undefined) : undefined}
                                       maxLength={f.field_type === "text" ? (f.max_length ?? undefined) : undefined}
@@ -1405,12 +1416,12 @@ export default async function ClaimPage({
                         </span>
                       )}
                     </div>
-                    {activity.status === "completed" && stageFields.some((f) => customFields[f.key]) && (
+                    {activity.status === "completed" && stageFields.some((f) => viewFields[f.key]) && (
                       <dl className="mt-2.5 grid gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-[12px] sm:grid-cols-2">
                         {stageFields
-                          .filter((f) => customFields[f.key])
+                          .filter((f) => viewFields[f.key])
                           .map((f) => {
-                            const raw = customFields[f.key];
+                            const raw = viewFields[f.key];
                             const display =
                               f.field_type === "boolean"
                                 ? raw === "true"
@@ -1418,7 +1429,7 @@ export default async function ClaimPage({
                                   : "Não"
                                 : f.field_type === "person"
                                   ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
-                                  : raw;
+                                  : fmtValue(f, raw);
                             return (
                               <div key={f.key} className="flex gap-1.5">
                                 <dt className="text-slate-500">{f.label}:</dt>

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
 import { WorkflowBuilder } from "@/components/builder/WorkflowBuilder";
+import type { WorkflowField } from "@/lib/workflow/types";
 
 export const metadata: Metadata = { title: "Editor de fluxo" };
 
@@ -46,7 +47,7 @@ export default async function WorkflowPage({
     supabase.from("sla_calendars").select("id, name").eq("tenant_id", ctx.tenantId).order("name"),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, position")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position")
       .order("position")
       .eq("workflow_id", workflowId)
       .order("created_at"),
@@ -66,7 +67,7 @@ export default async function WorkflowPage({
       calendars={calendars ?? []}
       initialFields={(fields ?? []).map((f) => ({
         ...f,
-        field_type: f.field_type as "text" | "number" | "date" | "select",
+        field_type: f.field_type as WorkflowField["field_type"],
         options: f.options as string[] | null,
       }))}
       canEdit={perms.has("workflow.edit")}

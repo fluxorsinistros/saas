@@ -19,7 +19,7 @@ export type NodeConfig = {
   readonly_field_keys?: string[];
 };
 
-export type FieldType = "text" | "textarea" | "number" | "date" | "boolean" | "select" | "person" | "attachment";
+export type FieldType = "text" | "textarea" | "number" | "money" | "percent" | "calculated" | "date" | "boolean" | "select" | "person" | "attachment";
 
 export type WorkflowField = {
   id: string;
@@ -32,6 +32,9 @@ export type WorkflowField = {
   default_value: string | null;
   min_length: number | null;
   max_length: number | null;
+  min_value: number | null;
+  max_value: number | null;
+  formula: string | null;
   position: number;
 };
 
@@ -39,6 +42,9 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
   text: "Texto",
   textarea: "Texto longo",
   number: "Número",
+  money: "Valor em R$",
+  percent: "Porcentagem (%)",
+  calculated: "Calculado (fórmula)",
   date: "Data",
   boolean: "Sim/Não",
   select: "Lista de opções",

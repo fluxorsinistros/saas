@@ -1,6 +1,7 @@
 "use server";
 
 import { publicDbMessage } from "@/lib/errors";
+import { validateFormula } from "@/lib/formula";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -48,12 +49,16 @@ export type FieldResult =
         default_value: string | null;
         min_length: number | null;
         max_length: number | null;
+        min_value: number | null;
+        max_value: number | null;
+        formula: string | null;
         position: number;
       };
     }
   | { ok: false; error: string };
 
-const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, position";
+const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position";
+const FIELD_TYPES = ["text", "textarea", "number", "money", "percent", "calculated", "date", "boolean", "select", "person", "attachment"];
 
 // Tamanho mínimo/máximo (só texto e texto longo): vazio = sem limite.
 function readLengths(formData: FormData, fieldType: string): { min_length: number | null; max_length: number | null } | { error: string } {
@@ -71,6 +76,38 @@ function readLengths(formData: FormData, fieldType: string): { min_length: numbe
   return { min_length: min, max_length: max };
 }
 
+// Mínimo/máximo de valor (número, R$ e %): vazio = sem limite.
+function readValueBounds(formData: FormData, fieldType: string): { min_value: number | null; max_value: number | null } | { error: string } {
+  if (!["number", "money", "percent"].includes(fieldType)) return { min_value: null, max_value: null };
+  const parse = (name: string) => {
+    const raw = String(formData.get(name) ?? "").trim().replace(",", ".");
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && Math.abs(n) <= 1e12 ? n : NaN;
+  };
+  const min = parse("min_value");
+  const max = parse("max_value");
+  if (Number.isNaN(min) || Number.isNaN(max)) return { error: "Mínimo e máximo precisam ser números." };
+  if (min !== null && max !== null && min > max) return { error: "O mínimo não pode ser maior que o máximo." };
+  return { min_value: min, max_value: max };
+}
+
+// Fórmula de um campo calculado, conferida contra o catálogo do fluxo (campos existentes, numéricos e sem ciclo).
+async function readFormula(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workflowId: string,
+  selfKey: string,
+  fieldType: string,
+  formData: FormData,
+): Promise<{ formula: string | null } | { error: string }> {
+  if (fieldType !== "calculated") return { formula: null };
+  if (!["money", "percent", "number"].includes(String(formData.get("default_value") ?? ""))) return { error: "Escolha como mostrar o resultado (R$, % ou número)." };
+  const formula = String(formData.get("formula") ?? "").trim();
+  const { data: others } = await supabase.from("workflow_fields").select("key, label, field_type, formula").eq("workflow_id", workflowId).neq("key", selfKey);
+  const problem = validateFormula(selfKey, formula, others ?? []);
+  return problem ? { error: problem } : { formula };
+}
+
 // Campo personalizado "estilo SHARP" (Documento 1): o cliente cria quantos quiser, sem migração
 // nova, isso só grava uma linha de catálogo. A chave vira o identificador estável em
 // claims.custom_fields, então nunca muda depois de criada (só o rótulo pode).
@@ -82,7 +119,7 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   const label = String(formData.get("label") ?? "").trim();
   const fieldType = String(formData.get("field_type") ?? "text");
   if (!label) return { ok: false, error: "Nome do campo é obrigatório." };
-  if (!["text", "textarea", "number", "date", "boolean", "select", "person", "attachment"].includes(fieldType)) {
+  if (!FIELD_TYPES.includes(fieldType)) {
     return { ok: false, error: "Tipo de campo inválido." };
   }
 
@@ -113,8 +150,12 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   }
   const lengths = readLengths(formData, fieldType);
   if ("error" in lengths) return { ok: false, error: lengths.error };
+  const bounds = readValueBounds(formData, fieldType);
+  if ("error" in bounds) return { ok: false, error: bounds.error };
 
   const supabase = await createClient();
+  const formulaRes = await readFormula(supabase, workflowId, key, fieldType, formData);
+  if ("error" in formulaRes) return { ok: false, error: formulaRes.error };
   // campo novo entra no fim da ordem
   const { data: lastField } = await supabase
     .from("workflow_fields")
@@ -138,6 +179,9 @@ export async function createWorkflowField(workflowId: string, formData: FormData
       default_value: defaultValue,
       min_length: lengths.min_length,
       max_length: lengths.max_length,
+      min_value: bounds.min_value,
+      max_value: bounds.max_value,
+      formula: formulaRes.formula,
     })
     .select(FIELD_SELECT)
     .single();
@@ -160,7 +204,7 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
   if (!label) return { ok: false, error: "Nome do campo é obrigatório." };
 
   const supabase = await createClient();
-  const { data: existing } = await supabase.from("workflow_fields").select("field_type").eq("id", fieldId).single();
+  const { data: existing } = await supabase.from("workflow_fields").select("field_type, key").eq("id", fieldId).single();
   if (!existing) return { ok: false, error: "Campo não encontrado." };
 
   const options =
@@ -182,10 +226,25 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
   }
   const lengths = readLengths(formData, existing.field_type);
   if ("error" in lengths) return { ok: false, error: lengths.error };
+  const bounds = readValueBounds(formData, existing.field_type);
+  if ("error" in bounds) return { ok: false, error: bounds.error };
+  const formulaRes = await readFormula(supabase, workflowId, existing.key, existing.field_type, formData);
+  if ("error" in formulaRes) return { ok: false, error: formulaRes.error };
 
   const { data, error } = await supabase
     .from("workflow_fields")
-    .update({ label, options, required, is_unique: isUnique, default_value: defaultValue, min_length: lengths.min_length, max_length: lengths.max_length })
+    .update({
+      label,
+      options,
+      required,
+      is_unique: isUnique,
+      default_value: defaultValue,
+      min_length: lengths.min_length,
+      max_length: lengths.max_length,
+      min_value: bounds.min_value,
+      max_value: bounds.max_value,
+      ...(existing.field_type === "calculated" ? { formula: formulaRes.formula } : {}),
+    })
     .eq("id", fieldId)
     .eq("tenant_id", ctx.tenantId)
     .select(FIELD_SELECT)
