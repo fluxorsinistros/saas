@@ -392,8 +392,16 @@ body[data-theme="dark"] {
    Regras de desempenho: desfoque só no menu e em poucos painéis grandes; nunca em cada linha de uma lista.
    ========================================================================== */
 :root {
-  /* O menu (.sidebar-glass) e o painel de dados (.app-content-bg) têm fundos próprios. */
-  --app-bg: #bec1d2;
+  /* UMA imagem de fundo para a tela inteira (menu + dados): #3067AD no canto superior esquerdo até #BEC1D2 no inferior
+     direito, com formas desfocadas. O menu NÃO tem fundo próprio: é um vidro azul mais escuro por cima desta imagem. */
+  --app-bg:
+    radial-gradient(135vw 230px at 0% 0%, rgba(48, 103, 173, 0.98), rgba(48, 103, 173, 0.55) 55%, transparent 100%),
+    radial-gradient(34vw 38vh at 30% 34%, rgba(96, 142, 210, 0.55), transparent 72%),
+    radial-gradient(30vw 34vh at 8% 70%, rgba(120, 165, 225, 0.5), transparent 72%),
+    radial-gradient(38vw 42vh at 72% 56%, rgba(150, 178, 226, 0.5), transparent 72%),
+    radial-gradient(44vw 46vh at 100% 100%, rgba(196, 199, 216, 1), transparent 72%),
+    radial-gradient(34vw 36vh at 22% 100%, rgba(214, 218, 236, 0.85), transparent 72%),
+    linear-gradient(150deg, #3067ad 0%, #6f98cf 24%, #a9bde0 52%, #bec1d2 100%);
 }
 
 /* Menu lateral: vidro azul. As cores "navy" viram brancos translúcidos só dentro do menu. */
@@ -401,18 +409,13 @@ body[data-theme="dark"] {
   --color-navy: transparent;
   --color-navy-800: rgba(255, 255, 255, 0.13);
   --color-navy-700: rgba(255, 255, 255, 0.2);
-  /* Fundo do menu: não é um degradê reto. Por baixo do vidro há "formas desfocadas" (manchas de luz e de sombra, como um
-     fundo fora de foco), em cima de um degradê vertical de #124B8F (topo) a #C8CBDA (base). */
-  background-color: #124b8f;
-  background-image:
-    radial-gradient(230px 190px at 24% 9%, rgba(130, 178, 240, 0.5), transparent 72%),
-    radial-gradient(250px 230px at 92% 30%, rgba(10, 52, 112, 0.55), transparent 74%),
-    radial-gradient(240px 210px at 8% 52%, rgba(120, 165, 225, 0.42), transparent 72%),
-    radial-gradient(270px 240px at 88% 70%, rgba(214, 220, 238, 0.7), transparent 72%),
-    radial-gradient(300px 230px at 20% 96%, rgba(222, 224, 238, 0.85), transparent 72%),
-    linear-gradient(180deg, #124b8f 0%, #2d62a8 52%, #8da8d0 80%, #c8cbda 100%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  backdrop-filter: blur(18px) saturate(150%);
+  /* O fundo do menu é o MESMO da tela, visto através de um vidro azul mais escuro e fosco: as formas desfocadas da imagem
+     continuam aparecendo por trás, só que mais escuras no lado esquerdo. */
+  background-color: transparent;
+  background-image: linear-gradient(180deg, rgba(18, 75, 143, 0.84) 0%, rgba(18, 75, 143, 0.62) 50%, rgba(18, 75, 143, 0.42) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.4);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
   box-shadow: 10px 0 40px rgba(34, 78, 190, 0.18), inset -1px 0 0 rgba(255, 255, 255, 0.28);
 }
 /* Faixa de baixo (tema, e-mail, sair): vidro azul mais escuro para o texto branco continuar legível sobre a base clara */
@@ -456,7 +459,9 @@ body[data-theme="dark"] {
   --color-navy: #0b1220;
   --color-navy-800: #111a2e;
   --color-navy-700: #1b2640;
+  background-color: #0b1220;
   background-image: none;
+  border-right: 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
@@ -473,18 +478,8 @@ body[data-theme="dark"] {
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-/* Painel de dados (área à direita do menu): #3067AD no canto superior esquerdo até #BEC1D2 no inferior direito, com
-   "formas desfocadas" por baixo dos cartões de vidro. A faixa azul forte fica no TOPO, onde estão o título e a descrição
-   da página (em branco); abaixo dela o fundo clareia e o texto escuro dos cartões mantém o contraste. */
-.app-content-bg {
-  background-color: #bec1d2;
-  background-image:
-    radial-gradient(1500px 230px at 0% 0%, rgba(48, 103, 173, 0.98), rgba(48, 103, 173, 0.6) 55%, transparent 100%),
-    radial-gradient(520px 380px at 34% 24%, rgba(104, 148, 212, 0.5), transparent 72%),
-    radial-gradient(560px 400px at 78% 52%, rgba(150, 178, 224, 0.5), transparent 72%),
-    radial-gradient(620px 440px at 100% 100%, rgba(190, 193, 210, 1), transparent 72%),
-    linear-gradient(150deg, #3067ad 0%, #6f98cf 22%, #a9bde0 50%, #bec1d2 100%);
-}
+/* Painel de dados: sem fundo próprio — a imagem de fundo é uma só, da tela inteira (ver --app-bg). A faixa azul forte do
+   topo é onde ficam título e descrição da página (em branco). */
 .app-content-bg h1 {
   color: #ffffff;
   text-shadow: 0 1px 14px rgba(10, 40, 90, 0.35);
@@ -497,10 +492,6 @@ body[data-theme="dark"] {
 .app-content-bg a:has(.lucide-arrow-left) {
   color: rgba(255, 255, 255, 0.95);
   text-shadow: 0 1px 10px rgba(10, 40, 90, 0.3);
-}
-:is(.dark, [data-theme="dark"]) .app-content-bg {
-  background-color: transparent;
-  background-image: none;
 }
 
 /* Títulos de seção em caixa-alta que ficam direto sobre o fundo (ex.: "EXECUÇÃO E DETALHES"): azul-marinho legível no degradê */
