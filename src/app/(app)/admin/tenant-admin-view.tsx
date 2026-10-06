@@ -1,15 +1,17 @@
 import Link from "next/link";
-import { Palette, Clock, Building2 } from "lucide-react";
+import { Palette, Clock, Building2, CircleDollarSign } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { TenantMarcaTab } from "./tenant-marca-tab";
 import { TenantSlaTab } from "./tenant-sla-tab";
 import { TenantEmpresaTab } from "./tenant-empresa-tab";
+import { TenantFinanceiroTab } from "./tenant-financeiro-tab";
 
 type SearchParams = { aba?: string | string[] };
 
 const TABS = [
   { key: "marca", label: "Marca e White-label", icon: Palette },
   { key: "sla", label: "SLA e Horários", icon: Clock },
+  { key: "financeiro", label: "Painel financeiro", icon: CircleDollarSign },
   { key: "empresa", label: "Empresa", icon: Building2 },
 ] as const;
 
@@ -33,6 +35,7 @@ export async function TenantAdminView({
     { data: contract },
     { data: calendars },
     { count: membersCount },
+    { data: workflowsList },
   ] = await Promise.all([
     supabase
       .from("tenants")
@@ -54,6 +57,7 @@ export async function TenantAdminView({
       .select("id", { count: "exact", head: true })
       .eq("tenant_id", tenantId)
       .eq("status", "active"),
+    supabase.from("workflows").select("id, name, financial_panel").eq("tenant_id", tenantId).eq("status", "active").order("name"),
   ]);
 
   const settings = ((tenant?.settings ?? {}) as Record<string, unknown>) ?? {};
@@ -153,6 +157,8 @@ export async function TenantAdminView({
               currentSlaSettings={slaSettings}
             />
           )}
+
+          {currentTab === "financeiro" && <TenantFinanceiroTab workflows={workflowsList ?? []} />}
 
           {currentTab === "empresa" && tenant && (
             <TenantEmpresaTab

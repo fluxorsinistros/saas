@@ -868,11 +868,18 @@ export default async function ClaimPage({
                         );
                       })}
                     </div>
-                    {canEditFinancial && panelItems.some(({ f }) => f.field_type !== "calculated") && (
-                      <div className="flex justify-end border-t border-slate-100 pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                      {perms.has("workflow.edit") ? (
+                        <Link href={`/fluxos/${version!.workflow_id}/financeiro`} className="text-[12px] font-medium text-brand hover:underline">
+                          Configurar o painel deste fluxo
+                        </Link>
+                      ) : (
+                        <span />
+                      )}
+                      {canEditFinancial && panelItems.some(({ f }) => f.field_type !== "calculated") && (
                         <button className="rounded-lg bg-brand px-4 py-1.5 text-[13px] font-medium text-white hover:bg-brand-600 cursor-pointer">Salvar valores</button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </form>
                 )}
               </div>
