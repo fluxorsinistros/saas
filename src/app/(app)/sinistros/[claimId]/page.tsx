@@ -12,7 +12,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
-import { computeProcessProgress, computeSla, formatDuration, minutesSince } from "@/lib/format";
+import { computeProcessProgress, computeSla, formatDuration, isPastIso, minutesSince } from "@/lib/format";
 import { computeCalculatedValues } from "@/lib/formula";
 import { readPanel } from "@/lib/financial-panel";
 import { formatNumberField, VALUE_FIELD_TYPES } from "@/lib/field-rules";
@@ -33,7 +33,7 @@ import {
   resolvePendingItem,
   resumeSla,
 } from "../actions";
-import { requestDocument, reviewDocument } from "../documents-actions";
+import { requestExtraDocument, reviewDocument } from "../documents-actions";
 import { DocumentUploadForm } from "@/components/documents/DocumentUploadForm";
 import { getLimits, isAllowed, limitOf } from "@/lib/limits";
 import { saveFinancialFields } from "../financial-actions";
@@ -209,10 +209,10 @@ export default async function ClaimPage({
       .eq("claim_cycle_id", cycle.id)
       .order("entered_at", { ascending: false }),
     supabase.from("decisions").select("id, stage_instance_id, question, options, selected_option, decided_at").eq("claim_cycle_id", cycle.id),
-    supabase.from("groups").select("id, name, icon, color").eq("tenant_id", ctx.tenantId),
+    supabase.from("groups").select("id, name, icon, color, status").eq("tenant_id", ctx.tenantId),
     supabase
       .from("documents")
-      .select("id, status, is_required, document_type_id, requested_at")
+      .select("id, status, is_required, is_extra, instructions, document_type_id, requested_at, pending_items(requested_by, responsible_group_id, due_at, status)")
       .eq("claim_cycle_id", cycle.id)
       .order("requested_at", { ascending: true, nullsFirst: false }),
     supabase.from("document_types").select("id, name").eq("tenant_id", ctx.tenantId),
@@ -949,15 +949,24 @@ export default async function ClaimPage({
             documents={
               <div className="space-y-4">
                 <div className="space-y-3">
-                  {(documents ?? []).map((doc) => {
+                  {(documents ?? []).map((doc, docIndex) => {
                     const versions = versionsByDoc.get(doc.id) ?? [];
-                    const canReview = (doc.status === "received" || doc.status === "in_validation") && perms.has("document.validate");
+                    const pend = doc.pending_items as unknown as { requested_by: string | null; responsible_group_id: string | null; due_at: string | null; status: string } | null;
+                    const extraNumber = doc.is_extra ? (documents ?? []).slice(0, docIndex + 1).filter((d) => d.is_extra).length : 0;
+                    const isRequester = doc.is_extra && pend?.requested_by === ctx.userId;
+                    const canReview = (doc.status === "received" || doc.status === "in_validation") && (perms.has("document.validate") || isRequester);
+                    const canSend = !doc.is_extra || canActOnGroup(pend?.responsible_group_id ?? null);
+                    const overdue = !!pend && pend.status === "open" && isPastIso(pend.due_at);
+                    const dueLabel = pend?.due_at ? new Date(pend.due_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : null;
                     return (
                       <div key={doc.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <FileText className="size-4 text-slate-500" />
-                            <span className="text-[13px] font-medium text-slate-900">{docTypeName.get(doc.document_type_id) ?? "-"}</span>
+                            <span className="text-[13px] font-medium text-slate-900">
+                              {doc.is_extra && <span className="mr-1.5 font-normal text-slate-600">Documento extra {extraNumber}:</span>}
+                              {docTypeName.get(doc.document_type_id) ?? "-"}
+                            </span>
                             {doc.is_required && (
                               <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
                                 obrigatório
@@ -966,6 +975,29 @@ export default async function ClaimPage({
                           </div>
                           <DocStatusBadge status={doc.status} />
                         </div>
+
+                        {doc.is_extra && (
+                          <div className="mt-2 space-y-1 text-[12px] text-slate-700">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                              <span className="inline-flex flex-wrap items-center gap-1.5">
+                                Grupo
+                                <span className="rounded bg-slate-900/[0.06] px-1.5 py-0.5 font-semibold text-slate-900">
+                                  <GroupChip
+                                    name={pend?.responsible_group_id ? (groupMeta.get(pend.responsible_group_id)?.name ?? "-") : "-"}
+                                    icon={pend?.responsible_group_id ? groupMeta.get(pend.responsible_group_id)?.icon : undefined}
+                                    color={pend?.responsible_group_id ? groupMeta.get(pend.responsible_group_id)?.color : undefined}
+                                  />
+                                </span>
+                              </span>
+                              {dueLabel && (
+                                <span className={overdue ? "sla-chip sla-urgent" : pend?.status === "resolved" ? "text-slate-600" : "sla-chip sla-ok"}>
+                                  {overdue ? `Atrasado, prazo era ${dueLabel}` : `Prazo ${dueLabel}`}
+                                </span>
+                              )}
+                            </div>
+                            {doc.instructions && <p className="whitespace-pre-line text-slate-700">{doc.instructions}</p>}
+                          </div>
+                        )}
 
                         {versions.length === 0 ? (
                           <p className="mt-2 text-[12px] text-slate-500">Nenhum arquivo enviado ainda.</p>
@@ -1002,7 +1034,11 @@ export default async function ClaimPage({
                         )}
 
                         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-                          <DocumentUploadForm variant="version" claimId={claim.id} claimCycleId={cycle.id} documentId={doc.id} hint={uploadHint} />
+                          {canSend ? (
+                            <DocumentUploadForm variant="version" claimId={claim.id} claimCycleId={cycle.id} documentId={doc.id} hint={uploadHint} />
+                          ) : (
+                            <span className="text-[12px] text-slate-600">Quem envia é o grupo responsável.</span>
+                          )}
 
                           {canReview && (
                             <>
@@ -1037,17 +1073,29 @@ export default async function ClaimPage({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <form action={requestDocument} className="rounded-xl border border-dashed border-slate-300 bg-white p-3 shadow-xs">
-                    <p className="mb-2 text-[12px] font-medium text-slate-600">Solicitar documento</p>
+                  <form action={requestExtraDocument} className="space-y-1.5 rounded-xl border border-dashed border-slate-300 bg-white p-3 shadow-xs">
+                    <p className="mb-1 text-[12px] font-medium text-slate-700">Solicitar documento extra</p>
                     <input type="hidden" name="claim_id" value={claim.id} />
                     <input type="hidden" name="claim_cycle_id" value={cycle.id} />
-                    <input name="type_name" required placeholder="Ex.: Boletim de ocorrência" className={`${input} mb-1.5`} />
-                    <label className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
-                      <input type="checkbox" name="is_required" className="size-3.5 accent-[var(--color-brand)]" /> Obrigatório
+                    <input name="type_name" required maxLength={80} placeholder="Nome (ex.: Nota fiscal de venda extra)" className={input} />
+                    <textarea name="instructions" rows={2} maxLength={1000} placeholder="Instruções para quem vai enviar (opcional)" className={input} />
+                    <select name="group_id" required defaultValue="" className={input} aria-label="Grupo que deve entregar">
+                      <option value="" disabled>
+                        Grupo que deve entregar
+                      </option>
+                      {(groups ?? [])
+                        .filter((g) => g.status === "active")
+                        .map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                    </select>
+                    <label className="block text-xs text-slate-700">
+                      Prazo
+                      <input type="datetime-local" name="due_at" required className={`${input} mt-0.5`} />
                     </label>
-                    <button className="w-full rounded-lg border border-slate-200 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
-                      Solicitar
-                    </button>
+                    <button className="w-full rounded-lg bg-brand py-1.5 text-[12px] font-medium text-white hover:bg-brand-600 cursor-pointer">Solicitar ao grupo</button>
                   </form>
 
                   <DocumentUploadForm variant="standalone" claimId={claim.id} claimCycleId={cycle.id} hint={uploadHint} />

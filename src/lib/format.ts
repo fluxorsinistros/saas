@@ -87,3 +87,8 @@ export function computeProcessProgress(
 export function minutesSince(iso: string): number {
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 }
+
+// Já passou desse instante? (usado para marcar pendência atrasada; fica aqui para a leitura da hora atual não ser feita no render da página)
+export function isPastIso(iso: string | null | undefined): boolean {
+  return !!iso && new Date(iso).getTime() < Date.now();
+}

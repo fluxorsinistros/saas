@@ -925,6 +925,9 @@ export type Database = {
           document_type_id: string
           id: string
           is_required: boolean
+          is_extra: boolean
+          instructions: string | null
+          pending_item_id: string | null
           node_id: string | null
           requested_at: string | null
           requested_by: string | null
@@ -938,6 +941,9 @@ export type Database = {
           document_type_id: string
           id?: string
           is_required?: boolean
+          is_extra?: boolean
+          instructions?: string | null
+          pending_item_id?: string | null
           node_id?: string | null
           requested_at?: string | null
           requested_by?: string | null
@@ -951,6 +957,9 @@ export type Database = {
           document_type_id?: string
           id?: string
           is_required?: boolean
+          is_extra?: boolean
+          instructions?: string | null
+          pending_item_id?: string | null
           node_id?: string | null
           requested_at?: string | null
           requested_by?: string | null

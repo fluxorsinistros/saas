@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { writeAudit, type Supa } from "./actions";
-import { requirePermission } from "@/lib/permissions";
+import { canActOnGroup, hasPermission, requirePermission } from "@/lib/permissions";
 import { getLimits, isAllowed, limitOf, type Limits } from "@/lib/limits";
 import { HARD_MAX_BYTES, MB, extOf, formatMb, mimeForFile, safeFileName } from "@/lib/document-files";
 
@@ -29,6 +29,88 @@ async function ensureDocumentType(supabase: Supa, tenantId: string, name: string
     .single();
   if (error || !data) throw new Error(error?.message ?? "Falha ao criar tipo de documento.");
   return data.id;
+}
+
+// Fila de eventos (tabela notifications): cada fato do documento extra é gravado aqui. Nenhum e-mail sai ainda; quando o envio
+// for ligado (integrações), os gatilhos já existem. Falha ao gravar o evento nunca derruba a ação principal.
+async function emitDocumentEvent(
+  supabase: Supa,
+  tenantId: string,
+  eventType: "document_extra.requested" | "document_extra.delivered" | "document_extra.validated" | "document_extra.rejected",
+  claimCycleId: string,
+  payload: Record<string, unknown>,
+) {
+  const { error } = await supabase.from("notifications").insert({ tenant_id: tenantId, event_type: eventType, claim_cycle_id: claimCycleId, payload: payload as never });
+  if (error) console.error("evento de documento não gravado:", error.message);
+}
+
+// Documento extra: pedido avulso, só deste sinistro, a um grupo, com nome, instruções e prazo. Vira uma pendência do grupo
+// (aparece em Tarefas e no sinistro) e um documento "solicitado" que o grupo preenche enviando o arquivo.
+export async function requestExtraDocument(formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.execute");
+  const supabase = await createClient();
+  const claimId = String(formData.get("claim_id") ?? "");
+  const claimCycleId = String(formData.get("claim_cycle_id") ?? "");
+  const name = String(formData.get("type_name") ?? "").trim();
+  const instructions = String(formData.get("instructions") ?? "").trim();
+  const groupId = String(formData.get("group_id") ?? "").trim();
+  const dueRaw = String(formData.get("due_at") ?? "").trim();
+  if (!name) throw new Error("Informe o nome do documento.");
+  if (name.length > 80) throw new Error("O nome do documento aceita no máximo 80 caracteres.");
+  if (instructions.length > 1000) throw new Error("As instruções aceitam no máximo 1000 caracteres.");
+  if (!groupId) throw new Error("Escolha o grupo que deve entregar o documento.");
+  const due = new Date(dueRaw);
+  if (!dueRaw || Number.isNaN(due.getTime())) throw new Error("Informe o prazo (data e hora).");
+
+  const { data: cycle } = await supabase.from("claim_cycles").select("id, claim_id").eq("id", claimCycleId).eq("claim_id", claimId).maybeSingle();
+  if (!cycle) throw new Error("Ciclo do sinistro não encontrado.");
+  const { data: group } = await supabase.from("groups").select("id, name").eq("id", groupId).eq("tenant_id", ctx.tenantId).eq("status", "active").maybeSingle();
+  if (!group) throw new Error("Grupo inválido.");
+
+  const typeId = await ensureDocumentType(supabase, ctx.tenantId, name);
+  const { data: item, error: pErr } = await supabase
+    .from("pending_items")
+    .insert({
+      tenant_id: ctx.tenantId,
+      claim_cycle_id: claimCycleId,
+      title: name,
+      description: instructions || null,
+      requested_by: ctx.userId,
+      responsible_group_id: groupId,
+      due_at: due.toISOString(),
+    })
+    .select("id")
+    .single();
+  if (pErr || !item) throw new Error(pErr ? publicDbMessage(pErr) : "Falha ao criar a pendência.");
+
+  const { data: doc, error } = await supabase
+    .from("documents")
+    .insert({
+      tenant_id: ctx.tenantId,
+      claim_cycle_id: claimCycleId,
+      document_type_id: typeId,
+      is_required: false,
+      is_extra: true,
+      instructions: instructions || null,
+      pending_item_id: item.id,
+      status: "requested",
+      requested_by: ctx.userId,
+      requested_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error || !doc) {
+    await supabase.from("pending_items").delete().eq("id", item.id);
+    throw new Error(error ? publicDbMessage(error) : "Falha ao solicitar o documento.");
+  }
+
+  await writeAudit(supabase, ctx.tenantId, "document_extra.requested", "document", doc.id, { next: { name, group: group.name, due_at: due.toISOString() } });
+  await emitDocumentEvent(supabase, ctx.tenantId, "document_extra.requested", claimCycleId, {
+    claim_id: claimId, document_id: doc.id, pending_item_id: item.id, name, instructions, group_id: groupId, due_at: due.toISOString(), requested_by: ctx.userId,
+  });
+  revalidatePath(`/sinistros/${claimId}`);
+  revalidatePath("/tarefas");
 }
 
 export async function requestDocument(formData: FormData): Promise<void> {
@@ -125,6 +207,16 @@ export async function prepareDocumentUpload(
   const limits = await getLimits(supabase, ctx.tenantId);
   const refusal = checkLimits(limits, fileName, size, await claimUsedBytes(supabase, claimId));
   if (refusal) return { ok: false, error: refusal };
+
+  // Documento extra: só o grupo responsável (ou o Administrador) envia o arquivo.
+  if (input.documentId) {
+    const { data: target } = await supabase.from("documents").select("is_extra, pending_items(responsible_group_id)").eq("id", input.documentId).eq("claim_cycle_id", claimCycleId).maybeSingle();
+    if (!target) return { ok: false, error: "Documento não encontrado." };
+    if (target.is_extra) {
+      const groupId = (target.pending_items as unknown as { responsible_group_id: string | null } | null)?.responsible_group_id ?? null;
+      if (!(await canActOnGroup(ctx, groupId))) return { ok: false, error: "Só o grupo responsável por este documento pode enviar o arquivo." };
+    }
+  }
 
   let documentId = input.documentId ?? "";
   const isNew = !documentId;
@@ -245,13 +337,18 @@ export async function finalizeDocumentUpload(
   await writeAudit(supabase, ctx.tenantId, "document.received", "document", documentId, {
     next: { version: versionNumber, file_name: fileName, size_bytes: size },
   });
+  const { data: sent } = await supabase.from("documents").select("is_extra, pending_item_id").eq("id", documentId).maybeSingle();
+  if (sent?.is_extra) {
+    await emitDocumentEvent(supabase, ctx.tenantId, "document_extra.delivered", claimCycleId, {
+      claim_id: claimId, document_id: documentId, pending_item_id: sent.pending_item_id, file_name: fileName, version: versionNumber, uploaded_by: ctx.userId,
+    });
+  }
   revalidatePath(`/sinistros/${claimId}`);
   return { ok: true, size, overageBytes };
 }
 
 export async function reviewDocument(formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
-  await requirePermission(ctx, "document.validate");
   const supabase = await createClient();
   const claimId = String(formData.get("claim_id") ?? "");
   const documentId = String(formData.get("document_id") ?? "");
@@ -259,6 +356,18 @@ export async function reviewDocument(formData: FormData): Promise<void> {
   const reason = String(formData.get("reason") ?? "").trim();
   if (decision !== "validated" && decision !== "rejected") throw new Error("Decisão inválida.");
   if (decision === "rejected" && !reason) throw new Error("Informe o motivo da rejeição.");
+
+  // Quem pode dar o OK: quem tem a permissão de validar documentos; no documento extra, também quem fez o pedido.
+  const { data: target } = await supabase
+    .from("documents")
+    .select("id, is_extra, pending_item_id, claim_cycle_id, pending_items(requested_by)")
+    .eq("id", documentId)
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+  if (!target) throw new Error("Documento não encontrado.");
+  const requesterId = (target.pending_items as unknown as { requested_by: string | null } | null)?.requested_by ?? null;
+  const isRequester = target.is_extra && requesterId === ctx.userId;
+  if (!isRequester && !(await hasPermission(ctx, "document.validate"))) throw new Error("Você não tem permissão para executar esta ação.");
 
   const { data: latest } = await supabase
     .from("document_versions")
@@ -278,6 +387,16 @@ export async function reviewDocument(formData: FormData): Promise<void> {
   await writeAudit(supabase, ctx.tenantId, decision === "validated" ? "document.validated" : "document.rejected", "document", documentId, {
     reason: decision === "rejected" ? reason : undefined,
   });
+  if (target.is_extra) {
+    // OK encerra a pendência do grupo; rejeição a mantém aberta (o grupo envia uma nova versão)
+    if (decision === "validated" && target.pending_item_id) {
+      await supabase.from("pending_items").update({ status: "resolved", resolved_at: new Date().toISOString(), resolved_by: ctx.userId }).eq("id", target.pending_item_id);
+    }
+    await emitDocumentEvent(supabase, ctx.tenantId, decision === "validated" ? "document_extra.validated" : "document_extra.rejected", target.claim_cycle_id, {
+      claim_id: claimId, document_id: documentId, pending_item_id: target.pending_item_id, reason: decision === "rejected" ? reason : undefined, decided_by: ctx.userId,
+    });
+    revalidatePath("/tarefas");
+  }
 
   revalidatePath(`/sinistros/${claimId}`);
 }

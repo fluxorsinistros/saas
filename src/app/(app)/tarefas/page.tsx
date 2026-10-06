@@ -3,7 +3,8 @@ import { StageSlaBadge } from "@/components/StageSlaBadge";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, FileText } from "lucide-react";
+import { isPastIso } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
@@ -57,6 +58,34 @@ export default async function TarefasPage() {
   const { data: groups } = await supabase.from("groups").select("id, name, icon, color").eq("tenant_id", ctx.tenantId);
   const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
 
+  // Documentos extra pedidos a grupos (pendências abertas): o grupo responsável vê o que precisa enviar; quem pediu vê o que
+  // já chegou e espera o OK. Administrador vê tudo; o Operador só o do grupo em que atua.
+  const { data: extraDocsRaw } = await supabase
+    .from("documents")
+    .select("id, status, claim_cycle_id, document_types(name), pending_items!inner(requested_by, responsible_group_id, due_at, status), claim_cycles(claim_id, claims(claim_number))")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("is_extra", true)
+    .eq("pending_items.status", "open")
+    .limit(100);
+  const extraDocs = (extraDocsRaw ?? []).map((d) => {
+    const pend = d.pending_items as unknown as { requested_by: string | null; responsible_group_id: string | null; due_at: string | null };
+    const cyc = d.claim_cycles as unknown as { claim_id: string; claims: { claim_number: string } | null } | null;
+    return {
+      id: d.id,
+      status: d.status,
+      name: (d.document_types as unknown as { name: string } | null)?.name ?? "Documento",
+      groupId: pend.responsible_group_id,
+      dueAt: pend.due_at,
+      requestedBy: pend.requested_by,
+      claimId: cyc?.claim_id ?? "",
+      claimNumber: cyc?.claims?.claim_number ?? "-",
+    };
+  });
+  const docsToSend = extraDocs
+    .filter((d) => (d.status === "requested" || d.status === "rejected") && (isAdmin || (d.groupId !== null && myGroupIds.includes(d.groupId))))
+    .sort((a, b) => (a.dueAt ?? "9").localeCompare(b.dueAt ?? "9"));
+  const docsToReview = extraDocs.filter((d) => d.status === "received" && (isAdmin || d.requestedBy === ctx.userId));
+
   const rows = (activities ?? [])
     .map((a) => {
       const stage = stageById.get(a.stage_instance_id);
@@ -84,6 +113,48 @@ export default async function TarefasPage() {
             ? "Atividades em aberto em todos os grupos da empresa. Abra o sinistro para conferir os dados e concluir a etapa."
             : `Atividades em aberto no grupo em que você atua${activeGroup ? ` (${activeGroup.name})` : ""}. Abra o sinistro para conferir os dados e concluir a etapa.`}
         </p>
+        {(docsToSend.length > 0 || docsToReview.length > 0) && (
+          <section className="mt-6 space-y-4" aria-label="Documentos solicitados">
+            {[
+              { title: "Documentos para enviar", list: docsToSend, action: "Enviar" },
+              { title: "Documentos para dar o OK", list: docsToReview, action: "Conferir" },
+            ]
+              .filter((g) => g.list.length > 0)
+              .map((g) => (
+                <div key={g.title}>
+                  <h2 className="mb-2 text-[13px] font-semibold text-slate-900">
+                    {g.title} ({g.list.length})
+                  </h2>
+                  <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    {g.list.map((d) => {
+                      const late = isPastIso(d.dueAt);
+                      return (
+                        <li key={d.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+                          <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
+                          <Link href={`/sinistros/${d.claimId}`} className="min-w-0 flex-1">
+                            <div className="truncate text-[14px] font-medium text-slate-900 hover:underline">{d.name}</div>
+                            <div className="truncate text-[12px] text-slate-600">
+                              {d.claimNumber}
+                              {d.status === "rejected" && " · rejeitado, envie de novo"}
+                            </div>
+                          </Link>
+                          {d.dueAt && (
+                            <span className={`sla-chip ${late ? "sla-urgent" : "sla-ok"}`}>
+                              {late ? "Atrasado · " : "Prazo "}
+                              {new Date(d.dueAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                            </span>
+                          )}
+                          <Link href={`/sinistros/${d.claimId}`} className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+                            {g.action}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+          </section>
+        )}
         {rows.length === 0 ? (
           <div className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <CheckCircle2 className="mx-auto size-8 text-slate-300" />
