@@ -432,7 +432,7 @@ body[data-theme="dark"] {
   backdrop-filter: blur(16px) saturate(120%);
   border: 0;
   border-radius: 20px;
-  box-shadow: 0 12px 32px rgba(20, 50, 110, 0.12);
+  box-shadow: 0 24px 56px rgba(10, 30, 80, 0.24), 0 6px 18px rgba(10, 30, 80, 0.14);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-card { background: rgba(255, 255, 255, 0.92); }
@@ -550,7 +550,7 @@ body[data-theme="dark"] {
   border-color: transparent;
   /* mesmo vidro dos cartões do Dashboard (sem o desfoque do fundo, para listas longas não pesarem) */
   background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 12px 32px rgba(20, 50, 110, 0.12);
+  box-shadow: 0 24px 56px rgba(10, 30, 80, 0.24), 0 6px 18px rgba(10, 30, 80, 0.14);
 }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
