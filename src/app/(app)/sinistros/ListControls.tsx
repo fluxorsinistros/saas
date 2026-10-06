@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, LayoutGrid, Search, Table2 } from "lucide-react";
+import { ArrowDown, ArrowUp, LayoutGrid, Search, SlidersHorizontal, Table2 } from "lucide-react";
 
 type Ordem = "criacao" | "urgencia" | "situacao" | "grupo" | "fluxo";
 
@@ -29,6 +29,8 @@ const DIR_TEXT: Record<Ordem, [string, string]> = {
 export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState(q);
+  // no celular só a busca fica à mostra; visão, agrupar, ordenar e quantidade abrem sob demanda
+  const [moreOpen, setMoreOpen] = useState(false);
 
   function go(over: Record<string, string>) {
     const qs = new URLSearchParams({ ...base, searched: "1", ...over });
@@ -69,6 +71,16 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
         />
       </form>
 
+      <button
+        type="button"
+        onClick={() => setMoreOpen((v) => !v)}
+        aria-expanded={moreOpen}
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/15 px-3 text-[13px] font-medium text-white hover:bg-white/25 pointer-coarse:h-11 md:hidden"
+      >
+        <SlidersHorizontal className="size-4" aria-hidden /> Exibição
+      </button>
+
+      <div className={`${moreOpen ? "flex" : "hidden"} w-full flex-wrap items-center gap-x-4 gap-y-2.5 md:contents`}>
       <div className="inline-flex rounded-lg bg-white/15 p-0.5" role="group" aria-label="Forma de exibição">
         <button type="button" onClick={() => go({ visao: "" })} aria-pressed={visao === "cartoes"} className={seg(visao === "cartoes")}>
           <LayoutGrid className="size-4" /> Cartões
@@ -118,6 +130,7 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
           <option value={50}>50</option>
         </select>
       </label>
+      </div>
     </div>
   );
 }
