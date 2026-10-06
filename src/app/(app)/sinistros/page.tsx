@@ -464,7 +464,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                 id="workflow_id"
                 name="fluxo"
                 required
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15 sm:w-64 sm:flex-none"
+                className="field-on-glass min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15 sm:w-64 sm:flex-none"
               >
                 <option value="">Selecione o fluxo publicado…</option>
                 {options.map((w) => (

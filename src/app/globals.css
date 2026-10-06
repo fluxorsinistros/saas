@@ -427,7 +427,7 @@ body[data-theme="dark"] {
 .glass-card {
   /* Mesmo vidro do menu: uma tinta lisa e translúcida por cima do fundo, com desfoque suave, sem degradê, sem fio de luz
      e sem contorno. O fundo atravessa o cartão do mesmo jeito que atravessa o menu. */
-  background: rgba(255, 255, 255, 0.43);
+  background: rgba(255, 255, 255, 0.6);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
   backdrop-filter: blur(16px) saturate(120%);
   border: 0;
@@ -549,7 +549,7 @@ body[data-theme="dark"] {
 .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
   border-color: transparent;
   /* mesmo vidro dos cartões do Dashboard (sem o desfoque do fundo, para listas longas não pesarem) */
-  background: rgba(255, 255, 255, 0.69);
+  background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 12px 32px rgba(20, 50, 110, 0.12);
 }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
@@ -560,16 +560,17 @@ body[data-theme="dark"] {
 :is(.dark, [data-theme="dark"]) .sidebar-glass [class*="border-navy"],
 :is(.dark, [data-theme="dark"]) .sidebar-glass .border-t { border-color: #1b2640; }
 
-/* Campos de preenchimento (tema claro): mais transparentes e incolores que os cartões (como a barra de busca da referência),
-   com um fio claro só no contorno para continuarem parecendo clicáveis. */
+/* Campos de preenchimento (tema claro): sem contorno e bem mais transparentes que o cartão que os contém (o cartão é
+   mais claro/opaco; o campo é só uma leve tinta azulada translúcida por cima dele). */
 .app-content-bg :is(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="color"])):not(:disabled) {
-  background-color: rgba(255, 255, 255, 0.26);
-  border-color: rgba(255, 255, 255, 0.7);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background-color: rgba(30, 70, 140, 0.07);
+  border-color: transparent;
+  box-shadow: none;
   color: #0f172a;
 }
 .app-content-bg :is(select, textarea, input)::placeholder { color: #475569; }
+/* campo que fica direto sobre o fundo azul (fora de cartão): fundo claro translúcido para o texto ler bem */
+.app-content-bg select.field-on-glass, .app-content-bg input.field-on-glass { background-color: rgba(255, 255, 255, 0.72); }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(select, textarea, input) { background-color: #0d131f; border-color: revert-layer; backdrop-filter: none; color: revert-layer; }
 
 /* Menu: rolagem sem barra visível (no tema claro) */
