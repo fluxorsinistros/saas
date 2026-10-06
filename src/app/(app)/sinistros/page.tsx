@@ -2,7 +2,7 @@ import { GroupChip } from "@/lib/group-icons";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, Plus, RotateCcw, SearchX, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, LayoutGrid, Plus, RotateCcw, SearchX, Table2, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -67,6 +67,9 @@ type SearchParams = {
   situacao?: string;
   searched?: string;
   pagina?: string;
+  visao?: string;
+  agrupar?: string;
+  por?: string;
 };
 
 export default async function SinistrosPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -115,7 +118,10 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   );
   // A lista só consulta o banco depois de "Filtrar" (ou com filtro na URL), nunca sozinha ao abrir a tela.
   const searched = sp.searched === "1" || hasActiveFilters;
-  const PAGE_SIZE = 20;
+  // Quantos sinistros aparecem por vez (10, 30 ou 50): a lista nunca monta centenas de linhas de uma vez.
+  const PAGE_SIZE = [10, 30, 50].includes(Number(sp.por)) ? Number(sp.por) : 10;
+  const visao = sp.visao === "tabela" ? "tabela" : "cartoes";
+  const agrupar = ["situacao", "grupo", "fluxo"].includes(sp.agrupar ?? "") ? (sp.agrupar as "situacao" | "grupo" | "fluxo") : "";
   const page = Math.max(1, Number.parseInt(sp.pagina ?? "1", 10) || 1);
 
   // Carrega fluxos, versões e etapas ativas para os filtros dinâmicos
@@ -386,6 +392,49 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     });
   }
 
+  // Agrupamento: cada sinistro ganha uma chave (situação, grupo responsável agora ou fluxo) e a lista sai ordenada por ela.
+  const closedStatuses = ["completed", "cancelled", "discarded", "archived"];
+  const groupOf = (c: (typeof visibleClaims)[number]): { key: string; order: number } => {
+    const cycle = currentCycleByClaim.get(c.id);
+    const status = cycle?.status ?? c.status;
+    if (agrupar === "situacao") {
+      if (status === "blocked") return { key: "Bloqueados", order: 1 };
+      if (closedStatuses.includes(status)) return { key: "Fechados", order: 2 };
+      return { key: "Abertos", order: 0 };
+    }
+    if (agrupar === "grupo") {
+      const names = cycle ? [...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id)).filter(Boolean) : [];
+      return names.length ? { key: names.join(", "), order: 0 } : { key: "Sem grupo responsável", order: 1 };
+    }
+    if (agrupar === "fluxo") {
+      const wf = cycle ? workflowById.get(versionToWorkflow.get(cycle.workflow_version_id) ?? "") : undefined;
+      return { key: wf?.name ?? "Sem fluxo", order: 0 };
+    }
+    return { key: "", order: 0 };
+  };
+  const orderedClaims = agrupar
+    ? visibleClaims
+        .map((c) => ({ c, g: groupOf(c) }))
+        .sort((a, b) => a.g.order - b.g.order || a.g.key.localeCompare(b.g.key, "pt-BR"))
+    : visibleClaims.map((c) => ({ c, g: { key: "", order: 0 } }));
+  const shownClaims = orderedClaims.slice(0, page * PAGE_SIZE);
+  const groupCounts = new Map<string, number>();
+  for (const { g } of orderedClaims) groupCounts.set(g.key, (groupCounts.get(g.key) ?? 0) + 1);
+  const listItems: ({ kind: "header"; key: string; count: number } | { kind: "claim"; claim: (typeof visibleClaims)[number] })[] = [];
+  shownClaims.forEach(({ c, g }, i) => {
+    if (agrupar && (i === 0 || shownClaims[i - 1].g.key !== g.key)) listItems.push({ kind: "header", key: g.key, count: groupCounts.get(g.key) ?? 0 });
+    listItems.push({ kind: "claim", claim: c });
+  });
+  const paramsWith = (over: Record<string, string>) => {
+    const base = Object.fromEntries(Object.entries(sp).filter(([, v]) => typeof v === "string") as [string, string][]);
+    delete base.pagina;
+    const qs = new URLSearchParams({ ...base, searched: "1", ...over });
+    for (const [k, v] of [...qs.entries()]) if (v === "") qs.delete(k);
+    return `/sinistros?${qs.toString()}`;
+  };
+  const seg = (active: boolean) =>
+    `inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition ${active ? "bg-selected text-white" : "text-slate-700 hover:bg-white/60"}`;
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
@@ -450,6 +499,36 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
           />
         </div>
 
+        {searched && visibleClaims.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-slate-700">
+            <div className="flex items-center gap-1.5" role="group" aria-label="Forma de exibição">
+              <span className="font-medium">Ver como</span>
+              <Link href={paramsWith({ visao: "" })} scroll={false} className={seg(visao === "cartoes")}>
+                <LayoutGrid className="size-3.5" /> Cartões
+              </Link>
+              <Link href={paramsWith({ visao: "tabela" })} scroll={false} className={seg(visao === "tabela")}>
+                <Table2 className="size-3.5" /> Tabela
+              </Link>
+            </div>
+            <div className="flex items-center gap-1.5" role="group" aria-label="Agrupar por">
+              <span className="font-medium">Agrupar por</span>
+              {([["", "Nenhum"], ["situacao", "Situação"], ["grupo", "Grupo"], ["fluxo", "Fluxo"]] as const).map(([v, label]) => (
+                <Link key={v} href={paramsWith({ agrupar: v })} scroll={false} className={seg(agrupar === v)}>
+                  {label}
+                </Link>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5" role="group" aria-label="Quantidade por vez">
+              <span className="font-medium">Mostrar</span>
+              {[10, 30, 50].map((n) => (
+                <Link key={n} href={paramsWith({ por: n === 10 ? "" : String(n) })} scroll={false} className={seg(PAGE_SIZE === n)}>
+                  {n}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!searched ? (
           <div className="mt-6 flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <SearchX className="mx-auto size-8 text-slate-300" />
@@ -474,9 +553,96 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
               </div>
             )}
           </div>
+        ) : visao === "tabela" ? (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full min-w-[820px] text-left text-[13px]">
+              <thead className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                <tr>
+                  <th className="px-3 py-2.5">Sinistro</th>
+                  <th className="px-3 py-2.5">Identificação</th>
+                  <th className="px-3 py-2.5">Fluxo</th>
+                  <th className="px-3 py-2.5">Etapa atual</th>
+                  <th className="px-3 py-2.5">Grupo</th>
+                  <th className="px-3 py-2.5">Progresso</th>
+                  <th className="px-3 py-2.5">Situação</th>
+                  <th className="px-3 py-2.5">Criado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {listItems.map((it) => {
+                  if (it.kind === "header")
+                    return (
+                      <tr key={`h-${it.key}`} className="bg-slate-100/70">
+                        <td colSpan={8} className="px-3 py-2 text-[12px] font-semibold text-slate-800">
+                          {it.key} <span className="font-normal text-slate-600">({it.count})</span>
+                        </td>
+                      </tr>
+                    );
+                  const c = it.claim;
+                  const cycle = currentCycleByClaim.get(c.id);
+                  const status = cycle?.status ?? c.status;
+                  const wfId = cycle ? versionToWorkflow.get(cycle.workflow_version_id) : undefined;
+                  const idValues = Object.entries((c.custom_fields ?? {}) as Record<string, string>)
+                    .map(([key, value]) => ({ label: wfId ? fieldLabelByWorkflowKey.get(`${wfId}:${key}`) : undefined, value }))
+                    .filter((v): v is { label: string; value: string } => !!v.label && !!v.value)
+                    .slice(0, 2);
+                  const stageNames = cycle ? (stagesByCycle.get(cycle.id) ?? []).map((st) => st.name) : [];
+                  const groupNames = cycle ? [...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id)).filter(Boolean) : [];
+                  const prog = computeProcessProgress(
+                    status === "completed",
+                    cycle?.workflow_version_id,
+                    cycle ? completedStagesByCycle.get(cycle.id) : undefined,
+                    stepsByVersion,
+                  );
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50/70">
+                      <td className="px-3 py-2.5 font-semibold text-slate-900">
+                        <Link href={`/sinistros/${c.id}`} className="hover:text-brand hover:underline">
+                          {c.claim_number}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-700">{idValues.length ? idValues.map((v) => v.value).join(" · ") : "-"}</td>
+                      <td className="px-3 py-2.5 text-slate-700">{wfId ? (workflowById.get(wfId)?.name ?? "-") : "-"}</td>
+                      <td className="px-3 py-2.5 text-slate-700">{stageNames.length ? stageNames.join(", ") : "-"}</td>
+                      <td className="px-3 py-2.5 text-slate-700">{groupNames.length ? groupNames.join(", ") : "-"}</td>
+                      <td className="px-3 py-2.5 font-medium text-slate-800">{prog ? `${prog.pct}%` : "-"}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${CYCLE_STATUS_STYLE[status] ?? "bg-slate-100 text-slate-600 ring-slate-200"}`}>
+                          {CYCLE_STATUS_LABEL[status] ?? status}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{new Date(c.created_at).toLocaleDateString("pt-BR")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {visibleClaims.length > page * PAGE_SIZE && (
+              <div className="border-t border-slate-100 p-3 text-center">
+                <Link
+                  scroll={false}
+                  href={`/sinistros?${new URLSearchParams({
+                    ...(Object.fromEntries(Object.entries(sp).filter(([, v]) => typeof v === "string")) as Record<string, string>),
+                    searched: "1",
+                    pagina: String(page + 1),
+                  }).toString()}`}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Mostrar mais ({visibleClaims.length - page * PAGE_SIZE} restantes)
+                </Link>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="mt-6 flex flex-col gap-4">
-            {visibleClaims.slice(0, page * PAGE_SIZE).map((c) => {
+            {listItems.map((it) => {
+              if (it.kind === "header")
+                return (
+                  <h2 key={`h-${it.key}`} className="mt-2 text-[13px] font-semibold text-slate-900 first:mt-0">
+                    {it.key} <span className="font-normal text-slate-700">({it.count})</span>
+                  </h2>
+                );
+              const c = it.claim;
               const cycle = currentCycleByClaim.get(c.id);
               const status = cycle?.status ?? c.status;
               const isCompleted = status === "completed";
