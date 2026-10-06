@@ -9,6 +9,7 @@
   --color-navy-700: #1b2640;
   --color-brand: #2563eb;
   --color-brand-600: #1d4ed8;
+  --color-selected: #577bf8; /* botão/aba no estado selecionado */
   --color-cyan: #22d3ee;
   --color-violet: #7c3aed;
   --color-canvas: #e8eef8;
@@ -418,8 +419,8 @@ body[data-theme="dark"] {
 
 /* Item ativo do menu: pílula de vidro clara com brilho */
 .sidebar-active {
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: none;
+  background: #577bf8;
+  box-shadow: 0 6px 18px rgba(87, 123, 248, 0.4);
 }
 
 /* Cartões e painéis de vidro */

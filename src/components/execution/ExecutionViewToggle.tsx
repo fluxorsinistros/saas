@@ -67,7 +67,7 @@ export function ExecutionViewToggle({
           type="button"
           onClick={() => choose("timeline")}
           className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-            mode === "timeline" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+            mode === "timeline" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
           }`}
         >
           <List className="size-3.5" /> Linha do tempo
@@ -76,7 +76,7 @@ export function ExecutionViewToggle({
           type="button"
           onClick={() => choose("graph")}
           className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-            mode === "graph" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+            mode === "graph" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
           }`}
         >
           <GitBranch className="size-3.5" /> Grafo completo
@@ -86,7 +86,7 @@ export function ExecutionViewToggle({
             type="button"
             onClick={() => choose("history")}
             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-              mode === "history" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+              mode === "history" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
             <History className="size-3.5" /> Histórico
@@ -108,7 +108,7 @@ export function ExecutionViewToggle({
             type="button"
             onClick={() => choose("financial")}
             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-              mode === "financial" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+              mode === "financial" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
             <DollarSign className="size-3.5" /> Financeiro
@@ -130,7 +130,7 @@ export function ExecutionViewToggle({
             type="button"
             onClick={() => choose("documents")}
             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-              mode === "documents" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+              mode === "documents" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
             <FileText className="size-3.5" /> Documentos
@@ -152,7 +152,7 @@ export function ExecutionViewToggle({
             type="button"
             onClick={() => choose("data")}
             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-              mode === "data" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+              mode === "data" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
             <ClipboardList className="size-3.5" /> Dados
