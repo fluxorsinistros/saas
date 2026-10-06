@@ -424,13 +424,17 @@ body[data-theme="dark"] {
 
 /* Cartões e painéis de vidro */
 .glass-card {
-  /* Vidro calmo: quase branco, levemente translúcido, com sombra difusa — o fundo aparece sem tomar conta. */
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.62) 100%);
-  -webkit-backdrop-filter: blur(10px) saturate(115%);
-  backdrop-filter: blur(10px) saturate(115%);
+  /* Vidro: bem translúcido (o fundo aparece e é desfocado por trás), claro no canto superior esquerdo como se a luz
+     batesse ali, com um fio de luz na borda e sombra difusa. */
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.3) 46%, rgba(255, 255, 255, 0.2) 100%);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+  backdrop-filter: blur(20px) saturate(145%);
   border: 0;
   border-radius: 20px;
-  box-shadow: 0 12px 34px rgba(31, 63, 130, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 18px 44px rgba(20, 50, 110, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-card { background: rgba(255, 255, 255, 0.92); }
@@ -507,7 +511,7 @@ body[data-theme="dark"] {
 .app-backdrop-blobs {
   position: absolute;
   inset: 0;
-  filter: blur(90px);
+  filter: blur(70px);
 }
 .app-blob {
   position: absolute;
@@ -517,7 +521,7 @@ body[data-theme="dark"] {
   top: calc(50% - 47.5vmax);
   left: calc(50% - 47.5vmax);
   mix-blend-mode: normal;
-  opacity: 0.55;
+  opacity: 0.8;
   will-change: transform;
 }
 .app-blob-1 { background: radial-gradient(circle at center, rgba(18, 75, 143, 0.8) 0, rgba(18, 75, 143, 0) 62%) no-repeat; transform-origin: center center; animation: app-move-vertical 34s ease infinite; }
@@ -547,8 +551,8 @@ body[data-theme="dark"] {
 .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
   border-color: transparent;
   /* mesmo vidro dos cartões do Dashboard (sem o desfoque do fundo, para listas longas não pesarem) */
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.68) 100%);
-  box-shadow: 0 12px 34px rgba(31, 63, 130, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.52) 50%, rgba(255, 255, 255, 0.46) 100%);
+  box-shadow: 0 16px 40px rgba(20, 50, 110, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {

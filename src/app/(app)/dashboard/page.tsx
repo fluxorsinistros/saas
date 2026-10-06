@@ -50,7 +50,7 @@ export default async function DashboardPage() {
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <section className="glass-card p-5">
-            <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Sinistros por tipo</h2>
+            <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-700">Sinistros por tipo</h2>
             <MagnitudeBars
               items={snap.byCategory.map((c) => ({ label: c.categoryName, count: c.count }))}
               emptyLabel="Nenhum sinistro formalizado ainda."
@@ -99,7 +99,7 @@ function Card({ label, value, accent, icon: Icon, tone }: { label: string; value
   return (
     <div className="glass-card flex items-start justify-between gap-3 px-4 py-4">
       <div className="min-w-0">
-        <dt className="text-[12px] font-medium text-slate-600">{label}</dt>
+        <dt className="text-[12px] font-medium text-slate-700">{label}</dt>
         <dd className={`mt-1.5 text-[28px] font-semibold leading-none tracking-tight ${accent ?? "text-slate-900"}`}>{value}</dd>
       </div>
       <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${TONES[tone]}`} aria-hidden="true">
