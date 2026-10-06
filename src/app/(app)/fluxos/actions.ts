@@ -2,6 +2,7 @@
 
 import { publicDbMessage } from "@/lib/errors";
 import { validateFormula } from "@/lib/formula";
+import { PANEL_FIELD_TYPES, PANEL_MAX_ITEMS, readPanel } from "@/lib/financial-panel";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -106,6 +107,26 @@ async function readFormula(
   const { data: others } = await supabase.from("workflow_fields").select("key, label, field_type, formula").eq("workflow_id", workflowId).neq("key", selfKey);
   const problem = validateFormula(selfKey, formula, others ?? []);
   return problem ? { error: problem } : { formula };
+}
+
+// Painel financeiro do fluxo: quais campos numéricos aparecem na aba Financeiro do sinistro, em que ordem e com que destaque.
+export async function saveFinancialPanel(workflowId: string, rawItems: unknown): Promise<ActionResult> {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "workflow.edit");
+  const items = readPanel(rawItems);
+  if (Array.isArray(rawItems) && rawItems.length > PANEL_MAX_ITEMS) return { ok: false, error: `O painel aceita no máximo ${PANEL_MAX_ITEMS} itens.` };
+  if (new Set(items.map((i) => i.key)).size !== items.length) return { ok: false, error: "Há um campo repetido no painel." };
+
+  const supabase = await createClient();
+  const { data: fields } = await supabase.from("workflow_fields").select("key, field_type").eq("workflow_id", workflowId);
+  const typeByKey = new Map((fields ?? []).map((f) => [f.key, f.field_type]));
+  for (const it of items) {
+    if (!PANEL_FIELD_TYPES.includes(typeByKey.get(it.key) ?? "")) return { ok: false, error: `"${it.key}" não é um campo numérico deste fluxo.` };
+  }
+  const { error } = await supabase.from("workflows").update({ financial_panel: items as unknown as Json }).eq("id", workflowId).eq("tenant_id", ctx.tenantId);
+  if (error) return { ok: false, error: publicDbMessage(error) };
+  revalidatePath(`/fluxos/${workflowId}/financeiro`);
+  return { ok: true };
 }
 
 // Campo personalizado "estilo SHARP" (Documento 1): o cliente cria quantos quiser, sem migração

@@ -3134,6 +3134,7 @@ export type Database = {
           claim_type_id: string | null
           created_at: string
           description: string | null
+          financial_panel: Json
           id: string
           is_template: boolean
           name: string
@@ -3145,6 +3146,7 @@ export type Database = {
           claim_type_id?: string | null
           created_at?: string
           description?: string | null
+          financial_panel?: Json
           id?: string
           is_template?: boolean
           name: string
@@ -3156,6 +3158,7 @@ export type Database = {
           claim_type_id?: string | null
           created_at?: string
           description?: string | null
+          financial_panel?: Json
           id?: string
           is_template?: boolean
           name?: string

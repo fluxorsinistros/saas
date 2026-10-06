@@ -14,6 +14,7 @@ import { NODE_META, type NodeType } from "@/lib/workflow/types";
 import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
 import { computeProcessProgress, computeSla, formatDuration, minutesSince } from "@/lib/format";
 import { computeCalculatedValues } from "@/lib/formula";
+import { readPanel } from "@/lib/financial-panel";
 import { formatNumberField, VALUE_FIELD_TYPES } from "@/lib/field-rules";
 import { StageSlaBadge } from "@/components/StageSlaBadge";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -235,7 +236,7 @@ export default async function ClaimPage({
       .eq("status", "waiting"),
   ]);
   const [{ data: workflow }, { data: workflowFields }] = await Promise.all([
-    supabase.from("workflows").select("name").eq("id", version!.workflow_id).single(),
+    supabase.from("workflows").select("name, financial_panel").eq("id", version!.workflow_id).single(),
     supabase
       .from("workflow_fields")
       .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position")
@@ -252,6 +253,10 @@ export default async function ClaimPage({
   for (const [k, v] of Object.entries(calcValues)) if (v !== null) viewFields[k] = String(v);
   // Número como a pessoa lê: R$ 1.234,50, 30%, 12,5.
   const fmtValue = (f: { field_type: string }, raw: string) => (f.field_type === "calculated" || VALUE_FIELD_TYPES.includes(f.field_type) ? formatNumberField(f.field_type === "calculated" ? (f as { default_value?: string | null }).default_value || "number" : f.field_type, Number(raw)) : String(raw));
+  // Painel financeiro desenhado no fluxo: campos numéricos (digitados ou calculados) na ordem escolhida.
+  const panelItems = readPanel(workflow?.financial_panel)
+    .map((it) => ({ it, f: fieldByKey.get(it.key) }))
+    .filter((x): x is { it: ReturnType<typeof readPanel>[number]; f: NonNullable<typeof x.f> } => !!x.f);
   const hasPersonField = (workflowFields ?? []).some((f) => f.field_type === "person");
   const hasAttachmentField = (workflowFields ?? []).some((f) => f.field_type === "attachment");
 
@@ -836,7 +841,23 @@ export default async function ClaimPage({
             financialCount={(financialEntries ?? []).length}
             financial={
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                {panelItems.length > 0 && (
+                  <dl className="grid grid-cols-2 gap-3 border-b border-slate-100 pb-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="Painel financeiro do fluxo">
+                    {panelItems.map(({ it, f }) => {
+                      const raw = viewFields[f.key];
+                      const has = raw !== undefined && raw !== "";
+                      const n = has ? Number(raw) : null;
+                      const tone = it.tone === "sign" && n !== null ? (n < 0 ? "text-rose-700" : "text-emerald-700") : "text-slate-900";
+                      return (
+                        <div key={f.key}>
+                          <dt className="text-xs text-slate-500">{f.label}</dt>
+                          <dd className={`text-[15px] font-semibold ${tone}`}>{has ? fmtValue(f, raw) : "-"}</dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 pt-0.5">
                   {perms.has("financial.manage") ? (
                     <form action={setDeclaredValue.bind(null, claim.id)} className="flex items-center gap-2">
                       <label htmlFor="declared_value" className="text-[12px] text-slate-500">

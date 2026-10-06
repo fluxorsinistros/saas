@@ -683,6 +683,12 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
             </select>
             <StatusBadge status={version.status} />
           </div>
+          <Link
+            href={`/fluxos/${workflow.id}/financeiro`}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          >
+            Painel financeiro
+          </Link>
 
           <div className="ml-auto flex items-center gap-2">
             {!readOnly && (
