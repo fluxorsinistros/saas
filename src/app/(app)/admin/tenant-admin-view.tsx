@@ -61,6 +61,7 @@ export async function TenantAdminView({
     name?: string;
     tagline?: string;
     primary_color?: string | null;
+    primary_color_dark?: string | null;
     logo_path?: string | null;
   };
   const logoUrl = branding.logo_path
@@ -139,6 +140,7 @@ export async function TenantAdminView({
                 name: branding.name,
                 tagline: branding.tagline,
                 color: branding.primary_color,
+                colorDark: branding.primary_color_dark,
                 logoUrl,
               }}
             />

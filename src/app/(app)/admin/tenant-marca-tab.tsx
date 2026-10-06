@@ -11,6 +11,7 @@ type Props = {
     name?: string;
     tagline?: string;
     color?: string | null;
+    colorDark?: string | null;
     logoUrl?: string | null;
   };
 };
@@ -24,16 +25,18 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
   const [previewName, setPreviewName] = useState(initialBrand.name ?? "");
   const [previewTagline, setPreviewTagline] = useState(initialBrand.tagline ?? "");
   const [previewColor, setPreviewColor] = useState(initialBrand.color ?? "#577bf8");
+  const [previewColorDark, setPreviewColorDark] = useState(initialBrand.colorDark ?? "#577bf8");
   const [logoPreview, setLogoPreview] = useState<string | null>(initialBrand.logoUrl ?? null);
 
   // Ressincroniza quando o servidor devolve a marca salva (ajuste durante o render, sem efeito).
-  const brandKey = `${initialBrand.name}|${initialBrand.tagline}|${initialBrand.color}|${initialBrand.logoUrl}`;
+  const brandKey = `${initialBrand.name}|${initialBrand.tagline}|${initialBrand.color}|${initialBrand.colorDark}|${initialBrand.logoUrl}`;
   const [seenBrandKey, setSeenBrandKey] = useState(brandKey);
   if (seenBrandKey !== brandKey) {
     setSeenBrandKey(brandKey);
     if (initialBrand.name !== undefined) setPreviewName(initialBrand.name ?? "");
     if (initialBrand.tagline !== undefined) setPreviewTagline(initialBrand.tagline ?? "");
     if (initialBrand.color) setPreviewColor(initialBrand.color);
+    if (initialBrand.colorDark) setPreviewColorDark(initialBrand.colorDark);
     if (initialBrand.logoUrl !== undefined) setLogoPreview(initialBrand.logoUrl);
   }
 
@@ -147,46 +150,12 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
               </div>
             </div>
 
-            {/* Cor Principal (Theme Brand Color) */}
-            <div className="border-t border-slate-100 pt-4">
-              <label htmlFor="brand_color" className="mb-1 block text-[12px] font-medium text-slate-700">
-                Cor Principal do Sistema
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={previewColor.startsWith("#") && previewColor.length === 7 ? previewColor : "#577bf8"}
-                  onChange={(e) => setPreviewColor(e.target.value)}
-                  disabled={!whiteLabelEnabled}
-                  className="size-10 cursor-pointer rounded-lg border border-slate-300 p-0.5"
-                  title="Escolha a cor da sua marca"
-                />
-                <input
-                  id="brand_color"
-                  name="brand_color"
-                  value={previewColor}
-                  onChange={(e) => setPreviewColor(e.target.value)}
-                  placeholder="#577bf8"
-                  maxLength={7}
-                  disabled={!whiteLabelEnabled}
-                  className={`${inputClass} w-36 font-mono uppercase`}
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {["#577bf8", "#0284c7", "#059669", "#7c3aed", "#d97706", "#dc2626"].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      disabled={!whiteLabelEnabled}
-                      onClick={() => setPreviewColor(preset)}
-                      className="size-6 rounded-md border border-slate-200 transition hover:scale-110 disabled:opacity-50"
-                      style={{ backgroundColor: preset }}
-                      title={`Cor pré-definida ${preset}`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <p className="mt-1.5 text-xs text-slate-500">
-                Esta cor personalizada será aplicada aos botões principais, links ativos e destaques visuais do sistema para todos os membros da sua empresa.
+            {/* Cor da marca, uma para cada tema */}
+            <div className="grid gap-4 border-t border-slate-100 pt-4 md:grid-cols-2">
+              <ColorField id="brand_color" label="Cor no tema claro" value={previewColor} onChange={setPreviewColor} disabled={!whiteLabelEnabled} />
+              <ColorField id="brand_color_dark" label="Cor no tema escuro" value={previewColorDark} onChange={setPreviewColorDark} disabled={!whiteLabelEnabled} />
+              <p className="text-xs text-slate-500 md:col-span-2">
+                Cada cor vale para os botões principais, links ativos e destaques quando a pessoa usa aquele tema. Sem cor escolhida, vale o azul padrão do sistema.
               </p>
             </div>
 
@@ -275,6 +244,50 @@ export function TenantMarcaTab({ tenantId, whiteLabelEnabled, initialBrand }: Pr
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ColorField({ id, label, value, onChange, disabled }: { id: string; label: string; value: string; onChange: (v: string) => void; disabled: boolean }) {
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1 block text-[12px] font-medium text-slate-700">
+        {label}
+      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="color"
+          value={value.startsWith("#") && value.length === 7 ? value : "#577bf8"}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="size-10 cursor-pointer rounded-lg border border-slate-300 p-0.5"
+          title="Escolha a cor da sua marca"
+          aria-label={`Seletor: ${label}`}
+        />
+        <input
+          id={id}
+          name={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#577bf8"
+          maxLength={7}
+          disabled={disabled}
+          className={`${inputClass} w-32 font-mono uppercase`}
+        />
+        <div className="flex flex-wrap gap-1.5">
+          {["#577bf8", "#0284c7", "#059669", "#7c3aed", "#d97706", "#dc2626"].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(preset)}
+              className="size-6 rounded-md border border-slate-200 transition hover:scale-110 disabled:opacity-50"
+              style={{ backgroundColor: preset }}
+              title={`Cor pré-definida ${preset}`}
+            />
+          ))}
         </div>
       </div>
     </div>

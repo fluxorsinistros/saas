@@ -54,8 +54,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const supabaseMe = await createClient();
   const { data: me } = await supabaseMe.from("user_profiles").select("full_name, avatar_path").eq("id", ctx.userId).maybeSingle();
   const myUrls = await signedAvatarUrls([me?.avatar_path]);
-  const themeVars = own?.color
-    ? ({ "--color-brand": ensureWhiteContrast(own.color), "--color-brand-600": darkenHex(ensureWhiteContrast(own.color)) } as React.CSSProperties)
+  // Cor da marca própria por tema: sem cor escolhida para o tema atual, vale o azul padrão do produto.
+  const themeColor = ctx.theme === "dark" ? own?.colorDark : own?.color;
+  const themeVars = themeColor
+    ? ({ "--color-brand": ensureWhiteContrast(themeColor), "--color-brand-600": darkenHex(ensureWhiteContrast(themeColor)) } as React.CSSProperties)
     : undefined;
 
   return (

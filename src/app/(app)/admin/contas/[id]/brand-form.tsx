@@ -10,12 +10,14 @@ export function TenantBrandForm({
   name,
   tagline,
   color,
+  colorDark,
   logoUrl,
 }: {
   tenantId: string;
   name: string;
   tagline: string;
   color: string;
+  colorDark: string;
   logoUrl: string | null;
 }) {
   const [state, action, pending] = useActionState(saveTenantBranding, null);
@@ -44,7 +46,7 @@ export function TenantBrandForm({
       </div>
       <div className="w-40">
         <label htmlFor="brand_color" className="mb-1 block text-[12px] font-medium text-slate-600">
-          Cor principal
+          Cor no tema claro
         </label>
         <div className="flex items-center gap-2">
           <input
@@ -57,6 +59,23 @@ export function TenantBrandForm({
             className={input}
           />
           {/^#[0-9a-fA-F]{6}$/.test(color) && <span className="size-6 shrink-0 rounded-md ring-1 ring-slate-200" style={{ background: color }} />}
+        </div>
+      </div>
+      <div className="w-40">
+        <label htmlFor="brand_color_dark" className="mb-1 block text-[12px] font-medium text-slate-600">
+          Cor no tema escuro
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            key={colorDark}
+            id="brand_color_dark"
+            name="brand_color_dark"
+            defaultValue={colorDark}
+            placeholder="#577bf8"
+            maxLength={7}
+            className={input}
+          />
+          {/^#[0-9a-fA-F]{6}$/.test(colorDark) && <span className="size-6 shrink-0 rounded-md ring-1 ring-slate-200" style={{ background: colorDark }} />}
         </div>
       </div>
       <div className="min-w-[220px] flex-1">

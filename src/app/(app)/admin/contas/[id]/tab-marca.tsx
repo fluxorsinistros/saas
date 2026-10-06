@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { TenantBrandForm } from "./brand-form";
 
-type Branding = { name?: string; tagline?: string; primary_color?: string | null; logo_path?: string | null };
+type Branding = { name?: string; tagline?: string; primary_color?: string | null; primary_color_dark?: string | null; logo_path?: string | null };
 
 export async function TabMarca({ tenantId, settings }: { tenantId: string; settings: unknown }) {
   const branding = (((settings ?? {}) as { branding?: Branding }).branding ?? {}) as Branding;
@@ -20,6 +20,7 @@ export async function TabMarca({ tenantId, settings }: { tenantId: string; setti
         name={branding.name ?? ""}
         tagline={branding.tagline ?? ""}
         color={branding.primary_color ?? ""}
+        colorDark={branding.primary_color_dark ?? ""}
         logoUrl={logoUrl}
       />
     </section>

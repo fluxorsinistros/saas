@@ -420,7 +420,8 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
   const name = String(formData.get("brand_name") ?? "").trim();
   const tagline = String(formData.get("brand_tagline") ?? "").trim();
   const color = String(formData.get("brand_color") ?? "").trim();
-  if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, message: "A cor precisa estar no formato #RRGGBB." };
+  const colorDark = String(formData.get("brand_color_dark") ?? "").trim();
+  if ((color && !/^#[0-9a-fA-F]{6}$/.test(color)) || (colorDark && !/^#[0-9a-fA-F]{6}$/.test(colorDark))) return { ok: false, message: "A cor precisa estar no formato #RRGGBB." };
 
   const { data: contract } = await supabase.from("tenant_contracts").select("white_label_enabled").eq("tenant_id", tenantId).maybeSingle();
   if (!contract?.white_label_enabled) return { ok: false, message: "O white-label não está liberado para esta conta (módulo White-label necessário)." };
@@ -447,7 +448,8 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
 
   const resetAll = formData.get("reset_branding") === "on";
   const isDefaultColor = !color || ["#2563eb", "#577bf8"].includes(color.toLowerCase());
-  const hasCustomization = !resetAll && Boolean(name || tagline || logoPath || !isDefaultColor);
+  const isDefaultColorDark = !colorDark || ["#2563eb", "#577bf8"].includes(colorDark.toLowerCase());
+  const hasCustomization = !resetAll && Boolean(name || tagline || logoPath || !isDefaultColor || !isDefaultColorDark);
 
   const next: Record<string, Json> = { ...settings };
   if (hasCustomization) {
@@ -455,6 +457,7 @@ export async function saveTenantBranding(_prev: ActionState, formData: FormData)
       name: name || null,
       tagline: tagline || null,
       primary_color: color || null,
+      primary_color_dark: colorDark || null,
       logo_path: logoPath,
     };
   } else {

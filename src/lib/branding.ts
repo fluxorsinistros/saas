@@ -13,7 +13,7 @@ export const getPlatformBrand = cache(async (): Promise<Brand> => {
   return { name: data.product_name, tagline: data.tagline, logoUrl };
 });
 
-export type TenantBrand = { brand: Brand; color: string | null };
+export type TenantBrand = { brand: Brand; color: string | null; colorDark: string | null };
 
 // Marca própria da conta (white-label): só vale se o contrato liberou e a conta tem customização de marca (cor, logo ou nome).
 export const getTenantBrand = cache(async (tenantId: string): Promise<TenantBrand | null> => {
@@ -24,21 +24,22 @@ export const getTenantBrand = cache(async (tenantId: string): Promise<TenantBran
     getPlatformBrand(),
   ]);
   if (!contract?.white_label_enabled) return null;
-  const b = ((tenant?.settings ?? {}) as { branding?: { name?: string | null; tagline?: string | null; primary_color?: string | null; logo_path?: string | null } })
+  const b = ((tenant?.settings ?? {}) as { branding?: { name?: string | null; tagline?: string | null; primary_color?: string | null; primary_color_dark?: string | null; logo_path?: string | null } })
     .branding;
   if (!b) return null;
 
   const logoUrl = b.logo_path ? supabase.storage.from("branding").getPublicUrl(b.logo_path).data.publicUrl : platformBrand.logoUrl;
   const color = b.primary_color && /^#[0-9a-fA-F]{6}$/.test(b.primary_color) ? b.primary_color : null;
+  const colorDark = b.primary_color_dark && /^#[0-9a-fA-F]{6}$/.test(b.primary_color_dark) ? b.primary_color_dark : null;
   const name = b.name?.trim() || platformBrand.name;
   const tagline = b.tagline !== undefined && b.tagline !== null ? b.tagline : platformBrand.tagline;
 
   // Se não há personalização alguma, não há marca própria ativa
-  if (!b.name?.trim() && (!b.tagline || !b.tagline.trim()) && !color && !b.logo_path) {
+  if (!b.name?.trim() && (!b.tagline || !b.tagline.trim()) && !color && !colorDark && !b.logo_path) {
     return null;
   }
 
-  return { brand: { name, tagline: tagline ?? "", logoUrl }, color };
+  return { brand: { name, tagline: tagline ?? "", logoUrl }, color, colorDark };
 });
 
 /** Escurece uma cor #RRGGBB em ~15% (para o estado de hover dos botões). */
