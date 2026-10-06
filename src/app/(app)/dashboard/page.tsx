@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, FolderOpen, Hourglass, Loader2, OctagonAlert, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadOperationalSnapshot } from "@/lib/reports";
@@ -37,19 +37,19 @@ export default async function DashboardPage() {
         </p>
 
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card label="Total de sinistros" value={snap.totalCycles} />
-          <Card label="Em andamento" value={open} />
-          <Card label="Bloqueados" value={blocked} accent={blocked > 0 ? "text-rose-600" : undefined} />
-          <Card label="Taxa de conclusão" value={`${completionRate}%`} />
+          <Card label="Total de sinistros" value={snap.totalCycles} icon={FolderOpen} tone="blue" />
+          <Card label="Em andamento" value={open} icon={Loader2} tone="sky" />
+          <Card label="Bloqueados" value={blocked} accent={blocked > 0 ? "text-rose-600" : undefined} icon={OctagonAlert} tone="rose" />
+          <Card label="Taxa de conclusão" value={`${completionRate}%`} icon={CheckCircle2} tone="emerald" />
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <Card label="Atrasados (SLA)" value={snap.slaOverdueCount} accent={snap.slaOverdueCount > 0 ? "text-rose-600" : undefined} />
-          <Card label="Próximos do prazo" value={snap.slaAtRiskCount} accent={snap.slaAtRiskCount > 0 ? "text-amber-600" : undefined} />
+          <Card label="Atrasados (SLA)" value={snap.slaOverdueCount} accent={snap.slaOverdueCount > 0 ? "text-rose-600" : undefined} icon={Clock3} tone="rose" />
+          <Card label="Próximos do prazo" value={snap.slaAtRiskCount} accent={snap.slaAtRiskCount > 0 ? "text-amber-600" : undefined} icon={Hourglass} tone="amber" />
         </div>
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <section className="glass-card p-5">
             <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Sinistros por tipo</h2>
             <MagnitudeBars
               items={snap.byCategory.map((c) => ({ label: c.categoryName, count: c.count }))}
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
             />
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <section className="glass-card p-5">
             <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Backlog por grupo</h2>
             <MagnitudeBars
               items={snap.backlogByGroup.map((g) => ({ label: g.groupName, count: g.count }))}
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
         </div>
 
         {snap.blockedCount > 0 && (
-          <section className="mt-8 rounded-xl border border-rose-200 bg-rose-50 p-4">
+          <section className="mt-8 rounded-2xl border border-rose-200 bg-rose-50 p-4">
             <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-rose-700">
               <AlertTriangle className="size-3.5" /> {snap.blockedCount} sinistro(s) bloqueado(s)
             </h2>
@@ -87,11 +87,24 @@ export default async function DashboardPage() {
   );
 }
 
-function Card({ label, value, accent }: { label: string; value: number | string; accent?: string }) {
+const TONES: Record<string, string> = {
+  blue: "bg-blue-100/80 text-blue-700",
+  sky: "bg-sky-100/80 text-sky-700",
+  rose: "bg-rose-100/80 text-rose-700",
+  emerald: "bg-emerald-100/80 text-emerald-700",
+  amber: "bg-amber-100/80 text-amber-700",
+};
+
+function Card({ label, value, accent, icon: Icon, tone }: { label: string; value: number | string; accent?: string; icon: LucideIcon; tone: keyof typeof TONES }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className={`text-[22px] font-semibold ${accent ?? "text-slate-900"}`}>{value}</dd>
+    <div className="glass-card flex items-start justify-between gap-3 px-4 py-4">
+      <div className="min-w-0">
+        <dt className="text-[12px] font-medium text-slate-600">{label}</dt>
+        <dd className={`mt-1.5 text-[28px] font-semibold leading-none tracking-tight ${accent ?? "text-slate-900"}`}>{value}</dd>
+      </div>
+      <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${TONES[tone]}`} aria-hidden="true">
+        <Icon className="size-5" />
+      </span>
     </div>
   );
 }

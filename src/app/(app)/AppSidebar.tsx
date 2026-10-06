@@ -99,7 +99,7 @@ export function AppSidebar({
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-30 flex h-12 items-center gap-3 border-b border-navy-700 bg-navy px-3 md:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-12 items-center gap-3 border-b border-navy-700 sidebar-glass bg-navy px-3 md:hidden">
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -116,7 +116,7 @@ export function AppSidebar({
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("a")) setDrawerOpen(false);
       }}
-      className={`sidebar-scrollbar fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col bg-navy text-slate-300 transition-transform duration-200 select-none md:static md:z-auto md:translate-x-0 md:transition-[width] md:duration-150 ${
+      className={`sidebar-scrollbar fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col sidebar-glass bg-navy text-slate-300 transition-transform duration-200 select-none md:static md:z-auto md:translate-x-0 md:transition-[width] md:duration-150 ${
         drawerOpen ? "translate-x-0" : "-translate-x-full"
       } ${collapsed ? "md:w-14" : "md:w-[232px]"}`}
     >

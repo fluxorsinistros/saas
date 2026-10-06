@@ -54,7 +54,7 @@ export function NavLinks({
               aria-current={active ? "page" : undefined}
               className={`flex items-center gap-2.5 rounded-lg py-2 text-[13px] font-medium transition ${
                 collapsed ? "justify-center px-0" : "px-2.5"
-              } ${active ? "bg-brand text-white shadow-sm" : "text-slate-300 hover:bg-navy-700 hover:text-white"}`}
+              } ${active ? "sidebar-active text-white" : "text-slate-300 hover:bg-navy-700 hover:text-white"}`}
             >
               <Icon className="size-4 shrink-0" />
               {!collapsed && label}
