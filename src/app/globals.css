@@ -439,7 +439,10 @@ body[data-theme="dark"] {
 }
 
 /* Tema escuro: o menu volta ao azul-marinho e o vidro vira vidro escuro */
-:is(.dark, [data-theme="dark"]) body {
+:is(.dark, [data-theme="dark"]) body,
+/* o invólucro do app também pinta o fundo escuro: ao trocar de tema pelo botão do menu o <body> pode demorar a receber a classe,
+   e sem isto só o conteúdo escurecia e o fundo ficava claro */
+div[data-theme="dark"] {
   background:
     radial-gradient(900px 520px at 6% -6%, rgba(37, 99, 235, 0.2), transparent 62%),
     #090d16;
