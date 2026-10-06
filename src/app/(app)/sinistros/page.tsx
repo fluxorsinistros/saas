@@ -389,45 +389,47 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
-        <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Sinistros</h1>
-        <p className="mt-1 max-w-xl text-[14px] text-slate-700">
-          Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido, mudanças futuras no fluxo não
-          afetam ciclos já abertos.
-        </p>
-
-        {!perms.has("claim.formalize") || !canFormalize ? null : options.length === 0 ? (
-          <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-4 text-[13px] text-slate-500">
-            Nenhum fluxo publicado ainda.{" "}
-            <Link href="/fluxos" className="font-medium text-brand hover:underline">
-              Publique um fluxo
-            </Link>{" "}
-            antes de abrir um sinistro.
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+          <div>
+            <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Sinistros</h1>
+            <p className="mt-1 max-w-xl text-[14px] text-slate-700">
+              Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido, mudanças futuras no fluxo não
+              afetam ciclos já abertos.
+            </p>
           </div>
-        ) : (
-          <form action="/sinistros/novo" className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-            <div className="min-w-[220px] flex-1">
-              <label htmlFor="workflow_id" className="mb-1 block text-[12px] font-medium text-slate-600">
+
+          {!perms.has("claim.formalize") || !canFormalize ? null : options.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-[13px] text-slate-500">
+              Nenhum fluxo publicado ainda.{" "}
+              <Link href="/fluxos" className="font-medium text-brand hover:underline">
+                Publique um fluxo
+              </Link>{" "}
+              antes de abrir um sinistro.
+            </div>
+          ) : (
+            <form action="/sinistros/novo" className="flex w-full items-center gap-2 sm:w-auto">
+              <label htmlFor="workflow_id" className="sr-only">
                 Fluxo publicado
               </label>
               <select
                 id="workflow_id"
                 name="fluxo"
                 required
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15 sm:w-64 sm:flex-none"
               >
-                <option value="">Selecione…</option>
+                <option value="">Selecione o fluxo publicado…</option>
                 {options.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
                 ))}
               </select>
-            </div>
-            <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
-              <Plus className="size-4" /> Formalizar sinistro
-            </button>
-          </form>
-        )}
+              <button className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
+                <Plus className="size-4" /> Formalizar sinistro
+              </button>
+            </form>
+          )}
+        </div>
 
         <div className="mt-6">
           <SinistrosFilterBar
