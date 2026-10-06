@@ -424,10 +424,14 @@ body[data-theme="dark"] {
 
 /* Cartões e painéis de vidro */
 .glass-card {
-  background: rgba(255, 255, 255, 0.66);
+  /* Vidro de verdade: preenchimento em degradê (mais claro no canto de cima, mais transparente no meio), desfoque com
+     saturação do que está por trás e um brilho de luz bem fino na borda de cima/esquerda. */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.46) 52%, rgba(255, 255, 255, 0.6) 100%);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%);
   border: 0;
   border-radius: 20px;
-  box-shadow: 0 12px 36px rgba(31, 63, 130, 0.12);
+  box-shadow: 0 14px 38px rgba(31, 63, 130, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 1px 0 0 rgba(255, 255, 255, 0.3);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-card { background: rgba(255, 255, 255, 0.92); }
@@ -540,14 +544,24 @@ body[data-theme="dark"] {
    ========================================================================== */
 .sidebar-glass [class*="border-navy"],
 .sidebar-glass .border-t { border-color: transparent; }
-.app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
-.app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+.app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
+.app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
   border-color: transparent;
-  box-shadow: 0 12px 34px rgba(31, 63, 130, 0.12);
+  /* mesmo vidro dos cartões do Dashboard (sem o desfoque do fundo, para listas longas não pesarem) */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.58) 52%, rgba(255, 255, 255, 0.7) 100%);
+  box-shadow: 0 14px 38px rgba(31, 63, 130, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 1px 0 0 rgba(255, 255, 255, 0.3);
 }
-:is(.dark, [data-theme="dark"]) .app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
-:is(.dark, [data-theme="dark"]) .app-content-bg :is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+  background: #111827;
   box-shadow: none;
 }
 :is(.dark, [data-theme="dark"]) .sidebar-glass [class*="border-navy"],
 :is(.dark, [data-theme="dark"]) .sidebar-glass .border-t { border-color: #1b2640; }
+
+/* Campos de preenchimento (tema claro): sempre com fundo branco quase opaco, mesmo sem a classe bg-white —
+   sobre o vidro translúcido eles precisam se destacar e parecer clicáveis. */
+.app-content-bg :is(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="color"])):not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.94);
+}
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(select, textarea, input) { background-color: #0d131f; }
