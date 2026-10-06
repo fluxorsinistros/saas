@@ -2,12 +2,13 @@ import { GroupChip } from "@/lib/group-icons";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, LayoutGrid, Plus, RotateCcw, SearchX, Table2, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, LayoutGrid, RotateCcw, SearchX, Table2, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
 import { computeProcessProgress, computeSla, formatDuration } from "@/lib/format";
 import { SinistrosFilterBar } from "./SinistrosFilterBar";
+import { FormalizeButton } from "./FormalizeButton";
 
 export const metadata: Metadata = { title: "Sinistros" };
 
@@ -456,27 +457,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
               antes de abrir um sinistro.
             </div>
           ) : (
-            <form action="/sinistros/novo" className="flex w-full items-center gap-2 sm:w-auto">
-              <label htmlFor="workflow_id" className="sr-only">
-                Fluxo publicado
-              </label>
-              <select
-                id="workflow_id"
-                name="fluxo"
-                required
-                className="field-on-glass min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15 sm:w-64 sm:flex-none"
-              >
-                <option value="">Selecione o fluxo publicado…</option>
-                {options.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
-              <button className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
-                <Plus className="size-4" /> Formalizar sinistro
-              </button>
-            </form>
+            <FormalizeButton options={options.map((w) => ({ id: w.id, name: w.name }))} />
           )}
         </div>
 
