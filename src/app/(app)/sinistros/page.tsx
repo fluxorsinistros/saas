@@ -75,7 +75,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
 
   // Quem é Administrador vê e escolhe qualquer grupo (inclusive "Todos"); Operador só enxerga os
-  // próprios grupos — grupo é conceito de Operador (decisão do usuário), igual à visibilidade de
+  // próprios grupos, grupo é conceito de Operador (decisão do usuário), igual à visibilidade de
   // menu em src/lib/screens.ts.
   const { isAdmin, active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
   // Operador atua num grupo por vez (o ativo na sessão); só ele aparece e vale nos filtros.
@@ -113,7 +113,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       requestedSlaTotal ||
       requestedSituacao
   );
-  // A lista só consulta o banco depois de "Filtrar" (ou com filtro na URL) — nunca sozinha ao abrir a tela.
+  // A lista só consulta o banco depois de "Filtrar" (ou com filtro na URL), nunca sozinha ao abrir a tela.
   const searched = sp.searched === "1" || hasActiveFilters;
   const PAGE_SIZE = 20;
   const page = Math.max(1, Number.parseInt(sp.pagina ?? "1", 10) || 1);
@@ -229,7 +229,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     capped = claims.length >= CLAIM_FETCH_CAP;
 
     // Identidade do sinistro na lista: os primeiros valores dos campos de abertura (placa, segurado...)
-    // — sem isso o operador só tem o número e precisa abrir cada cartão.
+    //, sem isso o operador só tem o número e precisa abrir cada cartão.
     const { data: fieldDefs } = await supabase
       .from("workflow_fields")
       .select("workflow_id, key, label")
@@ -238,7 +238,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     for (const f of fieldDefs ?? []) fieldLabelByWorkflowKey.set(`${f.workflow_id}:${f.key}`, f.label);
 
     // Grupo "responsável agora" = grupo da(s) atividade(s) em aberto do ciclo atual de cada
-    // sinistro (pode ter mais de um em paralelo) — é isso que responde "o que está na fila do meu grupo".
+    // sinistro (pode ter mais de um em paralelo), é isso que responde "o que está na fila do meu grupo".
     currentCycleByClaim = new Map(claims.map((c) => [c.id, [...c.claim_cycles].sort((a, b) => b.cycle_number - a.cycle_number)[0]]));
     const cycleIds = [...currentCycleByClaim.values()].filter(Boolean).map((c) => c!.id);
     
@@ -391,7 +391,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Sinistros</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-700">
-          Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido — mudanças futuras no fluxo não
+          Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido, mudanças futuras no fluxo não
           afetam ciclos já abertos.
         </p>
 
@@ -698,7 +698,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                                 <span>Aguardando:</span>
                                 <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-slate-800 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded text-xs">
                                   {[...(groupsByCycle.get(cycle?.id ?? "") ?? [])].map((gid) => (
-                                    <GroupChip key={gid} name={groupNameById.get(gid) ?? "—"} icon={groupMetaById.get(gid)?.icon} color={groupMetaById.get(gid)?.color} />
+                                    <GroupChip key={gid} name={groupNameById.get(gid) ?? "-"} icon={groupMetaById.get(gid)?.icon} color={groupMetaById.get(gid)?.color} />
                                   ))}
                                 </span>
                               </div>

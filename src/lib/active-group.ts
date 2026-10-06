@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 // Um Operador pode pertencer a vários grupos, mas atua em UM por vez (cada grupo tem telas e ações próprias).
 // O grupo ativo vive num cookie por empresa e só vale se a pessoa ainda for membro dele; sem escolha, vale o
-// primeiro grupo (por nome). Administrador não é limitado por grupo — para ele isto não restringe nada.
+// primeiro grupo (por nome). Administrador não é limitado por grupo, para ele isto não restringe nada.
 const ACTIVE_GROUP_COOKIE = "active_group";
 
 // Um cookie por empresa: os grupos da pessoa são dali, e trocar de empresa nunca pode herdar o grupo de outra.

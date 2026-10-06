@@ -10,7 +10,7 @@ import { csvToRows, type ImportRowData } from "./csv";
 import type { Json } from "@/lib/supabase/database.types";
 
 // Valida uma linha sem criar nada (Prévia): mesma checagem de fluxo publicado e data que
-// createClaimAndCycle faria, mais a checagem de duplicidade por referência externa — que só faz
+// createClaimAndCycle faria, mais a checagem de duplicidade por referência externa, que só faz
 // sentido em lote, não existe na formalização manual de um único sinistro.
 async function validateRow(supabase: Supa, tenantId: string, raw: ImportRowData): Promise<{ status: string; errors: string[] | null }> {
   const errors: string[] = [];
@@ -120,7 +120,7 @@ export async function ignoreImportRow(rowId: string): Promise<void> {
   const supabase = await createClient();
   const { data: row, error } = await supabase.from("import_rows").select("id, import_id, status").eq("id", rowId).single();
   if (error || !row) throw new Error("Linha não encontrada.");
-  if (row.status === "created") throw new Error("Esta linha já criou um sinistro — não pode ser ignorada.");
+  if (row.status === "created") throw new Error("Esta linha já criou um sinistro, não pode ser ignorada.");
 
   await supabase.from("import_rows").update({ status: "ignored" }).eq("id", rowId);
   await recalcImportCounts(supabase, row.import_id);
@@ -143,7 +143,7 @@ async function recalcImportCounts(supabase: Supa, importId: string): Promise<voi
 }
 
 // Confirmação do lote (Documento 5 §10): cria um sinistro por linha 'valid' (e por 'duplicate_candidate'
-// se o usuário decidiu incluir mesmo assim) chamando createClaimAndCycle — a mesma rotina da
+// se o usuário decidiu incluir mesmo assim) chamando createClaimAndCycle, a mesma rotina da
 // formalização manual (§29). Nenhuma linha 'error' ou 'ignored' vira sinistro.
 export async function confirmImport(importId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();

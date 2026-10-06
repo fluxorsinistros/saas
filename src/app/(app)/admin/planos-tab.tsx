@@ -26,7 +26,7 @@ export async function PlanosTab() {
 
           <details className="mb-1">
             <summary className="cursor-pointer list-none text-[12px] font-medium text-slate-500 hover:text-slate-800">
-              + Criar novo plano (raro — os planos padrão já existem)
+              + Criar novo plano (raro, os planos padrão já existem)
             </summary>
           <form action={createPlan} className="mt-2 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
             <div className="w-28">
@@ -104,7 +104,7 @@ export async function PlanosTab() {
                   <form action={savePlanLimits}>
                     <input type="hidden" name="plan_id" value={plan.id} />
                     <p className="mb-2 text-xs font-medium uppercase tracking-[0.06em] text-slate-500">
-                      Limites — deixe vazio para não limitar
+                      Limites: deixe vazio para não limitar
                     </p>
                     <div
                       key={JSON.stringify((limitsByPlan.get(plan.id) ?? []).map((l) => [l.limit_key, l.limit_value]))}

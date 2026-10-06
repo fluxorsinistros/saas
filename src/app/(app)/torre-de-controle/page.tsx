@@ -262,7 +262,7 @@ export default async function TorreDeControlePage({
       <div className="mx-auto page-wide px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Torre de Controle</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-700">
-          Onde está o gargalo, agora — não uma foto de ontem.
+          Onde está o gargalo, agora, não uma foto de ontem.
           {!isAdmin && ` Você vê só os sinistros do seu grupo${activeGroup ? ` (${activeGroup.name})` : ""}.`}
         </p>
 
@@ -353,7 +353,7 @@ export default async function TorreDeControlePage({
 
             <section>
               <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                <Clock3 className="size-3.5" /> Aging — mais tempo em aberto
+                <Clock3 className="size-3.5" /> Aging: mais tempo em aberto
               </h2>
               {snap.aging.length === 0 ? (
                 <p className="text-[13px] text-slate-500">Nada em aberto no momento.</p>

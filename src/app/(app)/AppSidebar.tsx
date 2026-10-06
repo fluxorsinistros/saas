@@ -35,7 +35,7 @@ type Props = {
 
 // O menu recolhe e expande pelo botão do topo e a escolha fica guardada no navegador. Sem escolha, dentro
 // do editor de fluxo (a tela principal, Documento 5 §2) ele já abre recolhido para dar o máximo de espaço
-// ao quadro — a crítica de design apontou o quadro como o maior gargalo.
+// ao quadro, a crítica de design apontou o quadro como o maior gargalo.
 type Pref = "collapsed" | "expanded" | null;
 const PREF_KEY = "sidebar";
 const listeners = new Set<() => void>();
@@ -224,7 +224,7 @@ export function AppSidebar({
             <button
               type="button"
               onClick={() => setGroupOpen(true)}
-              title={`Grupo atual: ${activeGroupName} — clique para trocar`}
+              title={`Grupo atual: ${activeGroupName}, clique para trocar`}
               aria-label={`Grupo atual: ${activeGroupName}. Trocar grupo`}
               className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 text-left transition hover:border-navy-600 ${
                 collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
@@ -239,7 +239,7 @@ export function AppSidebar({
               )}
             </button>
           ) : (
-            // Um grupo só: sempre visível, mas não é botão — quem tem um único grupo não troca.
+            // Um grupo só: sempre visível, mas não é botão, quem tem um único grupo não troca.
             <div
               title={`Seu grupo: ${activeGroupName}`}
               className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 ${
@@ -284,7 +284,7 @@ export function AppSidebar({
 
         <Link
           href="/perfil"
-          title="Meu perfil — foto e dados"
+          title="Meu perfil: foto e dados"
           className={`flex items-center gap-2 rounded-md py-1 text-xs text-slate-400 transition hover:bg-navy-700 hover:text-white ${collapsed ? "justify-center px-0" : "px-2"}`}
         >
           <Avatar name={personName || email} url={avatarUrl} className="size-6" />

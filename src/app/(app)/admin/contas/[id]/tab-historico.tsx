@@ -55,8 +55,8 @@ export async function TabHistorico({ tenantId }: { tenantId: string }) {
           <li key={e.id} className="relative text-[13px] text-slate-600">
             <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-slate-300" />
             <span className="font-medium text-slate-800">{ACTION_LABEL[e.action] ?? e.action}</span>
-            {detail(e.new_value) && <span className="text-slate-500"> — {detail(e.new_value)}</span>}
-            {e.reason && <span className="text-rose-700"> — {e.reason}</span>}
+            {detail(e.new_value) && <span className="text-slate-500">: {detail(e.new_value)}</span>}
+            {e.reason && <span className="text-rose-700">: {e.reason}</span>}
             <span className="ml-2 inline-flex items-center gap-1 text-[12px] text-slate-500">
               <Clock3 className="size-3" /> {new Date(e.created_at).toLocaleString("pt-BR")}
               {e.actor_email ? ` · ${e.actor_email}` : ""}

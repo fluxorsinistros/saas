@@ -27,13 +27,13 @@ export async function signIn(_: AuthState, formData: FormData): Promise<AuthStat
   redirect("/fluxos");
 }
 
-// Autoatendimento: qualquer pessoa pode pedir, não precisa estar logada nem ser Administrador —
+// Autoatendimento: qualquer pessoa pode pedir, não precisa estar logada nem ser Administrador,
 // é exatamente pra quando não tem Administrador por perto pra mandar pela tela de Usuários.
 export async function requestPasswordReset(_: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { error: "Informe o e-mail." };
   const mailError = await sendResetMail(email);
-  // Mesma mensagem dê certo ou não o e-mail existir — não confirma pra quem está tentando adivinhar contas.
+  // Mesma mensagem dê certo ou não o e-mail existir, não confirma pra quem está tentando adivinhar contas.
   return mailError ? { error: mailError } : { info: `Se existir uma conta com ${email}, enviamos um código de 6 dígitos.` };
 }
 

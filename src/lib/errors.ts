@@ -1,6 +1,6 @@
 // Mensagens de erro do banco que vão para a tela. Erros de regra de negócio (RAISE EXCEPTION, SQLSTATE P0001)
 // e de autenticação já são escritos para o usuário e passam como estão; o resto (nome de tabela, constraint,
-// detalhe de SQL) vira texto genérico — nunca expõe a estrutura interna.
+// detalhe de SQL) vira texto genérico, nunca expõe a estrutura interna.
 type DbError = { message: string; code?: string | null };
 
 const GENERIC: Record<string, string> = {

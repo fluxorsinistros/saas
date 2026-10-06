@@ -15,7 +15,7 @@ const input =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
 
 // Documento 1: campos de abertura vêm do elemento "Início" do fluxo escolhido, configurado no
-// Builder — por isso essa tela só existe depois de escolher o fluxo (cada um pode pedir campos
+// Builder, por isso essa tela só existe depois de escolher o fluxo (cada um pode pedir campos
 // diferentes), em vez de um formulário fixo igual pra todo mundo.
 export default async function NovoSinistroPage({ searchParams }: { searchParams: Promise<{ fluxo?: string }> }) {
   const ctx = await getTenantContext();
@@ -72,10 +72,10 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
           <Link href="/sinistros" className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-800">
             <ArrowLeft className="size-3.5" /> Sinistros
           </Link>
-          <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-slate-900">Novo sinistro — {workflow.name}</h1>
+          <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-slate-900">Novo sinistro: {workflow.name}</h1>
           <p className="mt-1 max-w-xl text-[14px] text-slate-700">
             {(fields ?? []).length === 0
-              ? "Este fluxo não pede nenhum campo na abertura — formalize e preencha o que for preciso nas próprias etapas."
+              ? "Este fluxo não pede nenhum campo na abertura, formalize e preencha o que for preciso nas próprias etapas."
               : "Campos definidos no elemento Início deste fluxo."}
           </p>
         </div>

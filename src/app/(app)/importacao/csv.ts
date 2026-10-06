@@ -1,6 +1,6 @@
 // Parser mínimo de CSV: aspas duplas para escapar vírgula/quebra de linha dentro de um campo
 // ("" dentro de um campo entre aspas vira uma aspa literal). Suficiente para uma planilha simples
-// de importação de sinistros — não precisa de uma lib inteira para isso.
+// de importação de sinistros, não precisa de uma lib inteira para isso.
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];

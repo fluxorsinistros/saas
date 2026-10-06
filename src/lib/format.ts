@@ -1,4 +1,4 @@
-// Um único formato de duração em todo o produto ("5h 8min", "2d 3h") — antes a Torre mostrava
+// Um único formato de duração em todo o produto ("5h 8min", "2d 3h"), antes a Torre mostrava
 // "310min" enquanto a lista de sinistros mostrava "5h 8min" para o mesmo atraso.
 export function formatDuration(minutes: number): string {
   if (minutes < 1) return "menos de 1 min";

@@ -37,7 +37,7 @@ const TABS = [
 ] as const;
 
 // Passo 3 do modelo (cadastrar → filtrar/listar → editar), igual a Usuários. Abas aqui porque mais
-// configuração do grupo vem por aí (telas hoje, outras coisas depois) — cada aba cuida de uma parte,
+// configuração do grupo vem por aí (telas hoje, outras coisas depois), cada aba cuida de uma parte,
 // em vez de empilhar tudo numa página só.
 export default async function EditGroupPage({
   params,
@@ -68,7 +68,7 @@ export default async function EditGroupPage({
   const hiddenScreens = new Set(group.hidden_screens ?? []);
   const disabledActions = new Set(group.disabled_actions ?? []);
 
-  // Papel (Administrador/Operador) controla telas e ações — é escolhido por pessoa em /usuarios,
+  // Papel (Administrador/Operador) controla telas e ações, é escolhido por pessoa em /usuarios,
   // não por grupo. Mostrar aqui é só pra deixar claro a diferença, sem misturar os dois conceitos.
   const { data: roleRows } = await supabase
     .from("roles")
@@ -169,7 +169,7 @@ export default async function EditGroupPage({
             <section className="rounded-xl border border-slate-200 bg-white p-5">
               <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Situação</h2>
               <p className="mb-3 text-[12px] text-slate-500">
-                Grupo nunca é excluído — etapas e histórico já publicados continuam apontando para ele. Desativar só impede que
+                Grupo nunca é excluído, etapas e histórico já publicados continuam apontando para ele. Desativar só impede que
                 ele seja escolhido em novos fluxos ou cadastros de usuário.
               </p>
               <form action={toggleGroup}>
@@ -196,7 +196,7 @@ export default async function EditGroupPage({
               <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Telas visíveis no menu</h2>
               <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
                 <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
-<span>                Vale só para quem é <strong>Operador</strong> e está neste grupo — Administrador sempre vê o menu inteiro,
+<span>                Vale só para quem é <strong>Operador</strong> e está neste grupo, Administrador sempre vê o menu inteiro,
                 independentemente do grupo. Desmarcar uma tela não revoga nenhuma ação, só tira o item do menu lateral.</span>
               </p>
             </div>
@@ -230,7 +230,7 @@ export default async function EditGroupPage({
               <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Ações permitidas</h2>
               <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
                 <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
-<span>                Vale só para quem é <strong>Operador</strong> e está neste grupo — Administrador sempre pode fazer tudo,
+<span>                Vale só para quem é <strong>Operador</strong> e está neste grupo, Administrador sempre pode fazer tudo,
                 independentemente do grupo. É uma restrição a mais sobre o que o Papel já libera, não substitui permissão.</span>
               </p>
             </div>

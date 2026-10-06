@@ -1,7 +1,7 @@
 import { Clock3 } from "lucide-react";
 import { computeSla } from "@/lib/format";
 
-// Selo "SLA da Etapa: 22% (restam 18h 43min)" — verde no prazo, âmbar a partir de 75%, vermelho estourado.
+// Selo "SLA da Etapa: 22% (restam 18h 43min)", verde no prazo, âmbar a partir de 75%, vermelho estourado.
 export function StageSlaBadge({ enteredAt, slaMinutes }: { enteredAt: string | null | undefined; slaMinutes: number | undefined }) {
   const sla = computeSla(enteredAt, slaMinutes);
   if (!sla) return null;

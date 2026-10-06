@@ -1,5 +1,5 @@
 // Marca exibida no produto. O nome e o logo vêm de platform_settings (editáveis em Administração);
-// sem configuração, cai na marca provisória (nome comercial ainda em definição — Documento 1 §72).
+// sem configuração, cai na marca provisória (nome comercial ainda em definição, Documento 1 §72).
 export type Brand = { name: string; tagline: string; logoUrl: string | null };
 
 export const DEFAULT_BRAND: Brand = { name: "Gerenciador de Sinistros", tagline: "Workflow de sinistros", logoUrl: null };

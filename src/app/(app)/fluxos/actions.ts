@@ -72,7 +72,7 @@ function readLengths(formData: FormData, fieldType: string): { min_length: numbe
 }
 
 // Campo personalizado "estilo SHARP" (Documento 1): o cliente cria quantos quiser, sem migração
-// nova — isso só grava uma linha de catálogo. A chave vira o identificador estável em
+// nova, isso só grava uma linha de catálogo. A chave vira o identificador estável em
 // claims.custom_fields, então nunca muda depois de criada (só o rótulo pode).
 export async function createWorkflowField(workflowId: string, formData: FormData): Promise<FieldResult> {
   const ctx = await getTenantContext();
@@ -148,7 +148,7 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   return { ok: true, field: { ...data, options: data.options as string[] | null } };
 }
 
-// Rótulo, opções, obrigatoriedade, duplicidade e valor padrão são editáveis — tipo e chave ficam
+// Rótulo, opções, obrigatoriedade, duplicidade e valor padrão são editáveis, tipo e chave ficam
 // travados depois de criado, porque claims.custom_fields já pode ter valores gravados sob essa
 // chave, no formato daquele tipo.
 export async function updateWorkflowField(fieldId: string, workflowId: string, formData: FormData): Promise<FieldResult> {

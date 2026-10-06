@@ -33,7 +33,7 @@ export function NavLinks({
   isAdmin?: boolean;
   isPlatformAdmin?: boolean;
   platformOnly?: boolean;
-  // Chaves de groups.hidden_screens do grupo da pessoa — Administração nunca entra aqui, é
+  // Chaves de groups.hidden_screens do grupo da pessoa, Administração nunca entra aqui, é
   // exclusiva de administradores e não depende de grupo nenhum.
   hiddenScreens?: string[];
 }) {

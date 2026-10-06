@@ -49,7 +49,7 @@ export default async function CalendariosPage() {
         </div>
         <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Calendários de SLA</h1>
         <p className="mt-1 max-w-xl text-[14px] text-slate-700">
-          Dias úteis, horário de expediente e feriados — usados pelo motor de SLA para calcular prazos. Um
+          Dias úteis, horário de expediente e feriados, usados pelo motor de SLA para calcular prazos. Um
           SLA sem calendário conta corrido, 24/7.
         </p>
 
@@ -103,7 +103,7 @@ export default async function CalendariosPage() {
                 </div>
                 <p className="mt-1.5 text-[12px] text-slate-500">
                   {WEEKDAYS.filter((d) => days.has(d.value)).map((d) => d.label).join(", ")}
-                  {cal.business_start && cal.business_end ? ` · ${cal.business_start.slice(0, 5)}–${cal.business_end.slice(0, 5)}` : " · dia inteiro"}
+                  {cal.business_start && cal.business_end ? ` · ${cal.business_start.slice(0, 5)} às ${cal.business_end.slice(0, 5)}` : " · dia inteiro"}
                 </p>
 
                 {excs.length > 0 && (
@@ -111,7 +111,7 @@ export default async function CalendariosPage() {
                     {excs.map((e) => (
                       <li key={e.id} className="flex items-center justify-between gap-2 text-[12px]">
                         <span className={e.is_working_day ? "text-emerald-700" : "text-rose-700"}>
-                          {new Date(e.exception_date + "T00:00:00").toLocaleDateString("pt-BR")} —{" "}
+                          {new Date(e.exception_date + "T00:00:00").toLocaleDateString("pt-BR")},{" "}
                           {e.is_working_day ? "dia útil extra" : "feriado"}
                           {e.note && <span className="ml-1 text-slate-500">({e.note})</span>}
                         </span>
@@ -142,7 +142,7 @@ export default async function CalendariosPage() {
             );
           })}
           {(calendars ?? []).length === 0 && (
-            <p className="text-[13px] text-slate-500">Nenhum calendário ainda — SLAs contam corrido, 24/7.</p>
+            <p className="text-[13px] text-slate-500">Nenhum calendário ainda, SLAs contam corrido, 24/7.</p>
           )}
         </div>
       </div>

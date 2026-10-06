@@ -59,7 +59,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
           </Link>
           <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-slate-900">{person.full_name || person.email}</h1>
           <p className="mt-1 text-[13px] text-slate-500">
-            {isGestor ? "Gestor da plataforma" : `${tenantName ?? "—"} · ${person.role_name ?? "Sem tipo"} · ${person.status === "active" ? "Ativo" : "Inativo"}`}
+            {isGestor ? "Gestor da plataforma" : `${tenantName ?? "-"} · ${person.role_name ?? "Sem tipo"} · ${person.status === "active" ? "Ativo" : "Inativo"}`}
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
             <ul className="mb-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
               {(memberships ?? []).map((m) => {
                 const role = m.role ?? "Sem tipo";
-                const name = (tenants ?? []).find((t) => t.id === m.tenant_id)?.name ?? "—";
+                const name = (tenants ?? []).find((t) => t.id === m.tenant_id)?.name ?? "-";
                 return (
                   <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 text-[13px]">
                     <span className="min-w-0 truncate">

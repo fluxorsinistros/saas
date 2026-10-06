@@ -73,7 +73,7 @@ export function DocumentUploadForm({ claimId, claimCycleId, documentId, hint, va
       if (!done.ok) return setStatus({ tone: "error", text: done.error });
 
       const shrunk = file.size < chosen.size ? ` (compactado de ${formatMb(chosen.size)} para ${formatMb(file.size)})` : "";
-      const extra = done.overageBytes > 0 ? ` — ${formatMb(done.overageBytes)} acima da franquia do plano, cobrados como excedente` : "";
+      const extra = done.overageBytes > 0 ? `: ${formatMb(done.overageBytes)} acima da franquia do plano, cobrados como excedente` : "";
       setStatus({ tone: "ok", text: `Enviado${shrunk}${extra}` });
       formRef.current?.reset();
       router.refresh();

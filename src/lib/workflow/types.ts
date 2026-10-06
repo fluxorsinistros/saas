@@ -11,7 +11,7 @@ export type NodeConfig = {
   loop_max?: number;
   join_rule?: JoinRule;
   min_count?: number;
-  // Chaves de workflow_fields que esta etapa pede pra preencher — valores entram em
+  // Chaves de workflow_fields que esta etapa pede pra preencher, valores entram em
   // claims.custom_fields na conclusão (ficha única do sinistro, nunca fragmentada por etapa).
   field_keys?: string[];
   // Subconjunto de field_keys que esta etapa só MOSTRA (consulta): a pessoa vê o valor, mas não edita. O valor é editado em
@@ -47,7 +47,7 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
 };
 
 // Tipos cujo valor em claims.custom_fields é o caminho de um arquivo no Storage (bucket
-// "documents"), não texto puro — precisam de upload e, pra exibir, de URL assinada.
+// "documents"), não texto puro, precisam de upload e, pra exibir, de URL assinada.
 export const FILE_FIELD_TYPES: FieldType[] = ["attachment"];
 
 export type EdgeKind = "normal" | "return";
@@ -76,7 +76,7 @@ export const NODE_META: Record<NodeType, { label: string; hint: string; help: st
   start: {
     label: "Início",
     hint: "Campos da abertura do sinistro",
-    help: "Único por fluxo. Os campos marcados aqui aparecem na tela de formalizar um sinistro neste fluxo — antes de qualquer etapa começar.",
+    help: "Único por fluxo. Os campos marcados aqui aparecem na tela de formalizar um sinistro neste fluxo, antes de qualquer etapa começar.",
   },
   stage: {
     label: "Etapa",
@@ -86,7 +86,7 @@ export const NODE_META: Record<NodeType, { label: string; hint: string; help: st
   decision: {
     label: "Decisão",
     hint: "Escolha única entre caminhos",
-    help: "Uma pergunta com respostas exclusivas — só um dos caminhos seguintes é ativado.",
+    help: "Uma pergunta com respostas exclusivas, só um dos caminhos seguintes é ativado.",
   },
   parallel_split: {
     label: "Paralelo",
@@ -106,7 +106,7 @@ export const NODE_META: Record<NodeType, { label: string; hint: string; help: st
   pending: {
     label: "Pendência",
     hint: "Solicitação sem nova etapa",
-    help: "Uma solicitação (ex.: documento faltando) dentro da etapa atual — não move o processo para outro passo.",
+    help: "Uma solicitação (ex.: documento faltando) dentro da etapa atual, não move o processo para outro passo.",
   },
   end: { label: "Fim", hint: "Encerra o caminho", help: "Encerra este caminho do processo." },
 };
@@ -121,7 +121,7 @@ export const JOIN_RULE_LABEL: Record<JoinRule, string> = {
 export const JOIN_RULE_HELP: Record<JoinRule, string> = {
   all_required: "Segue quando todo ramo marcado como obrigatório terminar. Ramos opcionais podem ficar pendentes.",
   all: "Segue somente quando todos os ramos, obrigatórios ou não, terminarem.",
-  any: "Segue assim que o primeiro ramo terminar — os demais continuam em segundo plano.",
+  any: "Segue assim que o primeiro ramo terminar, os demais continuam em segundo plano.",
   min_count: "Segue quando a quantidade de ramos concluídos atingir o número definido.",
 };
 

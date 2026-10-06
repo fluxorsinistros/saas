@@ -9,7 +9,7 @@ const input =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/15";
 
 // Sem autocadastro aqui: toda empresa nova entra pela Administração da plataforma (Documento 1
-// §56) — quem já faz parte de uma empresa só pode chegar aqui por convite. "Criar conta" existia
+// §56), quem já faz parte de uma empresa só pode chegar aqui por convite. "Criar conta" existia
 // antes como autocadastro público, mas isso deixava qualquer e-mail criar uma empresa nova sozinho.
 export function LoginForm() {
   const [state, action, pending] = useActionState<AuthState, FormData>(signIn, undefined);

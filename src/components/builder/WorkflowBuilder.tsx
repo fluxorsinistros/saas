@@ -268,7 +268,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
   const [releaseNote, setReleaseNote] = useState("");
   const [publishing, setPublishing] = useState(false);
 
-  // Nós recém-criados ficam "intocados" até perderem a seleção uma vez — a validação não os pune de imediato.
+  // Nós recém-criados ficam "intocados" até perderem a seleção uma vez, a validação não os pune de imediato.
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const prevSelectedRef = useRef<string | undefined>(undefined);
 
@@ -575,7 +575,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
     setEdges([]);
   };
 
-  // Ctrl+S salva, Ctrl+Z/Ctrl+Shift+Z desfaz/refaz, Ctrl+D duplica — nunca dentro de um campo de texto.
+  // Ctrl+S salva, Ctrl+Z/Ctrl+Shift+Z desfaz/refaz, Ctrl+D duplica, nunca dentro de um campo de texto.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const inField = ["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName);
@@ -745,7 +745,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
         {readOnly && (
           <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[12px] text-amber-900">
             <Lock className="size-3.5" />
-            Versão {STATUS_LABEL[version.status]?.toLowerCase()} — somente leitura. Processos iniciados nela continuam seguindo
+            Versão {STATUS_LABEL[version.status]?.toLowerCase()}, somente leitura. Processos iniciados nela continuam seguindo
             exatamente este desenho. Para alterar, crie uma nova versão.
           </div>
         )}
@@ -875,7 +875,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                 <div className="pointer-events-auto w-full max-w-lg rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl backdrop-blur">
                   <h2 className="text-[16px] font-semibold text-slate-900">Desenhe o fluxo do processo</h2>
                   <p className="mt-1 text-[13px] text-slate-500">
-                    Comece do zero ou a partir de um modelo pronto — dá para ajustar tudo depois.
+                    Comece do zero ou a partir de um modelo pronto, dá para ajustar tudo depois.
                   </p>
                   <div className="mt-4 space-y-2">
                     <button
@@ -1013,7 +1013,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
             {publishDiff && (
               <span className="mt-2 block rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
                 {!publishDiff.hasPublishedBefore ? (
-                  <>Primeira publicação — {publishDiff.nodesAdded} elemento(s).</>
+                  <>Primeira publicação, {publishDiff.nodesAdded} elemento(s).</>
                 ) : (
                   <>
                     Em relação à versão publicada: {publishDiff.nodesAdded > 0 && `${publishDiff.nodesAdded} elemento(s) novo(s)`}

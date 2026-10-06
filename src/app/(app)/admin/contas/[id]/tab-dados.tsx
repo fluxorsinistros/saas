@@ -38,7 +38,7 @@ export function TabDados({ tenant }: { tenant: Tenant }) {
             <p className="min-w-0 flex-1 text-[13px] text-rose-800">
               Conta suspensa
               {tenant.suspended_at ? ` em ${new Date(tenant.suspended_at).toLocaleDateString("pt-BR")}` : ""}
-              {tenant.suspension_reason ? ` — ${tenant.suspension_reason}` : ""}. Ninguém da empresa consegue acessar.
+              {tenant.suspension_reason ? `: ${tenant.suspension_reason}` : ""}. Ninguém da empresa consegue acessar.
             </p>
             <SaveButton className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600">
               Reativar conta

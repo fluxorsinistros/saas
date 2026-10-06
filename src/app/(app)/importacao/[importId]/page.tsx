@@ -80,10 +80,10 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
           <div className="mt-4 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] text-sky-800">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <div>
-              <p className="font-medium">Prévia — nenhum sinistro foi criado ainda.</p>
+              <p className="font-medium">Prévia: nenhum sinistro foi criado ainda.</p>
               <p className="mt-0.5">
-                Corrija as linhas com erro (ou deixe-as de fora) e confirme o lote. Só as linhas &quot;Válida&quot; — e
-                &quot;Possível duplicidade&quot; se você marcar para incluir — viram sinistro.
+                Corrija as linhas com erro (ou deixe-as de fora) e confirme o lote. Só as linhas &quot;Válida&quot;, e
+                &quot;Possível duplicidade&quot; se você marcar para incluir, viram sinistro.
               </p>
             </div>
           </div>
@@ -120,16 +120,16 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
                   ) : (
                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[12px] text-slate-600 sm:grid-cols-4">
                       <span>
-                        <span className="text-slate-500">Fluxo:</span> {raw.fluxo || "—"}
+                        <span className="text-slate-500">Fluxo:</span> {raw.fluxo || "-"}
                       </span>
                       <span>
-                        <span className="text-slate-500">Data:</span> {raw.data_ocorrencia || "—"}
+                        <span className="text-slate-500">Data:</span> {raw.data_ocorrencia || "-"}
                       </span>
                       <span>
-                        <span className="text-slate-500">Local:</span> {raw.local || "—"}
+                        <span className="text-slate-500">Local:</span> {raw.local || "-"}
                       </span>
                       <span>
-                        <span className="text-slate-500">Ref.:</span> {raw.referencia_externa || "—"}
+                        <span className="text-slate-500">Ref.:</span> {raw.referencia_externa || "-"}
                       </span>
                     </div>
                   )}
@@ -138,7 +138,7 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
                     <ul className="mt-1.5 space-y-0.5">
                       {errors.map((e, i) => (
                         <li key={i} className="text-[12px] text-rose-700">
-                          — {e}
+                          - {e}
                         </li>
                       ))}
                     </ul>

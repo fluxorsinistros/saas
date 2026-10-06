@@ -4,7 +4,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { TenantContext } from "@/lib/tenant";
 
-// Catálogo espelha a migração 0024 — mudar um sem mudar o outro deixa o código checando uma
+// Catálogo espelha a migração 0024, mudar um sem mudar o outro deixa o código checando uma
 // permissão que não existe no banco (RLS nunca vai conceder, mas o erro fica silencioso).
 export type PermissionCode =
   | "claim.formalize"
@@ -22,7 +22,7 @@ export type PermissionCode =
 export const getPermissionCodes = cache(async (userId: string, tenantId: string): Promise<Set<PermissionCode>> => {
   const supabase = await createClient();
   // membership_roles e role_permissions não têm FK direta entre si (os dois referenciam `roles`,
-  // não um ao outro) — o embed do PostgREST precisa passar por `roles` no meio do caminho.
+  // não um ao outro), o embed do PostgREST precisa passar por `roles` no meio do caminho.
   const { data } = await supabase
     .from("tenant_memberships")
     .select("membership_roles(roles(role_permissions(permissions(code))))")
@@ -48,7 +48,7 @@ export async function hasPermission(ctx: TenantContext, code: PermissionCode): P
   return codes.has(code);
 }
 
-// Para Server Actions: nunca confiar só na UI escondendo o botão (Documento 1 §56) — a ação em si
+// Para Server Actions: nunca confiar só na UI escondendo o botão (Documento 1 §56), a ação em si
 // barra antes de tocar o banco, com mensagem clara em vez de deixar a RLS falhar sem explicação.
 export async function requirePermission(ctx: TenantContext, code: PermissionCode): Promise<void> {
   if (!(await hasPermission(ctx, code))) {
@@ -56,7 +56,7 @@ export async function requirePermission(ctx: TenantContext, code: PermissionCode
   }
 }
 
-// Etapa aponta pro grupo responsável, não pra pessoa (Documento 1 §5.3) — ter a permissão
+// Etapa aponta pro grupo responsável, não pra pessoa (Documento 1 §5.3), ter a permissão
 // claim.execute não basta, Operador só pode agir nas etapas do(s) grupo(s) dele. Administrador
 // nunca é travado por grupo (mesma decisão já aplicada em telas, src/lib/screens.ts).
 export async function canActOnGroup(ctx: TenantContext, groupId: string | null): Promise<boolean> {

@@ -33,7 +33,7 @@ export default async function PerfilPage() {
           <dl className="mt-5 grid gap-3 border-t border-slate-100 pt-4 text-[13px] sm:grid-cols-2">
             <div>
               <dt className="text-xs text-slate-500">Nome</dt>
-              <dd className="font-medium text-slate-900">{profile?.full_name || "—"}</dd>
+              <dd className="font-medium text-slate-900">{profile?.full_name || "-"}</dd>
             </div>
             <div>
               <dt className="text-xs text-slate-500">E-mail (login)</dt>

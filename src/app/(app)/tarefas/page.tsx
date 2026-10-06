@@ -11,7 +11,7 @@ import { NODE_META, type NodeType } from "@/lib/workflow/types";
 export const metadata: Metadata = { title: "Minhas tarefas" };
 
 // Quem vê o quê: o Administrador controla a empresa e vê as tarefas de TODOS os grupos; o Operador vê só as do grupo
-// em que está atuando agora. Isso é decidido aqui, no servidor — não existe parâmetro de endereço que amplie a lista.
+// em que está atuando agora. Isso é decidido aqui, no servidor, não existe parâmetro de endereço que amplie a lista.
 export default async function TarefasPage() {
   const ctx = await getTenantContext();
   const supabase = await createClient();
@@ -105,7 +105,7 @@ export default async function TarefasPage() {
                         <GroupChip name={groupById.get(activity.group_id)!.name} icon={groupById.get(activity.group_id)!.icon} color={groupById.get(activity.group_id)!.color} />
                       </span>
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </div>
                 </Link>

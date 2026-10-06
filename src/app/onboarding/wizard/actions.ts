@@ -9,7 +9,7 @@ import { writeAudit } from "@/app/(app)/sinistros/actions";
 import { assertCountLimit } from "@/lib/limits";
 
 // Cada passo grava estado parcial em `tenants.onboarding_step` (Documento 5 §3: "não é uma transação
-// única no final, para permitir retomar") — nunca volta um passo já visitado, só avança.
+// única no final, para permitir retomar"), nunca volta um passo já visitado, só avança.
 async function advanceStep(tenantId: string, toStep: number): Promise<void> {
   const supabase = await createClient();
   const { data: tenant } = await supabase.from("tenants").select("onboarding_step").eq("id", tenantId).single();

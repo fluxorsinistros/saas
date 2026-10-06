@@ -26,7 +26,7 @@ export async function OrganizacoesTab({ tenantId, canManage }: { tenantId: strin
   return (
     <section>
       <p className="mb-3 text-[13px] text-slate-500">
-        Seguradoras, corretoras e outros parceiros que colaboram nesta empresa — não precisam de conta própria do
+        Seguradoras, corretoras e outros parceiros que colaboram nesta empresa, não precisam de conta própria do
         produto, só de usuários vinculados a elas.
       </p>
 

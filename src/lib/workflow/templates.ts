@@ -13,10 +13,10 @@ export type WorkflowTemplate = {
 
 const DAY = 1440;
 
-// Documento 1 §73 + subfluxos §49–§51.
+// Documento 1 §73 + subfluxos §49 a §51.
 const responsabilidadeFinanceira: WorkflowTemplate = {
   id: "responsabilidade-financeira",
-  name: "Gestão de Sinistro — Responsabilidade Financeira",
+  name: "Gestão de Sinistro, Responsabilidade Financeira",
   description: "Regulação, definição de responsável e tratamento por Transportadora, Seguradora ou CD/Planta.",
   nodes: [
     { key: "r1", type: "stage", name: "Receber e registrar", group: "Regulação", x: 560, y: 0 },

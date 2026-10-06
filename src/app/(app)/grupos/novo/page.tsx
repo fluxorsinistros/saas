@@ -26,7 +26,7 @@ export default async function NewGroupPage() {
           </Link>
           <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-slate-900">Novo grupo</h1>
           <p className="mt-1 max-w-xl text-[14px] text-slate-700">
-            Grupos são as unidades operacionais que respondem pelas etapas do fluxo — qualquer membro ativo do grupo pode atuar
+            Grupos são as unidades operacionais que respondem pelas etapas do fluxo, qualquer membro ativo do grupo pode atuar
             nas etapas apontadas para ele.
           </p>
         </div>

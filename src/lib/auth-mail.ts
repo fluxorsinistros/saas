@@ -17,7 +17,7 @@ export async function siteOrigin(): Promise<string> {
 }
 
 // Cliente sem cookies e SEM PKCE. O e-mail é aberto no navegador da pessoa, que não tem o "code verifier" de um
-// fluxo PKCE iniciado aqui — por isso o link volta com o token no endereço (#access_token) e a página
+// fluxo PKCE iniciado aqui, por isso o link volta com o token no endereço (#access_token) e a página
 // /redefinir-senha o usa.
 export function implicitClient() {
   return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {

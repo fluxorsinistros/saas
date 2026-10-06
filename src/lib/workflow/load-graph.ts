@@ -5,7 +5,7 @@ import type { Graph, NodeConfig, NodeType } from "./types";
 
 // Carrega o grafo (nós + arestas) de uma versão publicada, direto das tabelas normalizadas.
 // Como versão publicada é imutável (trigger em 0015), não precisamos reconstruir a partir do
-// snapshot JSON para rodar o motor — as tabelas workflow_nodes/workflow_edges já são a fonte
+// snapshot JSON para rodar o motor, as tabelas workflow_nodes/workflow_edges já são a fonte
 // estável. O snapshot em cycle_configuration_snapshots continua sendo gravado (Documento 2 §31),
 // serve de arquivo histórico caso o modelo evolua para permitir migração de ciclo entre versões.
 export async function loadGraph(supabase: SupabaseClient<Database>, versionId: string): Promise<Graph> {

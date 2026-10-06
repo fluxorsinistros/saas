@@ -4,7 +4,7 @@ import { getMemberGroups } from "@/lib/active-group";
 import { getTenantContext } from "@/lib/tenant";
 
 // Catálogo das telas que um Grupo pode esconder do menu (groups.hidden_screens). Espelha os itens
-// de NavLinks — "admin" fica de fora porque é exclusivo do administrador de plataforma, nunca
+// de NavLinks, "admin" fica de fora porque é exclusivo do administrador de plataforma, nunca
 // depende de grupo. Mudar aqui sem mudar NavLinks deixa uma tela sem chave pra esconder.
 export type ScreenKey =
   | "dashboard"
@@ -30,7 +30,7 @@ export const SCREENS: { key: ScreenKey; label: string }[] = [
 ];
 
 // Grupo de usuário é um conceito de Operador: Administrador sempre vê o menu inteiro, mesmo que o
-// grupo dela tenha telas escondidas (decisão explícita do usuário — grupo nunca tranca quem admina
+// grupo dela tenha telas escondidas (decisão explícita do usuário, grupo nunca tranca quem admina
 // a própria empresa fora de uma tela).
 export async function getHiddenScreensForMember(userId: string, tenantId: string): Promise<string[]> {
   const { isAdmin, active } = await getMemberGroups(userId, tenantId);

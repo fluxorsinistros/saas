@@ -6,7 +6,7 @@ type Summary = { label: string; value: string };
 
 // Botão que NÃO envia o formulário de primeira: valida os campos, abre uma janela com o resumo do que está sendo
 // feito (e os dados preenchidos) e só envia depois do "Confirmar". Evita concluir etapa ou escolher decisão por clique
-// sem querer — a ação do servidor é a mesma, só passa por uma conferência antes.
+// sem querer, a ação do servidor é a mesma, só passa por uma conferência antes.
 export function ConfirmSubmit({
   children,
   title,
@@ -35,7 +35,7 @@ export function ConfirmSubmit({
       else if (el instanceof HTMLInputElement && el.type === "file") value = el.files?.[0]?.name ?? "";
       else if (el instanceof HTMLInputElement && el.type === "checkbox") value = el.checked ? "Sim" : "Não";
       else value = el.value;
-      rows.push({ label: label || el.name.replace("field_", ""), value: value.trim() || "—" });
+      rows.push({ label: label || el.name.replace("field_", ""), value: value.trim() || "-" });
     }
     return rows;
   }

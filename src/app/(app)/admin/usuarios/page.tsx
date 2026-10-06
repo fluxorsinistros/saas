@@ -211,7 +211,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
               ? filtering
                 ? "Nenhum usuário encontrado com esses filtros."
                 : "Nenhum usuário cadastrado."
-              : `Mostrando ${firstShown}–${lastShown} de ${total} ${total === 1 ? "usuário" : "usuários"}`}
+              : `Mostrando ${firstShown} a ${lastShown} de ${total} ${total === 1 ? "usuário" : "usuários"}`}
           </p>
           {total > 0 && (
             <a
@@ -272,12 +272,12 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                       </Link>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 font-medium text-slate-900">{u.full_name || <span className="font-normal text-slate-400">—</span>}</td>
+                  <td className="px-3 py-2.5 font-medium text-slate-900">{u.full_name || <span className="font-normal text-slate-400">-</span>}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.email}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.tenant_name}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">—</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">-</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">-</span>}</td>
                   <td className="px-3 py-2.5">
                     {u.pending ? (
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">convite pendente</span>

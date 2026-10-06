@@ -28,7 +28,7 @@ export type GroupBacklog = { groupId: string; groupName: string; count: number }
 export type CategoryCount = { categoryId: string; categoryName: string; count: number };
 
 // minutesOverdue: positivo = minutos de atraso (slaOverdue); negativo = minutos que faltam,
-// já dentro da faixa de alerta (slaAtRisk) — o sinal deixa as duas listas ordenáveis pela mesma
+// já dentro da faixa de alerta (slaAtRisk), o sinal deixa as duas listas ordenáveis pela mesma
 // regra (mais urgente primeiro) sem precisar de dois campos.
 export type SlaItem = { cycleId: string; claimId: string; claimNumber: string; minutesOverdue: number };
 
@@ -48,7 +48,7 @@ export type OperationalSnapshot = {
 };
 
 
-// Alimenta Tower of Control (Documento 5 §6) e Dashboard (§7) — os dois leem o mesmo agregado,
+// Alimenta Tower of Control (Documento 5 §6) e Dashboard (§7), os dois leem o mesmo agregado,
 // só mudam o que destacam, para nunca haver duas contas diferentes de "quantos estão atrasados".
 //
 // `groupId`: visão do Operador. Só entram os ciclos em que o grupo dele tem (ou teve) atividade, e os prazos contados são

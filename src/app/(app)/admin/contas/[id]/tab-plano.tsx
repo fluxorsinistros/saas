@@ -80,7 +80,7 @@ export function TabPlano({
           <p className="mt-3 text-[13px] text-slate-600">
             {contract.white_label_enabled
               ? `Mensalidade com white-label: ${currency.format(plan.monthly_fee * (1 + contract.white_label_surcharge_pct / 100))} (plano ${currency.format(plan.monthly_fee)} + ${formatNumber(contract.white_label_surcharge_pct) || "0"}%). A aba Marca fica disponível.`
-              : `Sem white-label — mensalidade do plano: ${currency.format(plan.monthly_fee)}. Ao liberar, aparece a aba Marca.`}
+              : `Sem white-label: mensalidade do plano: ${currency.format(plan.monthly_fee)}. Ao liberar, aparece a aba Marca.`}
           </p>
         </section>
       )}

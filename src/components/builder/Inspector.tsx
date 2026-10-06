@@ -118,7 +118,7 @@ export function NodeInspector({
       {SLA_TYPES.includes(type) && data.config.sla_minutes && calendars.length > 0 && (
         <div>
           <label className={label} htmlFor="node-sla-calendar">
-            Calendário do SLA <span className="font-normal text-slate-500">(opcional — sem isso conta corrido, 24/7)</span>
+            Calendário do SLA <span className="font-normal text-slate-500">(opcional, sem isso conta corrido, 24/7)</span>
           </label>
           <select
             id="node-sla-calendar"
@@ -315,8 +315,8 @@ export function EdgeInspector({
         onDelete={readOnly ? undefined : onDelete}
       />
       <p className="-mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
-        De <span className="font-medium text-slate-900">{sourceName || "—"}</span> para{" "}
-        <span className="font-medium text-slate-900">{targetName || "—"}</span>
+        De <span className="font-medium text-slate-900">{sourceName || "-"}</span> para{" "}
+        <span className="font-medium text-slate-900">{targetName || "-"}</span>
       </p>
       <div>
         <label className={label} htmlFor="edge-label">
@@ -426,7 +426,7 @@ function Toggle({
 }
 
 // Campos personalizados "estilo SHARP" (Documento 1): o fluxo tem um catálogo de campos próprio,
-// criado conforme a necessidade, sem nunca precisar de migração — cada etapa só escolhe quais
+// criado conforme a necessidade, sem nunca precisar de migração, cada etapa só escolhe quais
 // desse catálogo ela pede pra preencher.
 function FieldsSection({
   fields,
@@ -621,7 +621,7 @@ function FieldsSection({
           )}
           <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
             <input type="checkbox" name="required" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
-            Obrigatório — bloqueia &quot;Concluir&quot; até preencher
+            Obrigatório, bloqueia &quot;Concluir&quot; até preencher
           </label>
           {fieldType !== "boolean" && fieldType !== "attachment" && (
             <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
@@ -655,7 +655,7 @@ function FieldsSection({
   );
 }
 
-// Só rótulo e opções (quando é lista) são editáveis — tipo e chave ficam travados porque
+// Só rótulo e opções (quando é lista) são editáveis, tipo e chave ficam travados porque
 // claims.custom_fields pode já ter valor gravado sob essa chave, no formato daquele tipo.
 function EditFieldForm({
   field,
@@ -725,7 +725,7 @@ function EditFieldForm({
           defaultChecked={field.required}
           className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30"
         />
-        Obrigatório — bloqueia &quot;Concluir&quot; até preencher
+        Obrigatório, bloqueia &quot;Concluir&quot; até preencher
       </label>
       {field.field_type !== "boolean" && field.field_type !== "attachment" && (
         <label className="flex items-center gap-1.5 text-[12px] text-slate-700">

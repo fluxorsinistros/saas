@@ -313,7 +313,7 @@ body[data-theme="dark"] {
 }
 
 /* ==========================================================================
-   TEMA ESCURO — CORES SEMÂNTICAS (cartões de situação, selos e etiquetas)
+   TEMA ESCURO, CORES SEMÂNTICAS (cartões de situação, selos e etiquetas)
    As regras acima cobriam só alguns tons claros fixos. Aqui entram TODAS as variações (inclusive com transparência,
    como bg-emerald-50/40): fundo = cor translúcida sobre o painel escuro; texto = tom claro legível; borda = tom suave.
    ========================================================================== */
@@ -425,7 +425,7 @@ body[data-theme="dark"] {
 
 /* Cartões e painéis de vidro */
 .glass-card {
-  /* Mesmo vidro do menu: uma tinta lisa e translúcida por cima do fundo, com desfoque suave — sem degradê, sem fio de luz
+  /* Mesmo vidro do menu: uma tinta lisa e translúcida por cima do fundo, com desfoque suave, sem degradê, sem fio de luz
      e sem contorno. O fundo atravessa o cartão do mesmo jeito que atravessa o menu. */
   background: rgba(255, 255, 255, 0.33);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
@@ -468,7 +468,7 @@ body[data-theme="dark"] {
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-/* Painel de dados: sem fundo próprio — a imagem de fundo é uma só, da tela inteira (ver --app-bg). A faixa azul forte do
+/* Painel de dados: sem fundo próprio, a imagem de fundo é uma só, da tela inteira (ver --app-bg). A faixa azul forte do
    topo é onde ficam título e descrição da página (em branco). */
 .app-content-bg h1 {
   color: #ffffff;
@@ -540,7 +540,7 @@ body[data-theme="dark"] {
 :is(.dark, [data-theme="dark"]) .app-backdrop { display: none; }
 
 /* ==========================================================================
-   SEM BORDAS (como na referência): a separação vem da transparência, da cor e de sombras suaves — nunca de linhas.
+   SEM BORDAS (como na referência): a separação vem da transparência, da cor e de sombras suaves, nunca de linhas.
    Vale para o tema claro; campos de preenchimento (input/select) mantêm borda porque precisam parecer clicáveis.
    ========================================================================== */
 .sidebar-glass [class*="border-navy"],
@@ -560,7 +560,7 @@ body[data-theme="dark"] {
 :is(.dark, [data-theme="dark"]) .sidebar-glass [class*="border-navy"],
 :is(.dark, [data-theme="dark"]) .sidebar-glass .border-t { border-color: #1b2640; }
 
-/* Campos de preenchimento (tema claro): sempre com fundo branco quase opaco, mesmo sem a classe bg-white —
+/* Campos de preenchimento (tema claro): sempre com fundo branco quase opaco, mesmo sem a classe bg-white,
    sobre o vidro translúcido eles precisam se destacar e parecer clicáveis. */
 .app-content-bg :is(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="color"])):not(:disabled) {
   background-color: rgba(255, 255, 255, 0.94);
@@ -610,7 +610,7 @@ body[data-theme="dark"] {
 .app-content-bg .text-brand { color: #3652d0; }
 :is(.dark, [data-theme="dark"]) .app-content-bg .text-brand { color: #8fa8ff; }
 
-/* Legibilidade (tema claro): o texto que fica direto sobre o fundo em degradê precisa de tons bem escuros — os cinzas
+/* Legibilidade (tema claro): o texto que fica direto sobre o fundo em degradê precisa de tons bem escuros, os cinzas
    médios do tema original sumiam sobre o azul. Vale também dentro dos vidros, onde o contraste só melhora. */
 .app-content-bg .text-slate-400 { color: #475569; }
 .app-content-bg .text-slate-500 { color: #334155; }

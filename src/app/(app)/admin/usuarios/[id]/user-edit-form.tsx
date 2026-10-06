@@ -117,7 +117,7 @@ export function UserEditForm({
             {isGestor ? "Empresa" : "*Empresa"}
           </label>
           {isGestor ? (
-            <input id="tenant_id" value="Plataforma — o Gestor não pertence a uma empresa" disabled readOnly className={input} />
+            <input id="tenant_id" value="Plataforma: o Gestor não pertence a uma empresa" disabled readOnly className={input} />
           ) : (
             <select id="tenant_id" name="tenant_id" required value={tenant} onChange={(e) => setTenant(e.target.value)} className={input}>
               <option value="" disabled>
@@ -157,7 +157,7 @@ export function UserEditForm({
       {isGestor && !wasGestor && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800 ring-1 ring-inset ring-amber-200">
           Virar Gestor: a pessoa sai de todas as empresas e passa a ver só a Administração da plataforma. Se ela for o único
-          Administrador de alguma conta, o sistema recusa — adicione outro Administrador antes.
+          Administrador de alguma conta, o sistema recusa, adicione outro Administrador antes.
         </p>
       )}
       {!isGestor && wasGestor && (
@@ -169,7 +169,7 @@ export function UserEditForm({
       {!isGestor && (
         <label className="flex items-center gap-2 text-[13px] font-medium text-slate-700">
           <input key={String(active)} type="checkbox" name="active" defaultChecked={wasGestor ? true : active} /> Ativo
-          <span className="font-normal text-slate-500">— desmarcado, o usuário perde o acesso à empresa na hora</span>
+          <span className="font-normal text-slate-500">(desmarcado, o usuário perde o acesso à empresa na hora)</span>
         </label>
       )}
 

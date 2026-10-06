@@ -68,8 +68,8 @@ function ExecutionNodeBox({
 
 const nodeTypes = { execNode: ExecutionNodeBox };
 
-// Documento 5 §5: mesmo grafo do Builder, com overlay de estado — em vez de reaproveitar o
-// WorkflowBuilder inteiro (que carrega edição, histórico de undo, validação — tudo desnecessário e
+// Documento 5 §5: mesmo grafo do Builder, com overlay de estado, em vez de reaproveitar o
+// WorkflowBuilder inteiro (que carrega edição, histórico de undo, validação, tudo desnecessário e
 // pesado pra uma visão só-leitura), é um render mínimo do mesmo canvas ReactFlow, sem interação de
 // edição nenhuma.
 export function ExecutionGraph({

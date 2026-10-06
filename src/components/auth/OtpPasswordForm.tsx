@@ -10,7 +10,7 @@ const input =
 type Phase = "code" | "password" | "done";
 
 // Código de 6 dígitos em vez de link clicável: o scanner de segurança de e-mail (Gmail etc.) visita
-// automaticamente links dentro da mensagem para checar se são seguros — isso consome o token de uso
+// automaticamente links dentro da mensagem para checar se são seguros, isso consome o token de uso
 // único antes da pessoa clicar de verdade, e o link vira "inválido ou expirado" sem ela ter feito
 // nada errado. Um código que a pessoa digita não é visitado por scanner nenhum. Usado tanto por
 // convite (otpType "email") quanto por "esqueci minha senha" (otpType "recovery").

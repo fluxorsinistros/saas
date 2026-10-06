@@ -3,7 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 
 // Erros lançados por Server Actions (ex.: addMember rejeitando e-mail sem conta) caem aqui em vez
-// de na tela de erro genérica do Next — mostra a mensagem de verdade, com um jeito de tentar de novo.
+// de na tela de erro genérica do Next, mostra a mensagem de verdade, com um jeito de tentar de novo.
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <div className="flex h-full items-center justify-center p-8">

@@ -11,7 +11,7 @@ import { SCREENS } from "@/lib/screens";
 import { GROUP_ACTIONS } from "@/lib/group-actions";
 import { normalizeGroupColor, normalizeGroupIcon } from "@/lib/group-icons";
 
-// Grupos entram no mesmo guard de Usuários (não têm código de permissão próprio no catálogo —
+// Grupos entram no mesmo guard de Usuários (não têm código de permissão próprio no catálogo,
 // quem administra pessoas administra as unidades operacionais que elas pertencem).
 export async function createGroup(formData: FormData) {
   const ctx = await getTenantContext();
@@ -55,7 +55,7 @@ export async function updateGroup(formData: FormData) {
   redirect(`/grupos/${id}`);
 }
 
-// Telas que membros Operador deste grupo veem no menu — Administrador nunca é afetado (ver
+// Telas que membros Operador deste grupo veem no menu, Administrador nunca é afetado (ver
 // getHiddenScreensForMember). O form manda os checkboxes marcados = visíveis; o que falta vira
 // hidden_screens.
 export async function updateGroupScreens(formData: FormData) {
@@ -72,7 +72,7 @@ export async function updateGroupScreens(formData: FormData) {
   redirect(`/grupos/${id}?aba=telas`);
 }
 
-// Ações que membros Operador deste grupo podem executar (ex.: lançar sinistro) — Administrador
+// Ações que membros Operador deste grupo podem executar (ex.: lançar sinistro), Administrador
 // nunca é afetado (ver isActionAllowedForMember). Mesmo padrão de updateGroupScreens: o form manda
 // os checkboxes marcados = permitidos, o que falta vira disabled_actions.
 export async function updateGroupActions(formData: FormData) {

@@ -1,4 +1,4 @@
-// Barra de magnitude de série única (contagem por grupo/categoria) — um hue só, comprimento
+// Barra de magnitude de série única (contagem por grupo/categoria), um hue só, comprimento
 // proporcional, rótulo direto no lugar de eixo. Segue a skill de dataviz: sequential = um hue.
 export function MagnitudeBars({ items, emptyLabel }: { items: { label: string; count: number }[]; emptyLabel: string }) {
   if (items.length === 0) return <p className="text-[13px] text-slate-500">{emptyLabel}</p>;

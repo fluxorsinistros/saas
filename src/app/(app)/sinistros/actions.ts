@@ -29,7 +29,7 @@ export async function writeAudit(
 ) {
   await supabase.rpc("write_audit", {
     // O tipo gerado marca p_tenant_id como string não-nula, mas a função aceita NULL de propósito
-    // para eventos de plataforma (Documento 5 §11) — checado por app.is_platform_admin() no banco.
+    // para eventos de plataforma (Documento 5 §11), checado por app.is_platform_admin() no banco.
     p_tenant_id: tenantId as unknown as string,
     p_action: action,
     p_entity_type: entityType,
@@ -43,7 +43,7 @@ export async function writeAudit(
 // Simplificação desta fatia: "tipo de sinistro" ainda não tem tela própria de configuração
 // (Documento 5 não construiu isso ainda), então cada fluxo publicado vira automaticamente seu
 // próprio tipo de sinistro (1:1) na primeira vez que alguém formaliza um sinistro nele. Quando a
-// tela de configuração de tipos existir, isto deixa de ser necessário — os dados já ficam corretos.
+// tela de configuração de tipos existir, isto deixa de ser necessário, os dados já ficam corretos.
 async function ensureClaimType(supabase: Supa, tenantId: string, workflowId: string, workflowName: string): Promise<string> {
   const { data: existing } = await supabase
     .from("claim_types")
@@ -84,7 +84,7 @@ async function ensureClaimType(supabase: Supa, tenantId: string, workflowId: str
   return type.id;
 }
 
-// Cria a stage_instance (e a activity/decision/paralelo/convergência correspondente) para um nó —
+// Cria a stage_instance (e a activity/decision/paralelo/convergência correspondente) para um nó,
 // usado na formalização e em todo avanço. Cada passagem por um nó é uma linha nova (Documento 3
 // §17): nunca sobrescreve. `branchInstanceId` amarra a passagem ao ramo de um Paralelo em curso
 // (null fora de qualquer Paralelo), para uma Convergência saber qual ramo específico chegou.
@@ -101,7 +101,7 @@ async function enterNode(
   const node = graph.nodes.find((n) => n.id === nodeId);
   if (!node) throw new Error("Elemento não encontrado no fluxo publicado.");
 
-  // Início não é uma etapa de verdade — é só o gate de campos da formalização (já coletados e
+  // Início não é uma etapa de verdade, é só o gate de campos da formalização (já coletados e
   // validados antes de chegar aqui, ver formalizeClaim). Não vira stage_instance; passa direto pra
   // etapa real conectada a ele.
   if (node.type === "start") {
@@ -120,7 +120,7 @@ async function enterNode(
     // numa Convergência), então bloqueia com motivo em vez de deixar o ciclo com um ramo pendurado.
     await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
     await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, {
-      reason: `"${node.name}" é um Paralelo dentro de outro Paralelo — ainda não suportado pela execução.`,
+      reason: `"${node.name}" é um Paralelo dentro de outro Paralelo, ainda não suportado pela execução.`,
     });
     return;
   }
@@ -199,7 +199,7 @@ async function enterNode(
 }
 
 // Cria o relógio de SLA (Documento 4 §1-§2) se a versão publicada tiver uma regra para este nó.
-// Sem calendário configurável ainda nesta fatia — corrido 24/7, comportamento explícito do §3 quando
+// Sem calendário configurável ainda nesta fatia, corrido 24/7, comportamento explícito do §3 quando
 // `calendar_id` é nulo, não uma omissão.
 async function startSlaTracking(supabase: Supa, tenantId: string, cycleId: string, versionId: string, nodeId: string, stageInstanceId: string) {
   const { data: sla } = await supabase
@@ -239,7 +239,7 @@ async function startSlaTracking(supabase: Supa, tenantId: string, cycleId: strin
 }
 
 // Encerra o(s) relógio(s) de SLA abertos para esta etapa (Documento 4 §8): 'breached' vira
-// 'completed' normalmente — o descumprimento já ocorrido continua sendo dado histórico, nunca apagado.
+// 'completed' normalmente, o descumprimento já ocorrido continua sendo dado histórico, nunca apagado.
 async function completeSlaTracking(supabase: Supa, stageInstanceId: string) {
   await supabase
     .from("sla_tracking")
@@ -286,7 +286,7 @@ async function openParallelSplit(supabase: Supa, tenantId: string, cycleId: stri
 
 // Um ramo chega numa Convergência (Documento 3 §5): marca o branch_instance como concluído, registra
 // a contribuição em join_instances e reavalia a regra (all/all_required/any/min_count). As atividades
-// já concluídas dos outros ramos permanecem concluídas — nunca desfaz progresso de um ramo.
+// já concluídas dos outros ramos permanecem concluídas, nunca desfaz progresso de um ramo.
 async function arriveAtJoin(
   supabase: Supa,
   tenantId: string,
@@ -299,7 +299,7 @@ async function arriveAtJoin(
   if (!branchInstanceId) {
     await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
     await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, {
-      reason: `"${node.name}" (Convergência) foi alcançada fora de um Paralelo — o fluxo publicado é inválido.`,
+      reason: `"${node.name}" (Convergência) foi alcançada fora de um Paralelo, o fluxo publicado é inválido.`,
     });
     return;
   }
@@ -361,7 +361,7 @@ async function arriveAtJoin(
   else if (ruleType === "all_required") released = requiredCompleted >= requiredTotal;
   else if (ruleType === "min_count") released = completedCount >= (minCount ?? all.length);
 
-  if (!released) return; // fica "waiting" — a chegada do próximo ramo reavalia de novo
+  if (!released) return; // fica "waiting", a chegada do próximo ramo reavalia de novo
 
   await supabase.from("joins").update({ status: "completed", released_at: now }).eq("id", joinId);
   await writeAudit(supabase, tenantId, "join.released", "join", joinId);
@@ -426,7 +426,7 @@ export type FormalizeClaimInput = {
   externalReference?: string;
 };
 
-// Detecção de duplicidade (Documento 2 §28): roda UMA VEZ, na primeira entrada do sinistro — nunca um
+// Detecção de duplicidade (Documento 2 §28): roda UMA VEZ, na primeira entrada do sinistro, nunca um
 // job contínuo. Avisa, nunca bloqueia: mesmo com candidatos fortes, a criação do sinistro já aconteceu
 // (chamado depois do insert em claims) e o usuário decide na Tela de Sinistro se é ou não duplicidade.
 async function runDuplicateCheck(
@@ -509,7 +509,7 @@ export async function decideDuplicate(checkId: string, decision: "confirmed_dupl
 }
 
 // Rotina única de criação de sinistro (Documento 5 §29: a importação em massa "usa as mesmas regras
-// de criação manual" — não existe caminho de escrita paralelo para `claims`). formalizeClaim (form da
+// de criação manual", não existe caminho de escrita paralelo para `claims`). formalizeClaim (form da
 // UI) e a importação em massa (createImport/confirmImport) chamam exatamente esta função.
 export async function createClaimAndCycle(
   supabase: Supa,
@@ -624,7 +624,7 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
 
   // Campos do elemento Início (Documento 1): validados ANTES de criar qualquer coisa, pra não
   // deixar um sinistro pela metade se faltar um campo obrigatório. Início não é etapa de verdade
-  // (enterNode passa direto por ele) — os campos são só da formalização em si.
+  // (enterNode passa direto por ele), os campos são só da formalização em si.
   const { data: publishedVersion } = await supabase
     .from("workflow_versions")
     .select("id")
@@ -732,7 +732,7 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
   }
 
   // Campos personalizados desta etapa (Documento 1, "estilo SHARP") caem na mesma ficha do
-  // sinistro — nunca sobrescrevem o que outra etapa já preencheu, só somam (merge raso). Anexo é
+  // sinistro, nunca sobrescrevem o que outra etapa já preencheu, só somam (merge raso). Anexo é
   // tratado à parte: o valor vira o caminho do arquivo no Storage, não o texto bruto. Obrigatório
   // e duplicidade são validados aqui, não só escondendo/marcando o input (Documento 1 §56).
   const { data: nodeRow } = await supabase.from("workflow_nodes").select("config").eq("id", stage.node_id).single();
@@ -878,7 +878,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
 
 // Pausa não é um botão livre (Documento 4 §5, §68.7): exige motivo e tipo. Autorização por tipo de
 // pausa fica fora desta fatia (o próprio Documento 4 §10 registra o catálogo de pause_type como
-// decisão de implementação em aberto) — hoje toda pausa é aceita sem exigir aprovação.
+// decisão de implementação em aberto), hoje toda pausa é aceita sem exigir aprovação.
 export async function pauseSla(trackingId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
   const supabase = await createClient();
@@ -935,10 +935,10 @@ export async function resumeSla(trackingId: string, claimId: string): Promise<vo
   revalidatePath(`/sinistros/${claimId}`);
 }
 
-// Reabrir ciclo (Documento 3 §11, caso J): só um ciclo já `completed` pode ser reaberto — grava uma
+// Reabrir ciclo (Documento 3 §11, caso J): só um ciclo já `completed` pode ser reaberto, grava uma
 // nova passagem (`entry_reason='reopen'`) sobre o mesmo claim_cycle_id, no último nó não-Fim por onde
 // o ciclo passou, em vez de recomeçar do zero. Autorização granular por papel fica para quando
-// `role_permissions` existir (gap conhecido) — por ora exige motivo obrigatório e fica auditado.
+// `role_permissions` existir (gap conhecido), por ora exige motivo obrigatório e fica auditado.
 export async function reopenCycle(cycleId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
   await requirePermission(ctx, "claim.reopen");
@@ -972,9 +972,9 @@ export async function reopenCycle(cycleId: string, formData: FormData): Promise<
 }
 
 // Descartar ciclo e abrir um novo relacionado (Documento 3 §11, caso K): o ciclo velho fica com
-// status='discarded' pra sempre (nunca é apagado — é histórico), e um novo claim_cycles nasce
+// status='discarded' pra sempre (nunca é apagado, é histórico), e um novo claim_cycles nasce
 // apontando pra ele via previous_cycle_id, sob a versão publicada ATUAL do fluxo (que pode ter
-// mudado desde que o ciclo velho abriu — o velho já estava preso à versão dele, imutável).
+// mudado desde que o ciclo velho abriu, o velho já estava preso à versão dele, imutável).
 export async function discardCycle(cycleId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
   await requirePermission(ctx, "claim.discard");
@@ -1044,7 +1044,7 @@ export async function discardCycle(cycleId: string, formData: FormData): Promise
 }
 
 // Pendência (Documento 3 §2.2, caso H): uma solicitação dentro da atividade atual, que NÃO move o
-// processo pra outro nó — por isso não passa por enterNode/stage_instances, é só uma linha própria
+// processo pra outro nó, por isso não passa por enterNode/stage_instances, é só uma linha própria
 // associada à activity_instance (§21: "pendência não é necessariamente uma nova etapa").
 export async function createPendingItem(activityInstanceId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
@@ -1106,7 +1106,7 @@ export async function cancelPendingItem(pendingItemId: string, claimId: string):
 
 // Desfaz a conclusão da ÚLTIMA etapa concluída (clique sem querer). Não apaga história: a etapa seguinte é marcada
 // como cancelada (fica no histórico), a etapa desfeita volta a "em andamento" e tudo vai para a trilha de auditoria
-// com o motivo. Recusa quando já há trabalho feito depois, ramos paralelos ou convergência — nesses casos o fluxo
+// com o motivo. Recusa quando já há trabalho feito depois, ramos paralelos ou convergência, nesses casos o fluxo
 // segue e a correção é por Reabrir ciclo / Descartar, que exigem motivo e permissão própria.
 export async function undoActivityCompletion(activityInstanceId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
@@ -1149,7 +1149,7 @@ export async function undoActivityCompletion(activityInstanceId: string, formDat
     throw new Error(`Este ciclo não permite desfazer (status atual: ${cycle.status}).`);
   }
 
-  // Etapas criadas logo depois da conclusão (as sucessoras) — nenhuma pode ter trabalho concluído.
+  // Etapas criadas logo depois da conclusão (as sucessoras), nenhuma pode ter trabalho concluído.
   const graph = await loadGraph(supabase, cycle.workflow_version_id);
   const { data: later } = await supabase
     .from("stage_instances")

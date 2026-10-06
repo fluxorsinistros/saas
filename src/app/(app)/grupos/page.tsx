@@ -22,7 +22,7 @@ const input =
   "w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
 
 // Mesmo modelo da tela de Usuários (Documento 5 §9): cadastrar numa tela própria (/grupos/novo),
-// pesquisar/filtrar/listar aqui, editar numa terceira (/grupos/[id]) — em vez do formulário e a
+// pesquisar/filtrar/listar aqui, editar numa terceira (/grupos/[id]), em vez do formulário e a
 // lista inteira numa página só, como era antes.
 export default async function GruposPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const ctx = await getTenantContext();
@@ -155,7 +155,7 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
             ? filtering
               ? "Nenhum grupo encontrado com esses filtros."
               : "Nenhum grupo cadastrado."
-            : `Mostrando ${firstShown}–${lastShown} de ${total} ${total === 1 ? "grupo" : "grupos"}`}
+            : `Mostrando ${firstShown} a ${lastShown} de ${total} ${total === 1 ? "grupo" : "grupos"}`}
         </p>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -186,13 +186,13 @@ export default async function GruposPage({ searchParams }: { searchParams: Promi
                           <Pencil className="size-3.5" />
                         </Link>
                       ) : (
-                        <span className="flex size-8 items-center justify-center text-xs text-slate-400">—</span>
+                        <span className="flex size-8 items-center justify-center text-xs text-slate-400">-</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 font-medium text-slate-900">
                       <GroupChip name={g.name} icon={g.icon} color={g.color} />
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">{g.description || <span className="text-slate-400">—</span>}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{g.description || <span className="text-slate-400">-</span>}</td>
                     <td className="px-3 py-2.5 text-slate-600">
                       {members} membro{members === 1 ? "" : "s"}
                     </td>

@@ -83,7 +83,7 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
                 {activeCalendar ? (
                   <>
                     <option value={activeCalendar.id}>
-                      ★ {activeCalendar.name} ({activeCalendar.business_start?.slice(0, 5) ?? "00:00"} às {activeCalendar.business_end?.slice(0, 5) ?? "23:59"}) — Ativo / Padrão
+                      ★ {activeCalendar.name} ({activeCalendar.business_start?.slice(0, 5) ?? "00:00"} às {activeCalendar.business_end?.slice(0, 5) ?? "23:59"}), Ativo / Padrão
                     </option>
                     {otherCalendars.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -95,7 +95,7 @@ export function TenantSlaTab({ tenantId, calendars, currentSlaSettings }: Props)
                 ) : (
                   <>
                     <option value="">
-                      Nenhum (Contagem corrida 24 horas por dia, 7 dias por semana) — Ativo / Padrão
+                      Nenhum (Contagem corrida 24 horas por dia, 7 dias por semana), Ativo / Padrão
                     </option>
                     {calendars.map((c) => (
                       <option key={c.id} value={c.id}>

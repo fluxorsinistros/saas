@@ -1,5 +1,5 @@
 // Cálculo de status "ao vivo" de um relógio de SLA (Documento 4 §4), sem esperar o scheduler
-// periódico (§7, ainda não implementado nesta fatia — ver docs/04-sla-engine.md §10). Sempre 24/7:
+// periódico (§7, ainda não implementado nesta fatia, ver docs/04-sla-engine.md §10). Sempre 24/7:
 // calendário de SLA (`sla_calendars`) é a próxima extensão, hoje todo `workflow_slas.calendar_id`
 // é nulo e o cálculo é corrido, comportamento explícito do §3.
 export type LiveSlaStatus = "on_track" | "at_risk" | "breached" | "paused" | "completed";
@@ -65,7 +65,7 @@ function dayWindow(d: Date, calendar: SlaCalendar): { start: Date; end: Date } {
 
 // Avança `minutes` de duração útil a partir de `from`, pulando fins de semana/feriados e horário
 // fora do expediente (Documento 4 §3: "fora do calendário, o relógio não avança"). Avança dia a dia
-// em vez de minuto a minuto por performance — matematicamente equivalente para calendários fixos.
+// em vez de minuto a minuto por performance, matematicamente equivalente para calendários fixos.
 export function addBusinessMinutes(from: Date, minutes: number, calendar: SlaCalendar, exceptions: SlaCalendarException[]): Date {
   const exceptionByDate = new Map(exceptions.map((e) => [e.exception_date, e.is_working_day]));
   let remainingMs = minutes * 60_000;

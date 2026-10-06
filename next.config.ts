@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 // Cabeçalhos de segurança em todas as rotas. CSP fica de fora de propósito: o Next injeta scripts inline e
-// uma política restritiva sem nonce quebraria a aplicação — entra numa etapa própria, primeiro em modo Report-Only.
+// uma política restritiva sem nonce quebraria a aplicação, entra numa etapa própria, primeiro em modo Report-Only.
 const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   { key: "X-Content-Type-Options", value: "nosniff" },

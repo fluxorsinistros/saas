@@ -146,7 +146,7 @@ export async function ContasTab({ sp }: { sp: SearchParams }) {
               ? filtering
                 ? "Nenhuma conta encontrada com esses filtros."
                 : "Nenhuma conta cadastrada."
-              : `Mostrando ${firstShown}–${lastShown} de ${total} ${total === 1 ? "conta" : "contas"}`}
+              : `Mostrando ${firstShown} a ${lastShown} de ${total} ${total === 1 ? "conta" : "contas"}`}
           </p>
 
           <ul className="space-y-2">

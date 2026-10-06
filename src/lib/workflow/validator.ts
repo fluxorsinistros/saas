@@ -9,7 +9,7 @@ export type Issue = {
 
 // Workflow Validator (Documento 3 §7). Erro bloqueia publicação; aviso não.
 // `untouched` (crítica de design, P2): nós recém-criados que ainda não perderam o foco uma vez.
-// Enquanto "intocados", seus próprios problemas ficam em silêncio — evita punir quem acabou de arrastar um elemento.
+// Enquanto "intocados", seus próprios problemas ficam em silêncio, evita punir quem acabou de arrastar um elemento.
 export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new Set()): Issue[] {
   const { nodes, edges } = graph;
   if (nodes.length === 0) return [];

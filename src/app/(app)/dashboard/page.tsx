@@ -9,7 +9,7 @@ import { MagnitudeBars } from "@/components/reports/Bars";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-// Documento 5 §61 — diferença de propósito em relação à Torre de Controle (§6, "agir agora"):
+// Documento 5 §61, diferença de propósito em relação à Torre de Controle (§6, "agir agora"):
 // aqui é "entender tendência", mas lê o mesmo agregado (loadOperationalSnapshot) para as duas
 // telas nunca divergirem em quantos sinistros estão atrasados.
 export default async function DashboardPage() {

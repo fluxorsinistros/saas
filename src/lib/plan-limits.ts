@@ -1,5 +1,5 @@
 // Catálogo de limites de plano. `key` é o que fica gravado em plan_limits.limit_key e em
-// tenant_contracts.overrides — o administrador nunca digita a chave, escolhe pelo rótulo.
+// tenant_contracts.overrides, o administrador nunca digita a chave, escolhe pelo rótulo.
 //
 // kind "number": vazio = sem limite. kind "toggle": 1 = permitido, 0 = bloqueado (sem valor = bloqueado).
 export type PlanLimitDef = {

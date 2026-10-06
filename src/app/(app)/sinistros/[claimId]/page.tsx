@@ -150,7 +150,7 @@ export default async function ClaimPage({
 
   const customFields = (claim.custom_fields ?? {}) as Record<string, string>;
 
-  // Duplicidade (Documento 2 §28): avisa, nunca bloqueia — mostra o `pending` mais recente (se houver)
+  // Duplicidade (Documento 2 §28): avisa, nunca bloqueia, mostra o `pending` mais recente (se houver)
   // com os candidatos e a evidência, pro usuário decidir. Roda só uma vez, na formalização.
   const [{ data: allDuplicateChecks }, { data: allCycles }] = await Promise.all([
     supabase.from("duplicate_checks").select("id, evidence, decision").eq("claim_id", claim.id).order("created_at", { ascending: false }),
@@ -170,7 +170,7 @@ export default async function ClaimPage({
     duplicateCandidates = (cands ?? []).map((c) => ({
       confidence: c.confidence,
       matched_fields: c.matched_fields,
-      claim_number: (c.claims as unknown as { claim_number: string } | null)?.claim_number ?? "—",
+      claim_number: (c.claims as unknown as { claim_number: string } | null)?.claim_number ?? "-",
     }));
   }
 
@@ -203,7 +203,7 @@ export default async function ClaimPage({
   ] = await Promise.all([
     supabase.from("workflow_versions").select("workflow_id, version_number").eq("id", cycle.workflow_version_id).single(),
     loadGraph(supabase, cycle.workflow_version_id),
-    // Posições dos nós (Documento 5 §5, modo "grafo completo") — loadGraph não carrega isso porque o
+    // Posições dos nós (Documento 5 §5, modo "grafo completo"), loadGraph não carrega isso porque o
     // motor de execução não precisa; aqui é só pra desenhar.
     supabase.from("workflow_nodes").select("id, position").eq("workflow_version_id", cycle.workflow_version_id),
     supabase
@@ -219,7 +219,7 @@ export default async function ClaimPage({
       .eq("claim_cycle_id", cycle.id)
       .order("requested_at", { ascending: true, nullsFirst: false }),
     // Financeiro do ciclo (Documento 5 §14): dado de domínio do sinistro (guincho, armazenagem,
-    // ressarcimento) — nunca confundir com billing_events, que é a cobrança do SaaS ao tenant.
+    // ressarcimento), nunca confundir com billing_events, que é a cobrança do SaaS ao tenant.
     supabase
       .from("cycle_financial_entries")
       .select("id, entry_type, description, amount, entry_date, status")
@@ -248,7 +248,7 @@ export default async function ClaimPage({
   const hasAttachmentField = (workflowFields ?? []).some((f) => f.field_type === "attachment");
 
   // tenant_memberships e user_profiles não têm FK direta entre si (mesma situação de
-  // membership_roles/role_permissions) — busca em duas etapas.
+  // membership_roles/role_permissions), busca em duas etapas.
   let memberOptions: { id: string; name: string }[] = [];
   if (hasPersonField) {
     const { data: tenantMembers } = await supabase
@@ -263,7 +263,7 @@ export default async function ClaimPage({
     memberOptions = (profiles ?? []).map((p) => ({ id: p.id, name: p.full_name || p.email || p.id }));
   }
 
-  // Anexo (Documento 1): custom_fields guarda o caminho no Storage, não o arquivo — precisa de URL
+  // Anexo (Documento 1): custom_fields guarda o caminho no Storage, não o arquivo, precisa de URL
   // assinada pra exibir, igual ao GED.
   const attachmentPaths = hasAttachmentField
     ? Object.values((customFields ?? {}) as Record<string, string>).filter((v) => v.includes("/custom-fields/"))
@@ -285,14 +285,14 @@ export default async function ClaimPage({
         .in("stage_instance_id", stageIds)
     : { data: [] as never[] };
 
-  // Só a ÚLTIMA etapa concluída pode ser desfeita (de trás para frente) — ver undoActivityCompletion.
+  // Só a ÚLTIMA etapa concluída pode ser desfeita (de trás para frente), ver undoActivityCompletion.
   const lastDoneStageId = [...(stages ?? [])]
     .filter((st) => st.status === "completed" && (activities ?? []).some((a) => a.stage_instance_id === st.id && a.status === "completed"))
     .sort((a, b) => (b.exited_at ?? "").localeCompare(a.exited_at ?? ""))[0]?.id;
   const activityByStage = new Map((activities ?? []).map((a) => [a.stage_instance_id, a]));
   const decisionByStage = new Map((decisions ?? []).filter((d) => d.stage_instance_id).map((d) => [d.stage_instance_id as string, d]));
 
-  // Pendências (Documento 3 §2.2, caso H): não movem o processo — são solicitações dentro da
+  // Pendências (Documento 3 §2.2, caso H): não movem o processo, são solicitações dentro da
   // atividade atual, por isso vivem agrupadas por activity_instance_id, não por stage.
   const activityIds = (activities ?? []).map((a) => a.id);
   const docIds = (documents ?? []).map((d) => d.id);
@@ -452,7 +452,7 @@ export default async function ClaimPage({
 
   const blockedReason = auditLogs?.find((a) => a.action === "cycle.blocked")?.reason;
 
-  // Convergências (Documento 3 §5): mostra "aguardando N de M" enquanto o join não libera — sem
+  // Convergências (Documento 3 §5): mostra "aguardando N de M" enquanto o join não libera, sem
   // isso o usuário vê uma etapa "Convergência" concluída na trilha sem entender por que o processo
   // não seguiu ainda para o próximo passo.
   const branchIds = (joins ?? []).map((j) => j.branch_id).filter((b): b is string => !!b);
@@ -473,11 +473,11 @@ export default async function ClaimPage({
       completed,
       total: j.rule_type === "min_count" ? (j.min_count ?? relevant.length) : relevant.length,
       ruleLabel,
-      branches: siblings.map((b) => ({ name: nodeById.get(b.target_node_id)?.name ?? "—", done: b.status === "completed" })),
+      branches: siblings.map((b) => ({ name: nodeById.get(b.target_node_id)?.name ?? "-", done: b.status === "completed" })),
     });
   }
 
-  // Grafo completo (Documento 5 §5/§15): status por nó derivado da passagem mais recente por ele —
+  // Grafo completo (Documento 5 §5/§15): status por nó derivado da passagem mais recente por ele,
   // mesma fonte de dados da trilha linear, só desenhada como grafo em vez de lista cronológica.
   const latestStageByNode = new Map<string, { id: string; status: string }>();
   for (const s of [...(stages ?? [])].reverse()) latestStageByNode.set(s.node_id, { id: s.id, status: s.status });
@@ -688,7 +688,7 @@ export default async function ClaimPage({
         )}
 
         {cycle.status === "discarded" && (
-          <p className="mt-3 text-[12px] text-slate-500">Ciclo descartado — motivo registrado no histórico abaixo.</p>
+          <p className="mt-3 text-[12px] text-slate-500">Ciclo descartado, motivo registrado no histórico abaixo.</p>
         )}
 
         {duplicateCheck && (
@@ -699,7 +699,7 @@ export default async function ClaimPage({
             <ul className="mt-1.5 space-y-0.5">
               {duplicateCandidates.map((c, i) => (
                 <li key={i}>
-                  Sinistro <span className="font-medium">{c.claim_number}</span> —{" "}
+                  Sinistro <span className="font-medium">{c.claim_number}</span>,{" "}
                   {((c.matched_fields as string[]) ?? []).join(", ")}
                   {c.confidence !== null && ` (${Math.round(c.confidence * 100)}% de confiança)`}
                 </li>
@@ -811,7 +811,7 @@ export default async function ClaimPage({
                 <span>Aguardando:</span>
                 {waitingGroupIds.map((gid) => (
                   <span key={gid} className="rounded border border-slate-200/60 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">
-                    <GroupChip name={groupMeta.get(gid)?.name ?? "—"} icon={groupMeta.get(gid)?.icon} color={groupMeta.get(gid)?.color} />
+                    <GroupChip name={groupMeta.get(gid)?.name ?? "-"} icon={groupMeta.get(gid)?.icon} color={groupMeta.get(gid)?.color} />
                   </span>
                 ))}
               </div>
@@ -851,7 +851,7 @@ export default async function ClaimPage({
                     <span className="text-[12px] text-slate-500">
                       Valor de carga/prejuízo declarado:{" "}
                       <span className="font-medium text-slate-700">
-                        {claim.declared_value != null ? currency.format(Number(claim.declared_value)) : "—"}
+                        {claim.declared_value != null ? currency.format(Number(claim.declared_value)) : "-"}
                       </span>
                     </span>
                   )}
@@ -869,7 +869,7 @@ export default async function ClaimPage({
                     {(financialEntries ?? []).map((e) => (
                       <li key={e.id} className="flex items-center justify-between gap-2 py-2 text-[12px]">
                         <div className={e.status === "cancelled" ? "text-slate-500 line-through" : "text-slate-700"}>
-                          <span className="font-medium">{FINANCIAL_TYPE_LABEL[e.entry_type] ?? e.entry_type}</span> — {e.description}
+                          <span className="font-medium">{FINANCIAL_TYPE_LABEL[e.entry_type] ?? e.entry_type}</span>: {e.description}
                           <span className="ml-1.5 text-slate-500">
                             {new Date(e.entry_date).toLocaleDateString("pt-BR")} · {currency.format(Number(e.amount))}
                           </span>
@@ -931,7 +931,7 @@ export default async function ClaimPage({
                     <div className="flex gap-1.5">
                       <dt className="text-slate-500">Fluxo:</dt>
                       <dd className="font-medium text-slate-900">
-                        {workflow?.name ?? "—"} · v{version?.version_number}
+                        {workflow?.name ?? "-"} · v{version?.version_number}
                       </dd>
                     </div>
                     <div className="flex gap-1.5">
@@ -997,7 +997,7 @@ export default async function ClaimPage({
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <FileText className="size-4 text-slate-500" />
-                            <span className="text-[13px] font-medium text-slate-900">{docTypeName.get(doc.document_type_id) ?? "—"}</span>
+                            <span className="text-[13px] font-medium text-slate-900">{docTypeName.get(doc.document_type_id) ?? "-"}</span>
                             {doc.is_required && (
                               <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
                                 obrigatório
@@ -1029,7 +1029,7 @@ export default async function ClaimPage({
                                   v.file_name
                                 )}
                                 <span className="text-slate-500">{(v.size_bytes / 1024).toFixed(0)} KB</span>
-                                {v.rejection_reason && <span className="text-rose-700">— {v.rejection_reason}</span>}
+                                {v.rejection_reason && <span className="text-rose-700">{v.rejection_reason}</span>}
                                 {v.validated_at && !v.rejection_reason && (
                                   <span className="inline-flex items-center gap-1 text-emerald-700">
                                     <CheckCircle2 className="size-3" /> validado
@@ -1118,7 +1118,7 @@ export default async function ClaimPage({
                         {NODE_META[type]?.label ?? type}
                         {stage.pass_number > 1 && ` · ${stage.pass_number}ª passagem`}
                       </span>
-                      <h3 className="text-[14px] font-medium text-slate-900">{node?.name ?? "—"}</h3>
+                      <h3 className="text-[14px] font-medium text-slate-900">{node?.name ?? "-"}</h3>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {liveSla && liveSla.status !== "completed" && (
@@ -1194,7 +1194,7 @@ export default async function ClaimPage({
                           {activity.group_id && groupMeta.get(activity.group_id) ? (
                             <GroupChip name={groupMeta.get(activity.group_id)!.name} icon={groupMeta.get(activity.group_id)!.icon} color={groupMeta.get(activity.group_id)!.color} />
                           ) : (
-                            "—"
+                            "-"
                           )}
                         </span>
                       </span>
@@ -1227,7 +1227,7 @@ export default async function ClaimPage({
                           canActOnGroup(activity.group_id))) && (
                         <details className="[&[open]]:basis-full">
                           <summary className="inline-flex cursor-pointer list-none text-[12px] font-medium text-rose-800 underline-offset-2 hover:text-rose-900 hover:underline">
-                            Concluí sem querer — desfazer
+                            Concluí sem querer, desfazer
                           </summary>
                           <form
                             action={undoActivityCompletion.bind(null, activity.id)}
@@ -1255,7 +1255,7 @@ export default async function ClaimPage({
                                 const raw = customFields[f.key];
                                 const has = raw !== undefined && raw !== null && String(raw) !== "";
                                 const display = !has
-                                  ? "—"
+                                  ? "-"
                                   : f.field_type === "boolean"
                                     ? raw === "true"
                                       ? "Sim"
@@ -1493,7 +1493,7 @@ export default async function ClaimPage({
                   {joinProgress && (
                     <div className="mt-3 border-t border-slate-100 pt-3">
                       <p className="text-[12px] font-medium text-amber-700">
-                        Aguardando ramos ({joinProgress.ruleLabel}) — {joinProgress.completed} de {joinProgress.total}
+                        Aguardando ramos ({joinProgress.ruleLabel}), {joinProgress.completed} de {joinProgress.total}
                       </p>
                       <ul className="mt-1.5 flex flex-wrap gap-1.5">
                         {joinProgress.branches.map((b, i) => (

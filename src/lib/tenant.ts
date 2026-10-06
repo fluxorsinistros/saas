@@ -17,7 +17,7 @@ export type TenantContext = {
   tenants: { id: string; name: string; iconUrl?: string | null; theme?: "light" | "dark" }[];
 };
 
-// Autorização real fica no banco (RLS) — aqui só resolvemos qual tenant está ativo para o usuário.
+// Autorização real fica no banco (RLS), aqui só resolvemos qual tenant está ativo para o usuário.
 export const getTenantContext = cache(async (): Promise<TenantContext> => {
   const supabase = await createClient();
   const {

@@ -8,7 +8,7 @@ const STORAGE_KEY = "sinistro-execution-view";
 type Mode = "timeline" | "graph" | "history" | "financial" | "documents" | "data";
 
 // Documento 5 §15: alternância entre as visões do processo (linha do tempo, grafo, histórico, financeiro e documentos)
-// é preferência do usuário, guardada no navegador — nunca dado de configuração do tenant.
+// é preferência do usuário, guardada no navegador, nunca dado de configuração do tenant.
 export function ExecutionViewToggle({
   timeline,
   graph,
@@ -36,7 +36,7 @@ export function ExecutionViewToggle({
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    // Leitura de localStorage não pode acontecer no render (SSR não tem `window`) — só depois de
+    // Leitura de localStorage não pode acontecer no render (SSR não tem `window`), só depois de
     // montado, uma vez só, é um efeito legítimo de sincronizar com um sistema externo ao React.
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -46,7 +46,7 @@ export function ExecutionViewToggle({
         setMode(saved as Mode);
       }
     } catch {
-      // localStorage indisponível (aba privada, etc.) — fica no padrão.
+      // localStorage indisponível (aba privada, etc.), fica no padrão.
     }
     setHydrated(true);
   }, []);
@@ -56,7 +56,7 @@ export function ExecutionViewToggle({
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
-      // idem — preferência só não persiste entre sessões, não quebra a tela.
+      // idem, preferência só não persiste entre sessões, não quebra a tela.
     }
   };
 

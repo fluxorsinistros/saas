@@ -25,7 +25,7 @@ export async function TabUsuarios({ tenantId, tenantName }: { tenantId: string; 
           Usuários da conta {total > 0 && <span className="font-normal normal-case tracking-normal text-slate-500">({total})</span>}
         </h2>
         {total === 0 ? (
-          <p className="rounded-xl border border-slate-200 bg-white p-4 text-[13px] text-slate-500">Ninguém nesta conta ainda — adicione alguém acima.</p>
+          <p className="rounded-xl border border-slate-200 bg-white p-4 text-[13px] text-slate-500">Ninguém nesta conta ainda, adicione alguém acima.</p>
         ) : (
           <ul className="space-y-3">
             {(rows ?? []).map((u) => (

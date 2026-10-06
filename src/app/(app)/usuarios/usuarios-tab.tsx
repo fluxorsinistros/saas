@@ -62,7 +62,7 @@ export async function UsuariosTab({
     return `/usuarios${qs ? `?${qs}` : ""}`;
   };
   const exportHref = `/usuarios/exportar?${filterParams().toString()}`;
-  // A lista só consulta o banco depois de clicar "Pesquisar" (campo oculto "searched" no form) —
+  // A lista só consulta o banco depois de clicar "Pesquisar" (campo oculto "searched" no form),
   // abrir a tela não dispara a busca pesada sozinha, só os combos de filtro (grupos/organizações,
   // que são baratos). Página pede isso pra não ficar lenta sem necessidade.
   const searched = one("searched") === "1";
@@ -195,7 +195,7 @@ export async function UsuariosTab({
         <div className="mt-2 flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
           <SearchX className="size-8 text-slate-300" />
           <p className="text-[15px] font-medium text-slate-800">Ajuste os filtros e clique em Pesquisar</p>
-          <p className="max-w-sm text-[13px] text-slate-500">A lista não carrega sozinha ao abrir a tela — isso mantém a página leve mesmo com muitos usuários.</p>
+          <p className="max-w-sm text-[13px] text-slate-500">A lista não carrega sozinha ao abrir a tela, isso mantém a página leve mesmo com muitos usuários.</p>
         </div>
       ) : (
         <>
@@ -205,7 +205,7 @@ export async function UsuariosTab({
             ? filtering
               ? "Nenhum usuário encontrado com esses filtros."
               : "Nenhum usuário cadastrado."
-            : `Mostrando ${firstShown}–${lastShown} de ${total} ${total === 1 ? "usuário" : "usuários"}`}
+            : `Mostrando ${firstShown} a ${lastShown} de ${total} ${total === 1 ? "usuário" : "usuários"}`}
         </p>
         {total > 0 && (
           <a
@@ -248,7 +248,7 @@ export async function UsuariosTab({
                       </details>
                     ) : isSelf ? (
                       <span title="Você não edita o próprio acesso" className="flex size-8 items-center justify-center text-xs text-slate-400">
-                        —
+                        -
                       </span>
                     ) : (
                       <Link
@@ -262,13 +262,13 @@ export async function UsuariosTab({
                     )}
                   </td>
                   <td className="px-3 py-2.5 font-medium text-slate-900">
-                    {u.full_name || <span className="font-normal text-slate-400">—</span>}
+                    {u.full_name || <span className="font-normal text-slate-400">-</span>}
                     {isSelf && <span className="ml-2 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">Você</span>}
                   </td>
                   <td className="px-3 py-2.5 text-slate-600">{u.email}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">—</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">-</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">-</span>}</td>
                   <td className="px-3 py-2.5">
                     {u.pending ? (
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">convite pendente</span>

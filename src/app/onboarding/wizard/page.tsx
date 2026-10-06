@@ -18,7 +18,7 @@ import {
 export const metadata: Metadata = { title: "Configurar empresa" };
 
 // Documento 5 §3: wizard de 9 passos. Passos 3/6/7/8 do documento (escolher template, revisar,
-// validar, publicar) colapsam num único checkpoint aqui — são literalmente a mesma tela (o Workflow
+// validar, publicar) colapsam num único checkpoint aqui, são literalmente a mesma tela (o Workflow
 // Builder já tem o seletor de template, o painel de validação e o botão Publicar; reimplementar isso
 // dentro do wizard duplicaria a peça principal do produto, e o Documento 5 §34 é explícito que o
 // Builder é "a tela principal", tudo o resto é consumo do que ele produz).
@@ -68,7 +68,7 @@ export default async function OnboardingWizardPage() {
       <div className="w-full max-w-xl">
         <PlatformBrandMark tone="light" />
         <h1 className="mt-6 text-[22px] font-semibold tracking-tight text-slate-900">Configurando {tenant.name}</h1>
-        <p className="mt-1 text-[14px] text-slate-500">Poucos passos — cada um já fica salvo, dá pra sair e voltar depois.</p>
+        <p className="mt-1 text-[14px] text-slate-500">Poucos passos, cada um já fica salvo, dá pra sair e voltar depois.</p>
 
         <ol className="mt-6 flex flex-wrap gap-2">
           {STEPS.map((label, i) => {
@@ -98,7 +98,7 @@ export default async function OnboardingWizardPage() {
             <form action={setOperatingModel} className="space-y-4">
               <div>
                 <h2 className="text-[15px] font-medium text-slate-900">Qual é o modelo operacional da empresa?</h2>
-                <p className="mt-1 text-[13px] text-slate-500">Só para orientar sugestões depois — você pode mudar isso quando quiser.</p>
+                <p className="mt-1 text-[13px] text-slate-500">Só para orientar sugestões depois, você pode mudar isso quando quiser.</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {OPERATING_MODELS.map((m) => (
@@ -120,7 +120,7 @@ export default async function OnboardingWizardPage() {
               <div>
                 <h2 className="text-[15px] font-medium text-slate-900">Quais tipos de sinistro vocês tratam?</h2>
                 <p className="mt-1 text-[13px] text-slate-500">
-                  Ex.: Roubo de carga, Avaria, Extravio. Cada tipo aqui vira uma categoria de sinistro — dá pra ajustar
+                  Ex.: Roubo de carga, Avaria, Extravio. Cada tipo aqui vira uma categoria de sinistro, dá pra ajustar
                   depois.
                 </p>
               </div>
@@ -152,7 +152,7 @@ export default async function OnboardingWizardPage() {
               <div>
                 <h2 className="text-[15px] font-medium text-slate-900">Desenhe e publique o fluxo do processo</h2>
                 <p className="mt-1 text-[13px] text-slate-500">
-                  No Editor de Fluxo você escolhe um modelo pronto (ou começa do zero), revisa, valida e publica — é a tela
+                  No Editor de Fluxo você escolhe um modelo pronto (ou começa do zero), revisa, valida e publica, é a tela
                   principal do produto. Volte aqui quando tiver ao menos um fluxo publicado.
                 </p>
               </div>
@@ -169,7 +169,7 @@ export default async function OnboardingWizardPage() {
                     disabled={(publishedWorkflows ?? []).length === 0}
                     title={(publishedWorkflows ?? []).length === 0 ? "Publique ao menos um fluxo para continuar" : undefined}
                   >
-                    Já publiquei — continuar
+                    Já publiquei, continuar
                   </button>
                 </form>
               </div>
@@ -214,7 +214,7 @@ export default async function OnboardingWizardPage() {
                 <h2 className="text-[15px] font-medium text-slate-900">Convide quem mais vai usar</h2>
                 <p className="mt-1 text-[13px] text-slate-500">
                   A pessoa precisa já ter uma conta (tela de login → Criar conta). Convite por e-mail para quem ainda não
-                  tem conta é um passo futuro — {memberCount ?? 1} pessoa{(memberCount ?? 1) === 1 ? "" : "s"} no tenant até
+                  tem conta é um passo futuro, {memberCount ?? 1} pessoa{(memberCount ?? 1) === 1 ? "" : "s"} no tenant até
                   agora.
                 </p>
               </div>
@@ -233,7 +233,7 @@ export default async function OnboardingWizardPage() {
           {step === 6 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-[15px] font-medium text-slate-900">Pronto — crie o primeiro sinistro</h2>
+                <h2 className="text-[15px] font-medium text-slate-900">Pronto, crie o primeiro sinistro</h2>
                 <p className="mt-1 text-[13px] text-slate-500">
                   Isso fecha o ciclo: fluxo publicado, grupos configurados, gente convidada. O primeiro sinistro pode ser
                   agora ou depois, direto da tela de Sinistros.

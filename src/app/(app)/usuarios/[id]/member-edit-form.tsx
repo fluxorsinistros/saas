@@ -110,7 +110,7 @@ export function MemberEditForm({
 
       <label className="flex items-center gap-2 text-[13px] font-medium text-slate-700">
         <input key={String(active)} type="checkbox" name="active" defaultChecked={active} /> Ativo
-        <span className="font-normal text-slate-500">— desmarcado, o usuário perde o acesso à empresa na hora</span>
+        <span className="font-normal text-slate-500">(desmarcado, o usuário perde o acesso à empresa na hora)</span>
       </label>
 
       {isAdmin ? (
