@@ -81,24 +81,22 @@ export function ExecutionViewToggle({
         >
           <GitBranch className="size-3.5" /> Grafo completo
         </button>
-        {history && (
+        {data && (
           <button
             type="button"
-            onClick={() => choose("history")}
+            onClick={() => choose("data")}
             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-              mode === "history" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
+              mode === "data" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <History className="size-3.5" /> Histórico
-            {typeof historyCount === "number" && historyCount > 0 && (
+            <ClipboardList className="size-3.5" /> Dados
+            {typeof dataCount === "number" && dataCount > 0 && (
               <span
                 className={`ml-0.5 rounded-full px-1.5 py-0.2 text-xs font-semibold ${
-                  mode === "history"
-                    ? "bg-white/20 text-white"
-                    : "bg-slate-100 text-slate-600"
+                  mode === "data" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
                 }`}
               >
-                {historyCount}
+                {dataCount}
               </span>
             )}
           </button>
@@ -147,22 +145,24 @@ export function ExecutionViewToggle({
             )}
           </button>
         )}
-        {data && (
+        {history && (
           <button
             type="button"
-            onClick={() => choose("data")}
+            onClick={() => choose("history")}
             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-              mode === "data" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
+              mode === "history" ? "bg-selected text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <ClipboardList className="size-3.5" /> Dados
-            {typeof dataCount === "number" && dataCount > 0 && (
+            <History className="size-3.5" /> Histórico
+            {typeof historyCount === "number" && historyCount > 0 && (
               <span
                 className={`ml-0.5 rounded-full px-1.5 py-0.2 text-xs font-semibold ${
-                  mode === "data" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                  mode === "history"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-100 text-slate-600"
                 }`}
               >
-                {dataCount}
+                {historyCount}
               </span>
             )}
           </button>

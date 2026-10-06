@@ -58,7 +58,7 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
           e.preventDefault();
           go({ q: query.trim() });
         }}
-        className="relative min-w-[11rem] flex-1 md:w-36 md:flex-none"
+        className="relative min-w-[11rem] flex-1 md:w-32 md:flex-none"
       >
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-white/80" aria-hidden />
         <input
@@ -104,8 +104,8 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
         <label className={label}>
           Ordenar
           <select className={select} value={ordem} onChange={(e) => go({ ordem: e.target.value === "criacao" ? "" : e.target.value, dir: "" })}>
-            <option value="criacao">Data de criação</option>
-            <option value="urgencia">Urgência do prazo</option>
+            <option value="criacao">Criação</option>
+            <option value="urgencia">Urgência</option>
             <option value="situacao">Situação</option>
             <option value="grupo">Grupo</option>
             <option value="fluxo">Fluxo</option>
