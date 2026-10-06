@@ -570,7 +570,14 @@ body[data-theme="dark"] {
 }
 .app-content-bg :is(select, textarea, input)::placeholder { color: #475569; }
 /* campo que fica direto sobre o fundo azul (fora de cartão): fundo claro translúcido para o texto ler bem */
-.app-content-bg select.field-on-glass, .app-content-bg input.field-on-glass { background-color: rgba(255, 255, 255, 0.72); }
+.app-content-bg select.field-on-glass, .app-content-bg input.field-on-glass {
+  /* mesmo vidro do bloco "Empresa" do menu: branco bem translúcido sobre o azul, texto branco */
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+.app-content-bg .field-on-glass option { color: #0f172a; background-color: #fff; }
+.app-content-bg .field-on-glass::placeholder { color: rgba(255, 255, 255, 0.75); }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(select, textarea, input) { background-color: #0d131f; border-color: revert-layer; backdrop-filter: none; color: revert-layer; }
 
 /* Menu: rolagem sem barra visível (no tema claro) */
