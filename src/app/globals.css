@@ -544,15 +544,15 @@ body[data-theme="dark"] {
    ========================================================================== */
 .sidebar-glass [class*="border-navy"],
 .sidebar-glass .border-t { border-color: transparent; }
-.app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
-.app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+.app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
+.app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
   border-color: transparent;
   /* mesmo vidro dos cartões do Dashboard (sem o desfoque do fundo, para listas longas não pesarem) */
   background: rgba(255, 255, 255, 0.59);
   box-shadow: 0 12px 32px rgba(20, 50, 110, 0.12);
 }
-:is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
-:is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
   background: #111827;
   box-shadow: none;
 }
@@ -570,3 +570,37 @@ body[data-theme="dark"] {
 .sidebar-glass nav { scrollbar-width: none; }
 .sidebar-glass nav::-webkit-scrollbar { display: none; }
 :is(.dark, [data-theme="dark"]) .sidebar-glass nav { scrollbar-width: thin; }
+
+/* Tabelas no mesmo vidro: cabeçalho com a tinta azul do menu, linhas translúcidas (listras bem leves) */
+.app-content-bg .bg-navy {
+  background-color: rgba(18, 75, 143, 0.62);
+}
+.app-content-bg tbody tr {
+  background-color: transparent !important;
+}
+.app-content-bg tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+:is(.dark, [data-theme="dark"]) .app-content-bg .bg-navy { background-color: #0b1220; }
+:is(.dark, [data-theme="dark"]) .app-content-bg tbody tr { background-color: revert-layer !important; }
+:is(.dark, [data-theme="dark"]) .app-content-bg tbody tr:nth-child(even) { background-color: revert-layer !important; }
+
+/* Abas (Torre de Controle etc.): a aba ativa é um vidro claro, não um bloco branco sólido */
+.app-content-bg nav[aria-label] a.bg-white,
+.app-content-bg nav[aria-label] a[class*="bg-white"] { background-color: rgba(255, 255, 255, 0.55); border-color: transparent; }
+
+/* Painéis do editor de fluxo e barras de abas/segmentos: o mesmo vidro (o fundo animado aparece por trás) */
+.app-content-bg :is(header, aside).bg-white {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-color: transparent;
+}
+.app-content-bg .bg-canvas { background-color: transparent; }
+.app-content-bg div.bg-white[class*="rounded-lg"]:not([class*="absolute"]) {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-color: transparent;
+}
+:is(.dark, [data-theme="dark"]) .app-content-bg :is(header, aside).bg-white,
+:is(.dark, [data-theme="dark"]) .app-content-bg div.bg-white[class*="rounded-lg"]:not([class*="absolute"]) { background-color: #111827; }
+:is(.dark, [data-theme="dark"]) .app-content-bg .bg-canvas { background-color: #090d16; }
+.app-content-bg .react-flow__minimap { background-color: rgba(255, 255, 255, 0.5) !important; border-color: transparent !important; }
+:is(.dark, [data-theme="dark"]) .app-content-bg .react-flow__minimap { background-color: #111827 !important; }
