@@ -51,7 +51,7 @@ export function FormalizeButton({ options }: { options: { id: string; name: stri
             aria-modal="true"
             aria-labelledby="formalize-title"
             style={{
-              background: "rgba(255, 255, 255, 0.9)",
+              background: "rgba(255, 255, 255, 0.7)",
               WebkitBackdropFilter: "blur(22px) saturate(130%)",
               backdropFilter: "blur(22px) saturate(130%)",
               boxShadow: "0 30px 80px rgba(8, 20, 50, 0.45), 0 8px 24px rgba(8, 20, 50, 0.25)",
