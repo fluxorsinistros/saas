@@ -20,7 +20,7 @@ export function TenantFinanceiroTab({ workflows }: Props) {
             const n = readPanel(wf.financial_panel).length;
             return (
               <li key={wf.id}>
-                <Link href={`/fluxos/${wf.id}/financeiro`} className="group flex items-center gap-3 px-5 py-3.5 transition hover:bg-slate-50">
+                <Link href={`/sinistros/painel-financeiro/${wf.id}`} className="group flex items-center gap-3 px-5 py-3.5 transition hover:bg-slate-50">
                   <Workflow className="size-4 shrink-0 text-brand" aria-hidden />
                   <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-slate-900">{wf.name}</span>
                   <span className="shrink-0 text-[12px] text-slate-600">{n === 0 ? "Sem painel" : `${n} ${n === 1 ? "campo" : "campos"} no painel`}</span>

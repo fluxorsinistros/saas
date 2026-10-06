@@ -81,8 +81,10 @@ export async function updateGroupActions(formData: FormData) {
   const id = String(formData.get("id"));
   const allowed = new Set(formData.getAll("allowed").map(String));
   const disabled = GROUP_ACTIONS.map((a) => a.key).filter((key) => !allowed.has(key));
+  // permissões extras que o grupo concede (catálogo fechado; o banco também confere)
+  const granted = formData.getAll("granted").map(String).filter((k) => k === "financial.manage" || k === "financial.configure");
   const supabase = await createClient();
-  const { error } = await supabase.from("groups").update({ disabled_actions: disabled }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  const { error } = await supabase.from("groups").update({ disabled_actions: disabled, granted_actions: granted }).eq("id", id).eq("tenant_id", ctx.tenantId);
   if (error) throw new Error(publicDbMessage(error));
   revalidatePath("/grupos");
   revalidatePath(`/grupos/${id}`);

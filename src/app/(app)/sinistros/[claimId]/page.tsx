@@ -824,8 +824,8 @@ export default async function ClaimPage({
                 {panelItems.length === 0 ? (
                   <p className="text-[13px] text-slate-600">
                     Este fluxo ainda não tem painel financeiro.{" "}
-                    {perms.has("workflow.edit") ? (
-                      <Link href={`/fluxos/${version!.workflow_id}/financeiro`} className="font-medium text-brand hover:underline">
+                    {perms.has("workflow.edit") || perms.has("financial.configure") ? (
+                      <Link href={`/sinistros/painel-financeiro/${version!.workflow_id}`} className="font-medium text-brand hover:underline">
                         Montar o painel
                       </Link>
                     ) : (
@@ -869,8 +869,8 @@ export default async function ClaimPage({
                       })}
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                      {perms.has("workflow.edit") ? (
-                        <Link href={`/fluxos/${version!.workflow_id}/financeiro`} className="text-[12px] font-medium text-brand hover:underline">
+                      {perms.has("workflow.edit") || perms.has("financial.configure") ? (
+                        <Link href={`/sinistros/painel-financeiro/${version!.workflow_id}`} className="text-[12px] font-medium text-brand hover:underline">
                           Configurar o painel deste fluxo
                         </Link>
                       ) : (

@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { PANEL_LABEL_MAX, type PanelItem } from "@/lib/financial-panel";
 import { FormulaInput } from "@/components/builder/Inspector";
 import type { WorkflowField } from "@/lib/workflow/types";
-import { createWorkflowField, deleteWorkflowField, saveFinancialPanel, updateWorkflowField } from "../../actions";
+import { createWorkflowField, deleteWorkflowField, saveFinancialPanel, updateWorkflowField } from "@/app/(app)/fluxos/actions";
 
 type Field = {
   id: string;
@@ -31,7 +31,7 @@ const NEW_TYPES = [
 
 // Monta o painel financeiro do fluxo: cria, edita e exclui campos numéricos; escolhe quais entram, a ordem, o rótulo,
 // o destaque e se a pessoa preenche ou só consulta.
-export function PanelEditor({ workflowId, fields, initial, canEdit }: { workflowId: string; fields: Field[]; initial: PanelItem[]; canEdit: boolean }) {
+export function PanelEditor({ workflowId, fields, initial, canEdit, canFields }: { workflowId: string; fields: Field[]; initial: PanelItem[]; canEdit: boolean; canFields: boolean }) {
   const router = useRouter();
   const known = new Set(fields.map((f) => f.key));
   const [items, setItems] = useState<PanelItem[]>(initial.filter((i) => known.has(i.key)));
@@ -194,19 +194,23 @@ export function PanelEditor({ workflowId, fields, initial, canEdit }: { workflow
                         <button type="button" onClick={() => move(i, 1)} disabled={i === items.length - 1} aria-label={`Descer ${f.label}`} className="rounded p-1.5 text-slate-700 hover:bg-slate-900/[0.06] disabled:opacity-30">
                           <ChevronDown className="size-4" />
                         </button>
+                        {canFields && (
                         <button type="button" onClick={() => setEditingId(editingId === f.id ? null : f.id)} aria-label={`Editar o campo ${f.label}`} title="Editar o campo" className="rounded p-1.5 text-slate-700 hover:bg-slate-900/[0.06]">
                           <Pencil className="size-4" />
                         </button>
+                        )}
+                        {canFields && (
                         <button type="button" onClick={() => handleDelete(f)} aria-label={`Excluir o campo ${f.label}`} title="Excluir o campo" className="rounded p-1.5 text-rose-700 hover:bg-rose-500/10">
                           <Trash2 className="size-4" />
                         </button>
+                        )}
                         <button type="button" onClick={() => setItems((l) => l.filter((x) => x.key !== it.key))} className="ml-1 rounded px-2 py-1 text-xs text-slate-700 hover:bg-slate-900/[0.06]">
                           Tirar do painel
                         </button>
                       </div>
                     )}
                   </div>
-                  {canEdit && editingId === f.id && (
+                  {canFields && editingId === f.id && (
                     <div className="mt-2">
                       {fieldForm(f)}
                     </div>
@@ -232,16 +236,18 @@ export function PanelEditor({ workflowId, fields, initial, canEdit }: { workflow
                   >
                     + {f.label} <span className="text-xs text-slate-600">({f.typeLabel})</span>
                   </button>
-                  <button type="button" onClick={() => handleDelete(f)} aria-label={`Excluir o campo ${f.label}`} title="Excluir o campo" className="px-1.5 py-1 text-rose-700 hover:bg-rose-500/10">
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  {canFields && (
+                    <button type="button" onClick={() => handleDelete(f)} aria-label={`Excluir o campo ${f.label}`} title="Excluir o campo" className="px-1.5 py-1 text-rose-700 hover:bg-rose-500/10">
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
                 </span>
               ))}
             </div>
           ) : (
             <p className="mt-2 text-[13px] text-slate-700">Todos os campos numéricos do fluxo já estão no painel.</p>
           )}
-          <div className="mt-3">
+          <div className={canFields ? "mt-3" : "hidden"}>
             {creating ? (
               fieldForm(null)
             ) : (

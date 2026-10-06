@@ -684,7 +684,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
             <StatusBadge status={version.status} />
           </div>
           <Link
-            href={`/fluxos/${workflow.id}/financeiro`}
+            href={`/sinistros/painel-financeiro/${workflow.id}`}
             className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           >
             Painel financeiro

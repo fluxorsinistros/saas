@@ -1140,6 +1140,7 @@ export type Database = {
           color: string | null
           description: string | null
           disabled_actions: string[]
+          granted_actions: string[]
           hidden_screens: string[]
           icon: string | null
           id: string
@@ -1153,6 +1154,7 @@ export type Database = {
           color?: string | null
           description?: string | null
           disabled_actions?: string[]
+          granted_actions?: string[]
           hidden_screens?: string[]
           icon?: string | null
           id?: string
@@ -1166,6 +1168,7 @@ export type Database = {
           color?: string | null
           description?: string | null
           disabled_actions?: string[]
+          granted_actions?: string[]
           hidden_screens?: string[]
           icon?: string | null
           id?: string
@@ -3191,6 +3194,10 @@ export type Database = {
       add_tenant_member: {
         Args: { p_email: string; p_tenant_id: string }
         Returns: string
+      }
+      save_financial_panel: {
+        Args: { p_workflow_id: string; p_panel: Json }
+        Returns: undefined
       }
       create_draft_from_version: {
         Args: { p_version_id: string }

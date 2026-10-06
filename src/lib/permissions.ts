@@ -16,7 +16,8 @@ export type PermissionCode =
   | "workflow.publish"
   | "import.confirm"
   | "user.manage"
-  | "financial.manage";
+  | "financial.manage"
+  | "financial.configure";
 
 // Uma consulta por request (cache do React), não uma por botão da tela.
 export const getPermissionCodes = cache(async (userId: string, tenantId: string): Promise<Set<PermissionCode>> => {
@@ -38,6 +39,17 @@ export const getPermissionCodes = cache(async (userId: string, tenantId: string)
   for (const mr of memberRoles) {
     for (const rp of mr.roles?.role_permissions ?? []) {
       if (rp.permissions?.code) codes.add(rp.permissions.code as PermissionCode);
+    }
+  }
+  // Concessões do grupo: o Administrador tem tudo; o Operador ganha, além do papel, o que o grupo em que atua agora concede
+  // (catálogo fechado: salvar valores do painel financeiro e configurar o painel). Só o grupo ativo vale.
+  const { isAdmin, active } = await getMemberGroups(userId, tenantId);
+  if (isAdmin) {
+    codes.add("financial.manage");
+    codes.add("financial.configure");
+  } else if (active) {
+    for (const g of active.granted_actions) {
+      if (g === "financial.manage" || g === "financial.configure") codes.add(g);
     }
   }
   return codes;

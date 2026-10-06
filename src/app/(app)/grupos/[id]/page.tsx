@@ -28,6 +28,7 @@ const PERMISSION_LABELS: Record<PermissionCode, string> = {
   "import.confirm": "Confirmar importação em massa",
   "user.manage": "Gerenciar usuários e grupos",
   "financial.manage": "Gerenciar financeiro do ciclo",
+  "financial.configure": "Configurar o painel financeiro",
 };
 
 const TABS = [
@@ -57,7 +58,7 @@ export default async function EditGroupPage({
   const supabase = await createClient();
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, description, status, icon, color, hidden_screens, disabled_actions, group_members(count)")
+    .select("id, name, description, status, icon, color, hidden_screens, disabled_actions, granted_actions, group_members(count)")
     .eq("id", id)
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
@@ -67,6 +68,7 @@ export default async function EditGroupPage({
   const members = group.group_members?.[0]?.count ?? 0;
   const hiddenScreens = new Set(group.hidden_screens ?? []);
   const disabledActions = new Set(group.disabled_actions ?? []);
+  const grantedActions = new Set(group.granted_actions ?? []);
 
   // Papel (Administrador/Operador) controla telas e ações, é escolhido por pessoa em /usuarios,
   // não por grupo. Mostrar aqui é só pra deixar claro a diferença, sem misturar os dois conceitos.
@@ -252,6 +254,36 @@ export default async function EditGroupPage({
                 </li>
               ))}
             </ul>
+            <div className="border-t border-slate-100 pt-4">
+              <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Permissões extras do financeiro</h2>
+              <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
+                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
+                <span>
+                  O Operador deste grupo ganha estas permissões além do papel dele, enquanto estiver atuando neste grupo. Administrador já pode tudo.
+                </span>
+              </p>
+              <ul className="space-y-2">
+                {[
+                  { key: "financial.manage", label: "Salvar os valores do painel financeiro", hint: "Preencher e salvar os campos editáveis da aba Financeiro do sinistro." },
+                  { key: "financial.configure", label: "Configurar o painel financeiro", hint: "Escolher quais campos aparecem, a ordem, o rótulo, o destaque e se são editáveis. Criar ou excluir campos continua com o Administrador." },
+                ].map((a) => (
+                  <li key={a.key} className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      id={`granted-${a.key}`}
+                      name="granted"
+                      value={a.key}
+                      defaultChecked={grantedActions.has(a.key)}
+                      className="mt-0.5 size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+                    />
+                    <label htmlFor={`granted-${a.key}`}>
+                      <span className="block text-[14px] text-slate-800">{a.label}</span>
+                      <span className="block text-[12px] text-slate-500">{a.hint}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
             <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
               Salvar ações
             </button>

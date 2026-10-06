@@ -112,7 +112,10 @@ async function readFormula(
 // Painel financeiro do fluxo: quais campos numéricos aparecem na aba Financeiro do sinistro, em que ordem e com que destaque.
 export async function saveFinancialPanel(workflowId: string, rawItems: unknown): Promise<ActionResult> {
   const ctx = await getTenantContext();
-  await requirePermission(ctx, "workflow.edit");
+  // quem edita fluxos ou quem o grupo autorizou a configurar o painel (o banco confere de novo)
+  if (!(await hasPermission(ctx, "workflow.edit")) && !(await hasPermission(ctx, "financial.configure"))) {
+    return { ok: false, error: "Você não tem permissão para configurar o painel financeiro." };
+  }
   const items = readPanel(rawItems);
   if (Array.isArray(rawItems) && rawItems.length > PANEL_MAX_ITEMS) return { ok: false, error: `O painel aceita no máximo ${PANEL_MAX_ITEMS} itens.` };
   if (new Set(items.map((i) => i.key)).size !== items.length) return { ok: false, error: "Há um campo repetido no painel." };
@@ -126,9 +129,9 @@ export async function saveFinancialPanel(workflowId: string, rawItems: unknown):
   }
   // calculado é sempre informativo
   const clean = items.map((i) => (typeFor(i.key) === "calculated" ? { ...i, mode: "view" as const } : i));
-  const { error } = await supabase.from("workflows").update({ financial_panel: clean as unknown as Json }).eq("id", workflowId).eq("tenant_id", ctx.tenantId);
+  const { error } = await supabase.rpc("save_financial_panel", { p_workflow_id: workflowId, p_panel: clean as unknown as Json });
   if (error) return { ok: false, error: publicDbMessage(error) };
-  revalidatePath(`/fluxos/${workflowId}/financeiro`);
+  revalidatePath(`/sinistros/painel-financeiro/${workflowId}`);
   return { ok: true };
 }
 
@@ -302,7 +305,7 @@ export async function deleteWorkflowField(fieldId: string, workflowId: string): 
     const { data: wf } = await supabase.from("workflows").select("financial_panel").eq("id", workflowId).maybeSingle();
     const kept = readPanel(wf?.financial_panel).filter((i) => i.key !== target.key);
     await supabase.from("workflows").update({ financial_panel: kept as unknown as Json }).eq("id", workflowId).eq("tenant_id", ctx.tenantId);
-    revalidatePath(`/fluxos/${workflowId}/financeiro`);
+    revalidatePath(`/sinistros/painel-financeiro/${workflowId}`);
   }
   revalidatePath(`/fluxos/${workflowId}`);
   return { ok: true };
