@@ -12,6 +12,8 @@ import {
   Timer,
   Activity,
   Search,
+  SlidersHorizontal,
+  ChevronUp,
 } from "lucide-react";
 
 type Props = {
@@ -29,6 +31,8 @@ type Props = {
     situacao?: string;
   };
   totalCount: number;
+  // Já listou os resultados: a barra se recolhe numa linha-resumo para dar espaço à lista.
+  searched: boolean;
 };
 
 const selectClass =
@@ -42,7 +46,9 @@ export function SinistrosFilterBar({
   isAdmin,
   currentFilters,
   totalCount,
+  searched,
 }: Props) {
+  const [expanded, setExpanded] = useState(!searched);
   const [selectedWorkflow, setSelectedWorkflow] = useState(currentFilters.fluxo ?? "");
   const [selectedStage, setSelectedStage] = useState(currentFilters.etapa ?? "");
   const [selectedGroup, setSelectedGroup] = useState(
@@ -79,8 +85,45 @@ export function SinistrosFilterBar({
       selectedSituacao
   );
 
+  const SITUACAO_LABEL: Record<string, string> = { aberto: "Aberto / Em andamento", pausado: "Pausado / Bloqueado", fechado: "Concluído / Fechado" };
+  const summary: string[] = [];
+  if (selectedWorkflow) summary.push(`Fluxo: ${workflows.find((w) => w.id === selectedWorkflow)?.name ?? selectedWorkflow}`);
+  if (selectedStage) summary.push(`Etapa: ${selectedStage}`);
+  if (selectedGroup && selectedGroup !== "todos") summary.push(`Grupo: ${groups.find((g) => g.id === selectedGroup)?.name ?? selectedGroup}`);
+  if (selectedSlaEtapa) summary.push(`Prazo da etapa: ${selectedSlaEtapa === "atrasado" ? "Atrasada" : "No prazo"}`);
+  if (selectedSlaTotal) summary.push(`Prazo do fluxo: ${selectedSlaTotal === "atrasado" ? "Atrasado" : "No prazo"}`);
+  if (selectedSituacao) summary.push(`Situação: ${SITUACAO_LABEL[selectedSituacao] ?? selectedSituacao}`);
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <>
+    {!expanded && (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+        <Filter className="size-4 shrink-0 text-brand" />
+        <span className="text-[13px] text-slate-700">
+          <strong className="font-semibold text-slate-900">{totalCount}</strong> sinistro(s)
+        </span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          {summary.length === 0 ? (
+            <span className="text-xs text-slate-600">Sem filtros</span>
+          ) : (
+            summary.map((t) => (
+              <span key={t} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                {t}
+              </span>
+            ))
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-slate-50"
+        >
+          <SlidersHorizontal className="size-3.5" /> Alterar filtros
+        </button>
+      </div>
+    )}
+    <div className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${expanded ? "" : "hidden"}`}>
       <form method="get" action="/sinistros" className="space-y-4">
         <input type="hidden" name="searched" value="1" />
 
@@ -99,6 +142,16 @@ export function SinistrosFilterBar({
             <span>
               Encontrados: <strong className="font-semibold text-slate-800">{totalCount}</strong> sinistro(s)
             </span>
+            {searched && (
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-expanded
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <ChevronUp className="size-3.5" /> Recolher
+              </button>
+            )}
           </div>
         </div>
 
@@ -305,5 +358,6 @@ export function SinistrosFilterBar({
         </div>
       </form>
     </div>
+    </>
   );
 }

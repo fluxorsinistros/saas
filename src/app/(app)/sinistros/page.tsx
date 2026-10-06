@@ -442,10 +442,12 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Sinistros</h1>
-            <p className="mt-1 max-w-xl text-[14px] text-slate-700">
-              Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido, mudanças futuras no fluxo não
-              afetam ciclos já abertos.
-            </p>
+            {!searched && (
+              <p className="mt-1 max-w-xl text-[14px] text-slate-700">
+                Cada sinistro formalizado abre um ciclo preso à versão publicada do fluxo escolhido, mudanças futuras no fluxo não
+                afetam ciclos já abertos.
+              </p>
+            )}
           </div>
 
           {!perms.has("claim.formalize") || !canFormalize ? null : options.length === 0 ? (
@@ -477,6 +479,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
               situacao: requestedSituacao,
             }}
             totalCount={visibleClaims.length}
+            searched={searched}
           />
         </div>
 
