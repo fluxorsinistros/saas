@@ -424,17 +424,14 @@ body[data-theme="dark"] {
 
 /* Cartões e painéis de vidro */
 .glass-card {
-  /* Vidro: bem translúcido (o fundo aparece e é desfocado por trás), claro no canto superior esquerdo como se a luz
-     batesse ali, com um fio de luz na borda e sombra difusa. */
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.3) 46%, rgba(255, 255, 255, 0.2) 100%);
-  -webkit-backdrop-filter: blur(20px) saturate(145%);
-  backdrop-filter: blur(20px) saturate(145%);
+  /* Mesmo vidro do menu: uma tinta lisa e translúcida por cima do fundo, com desfoque suave — sem degradê, sem fio de luz
+     e sem contorno. O fundo atravessa o cartão do mesmo jeito que atravessa o menu. */
+  background: rgba(255, 255, 255, 0.26);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
   border: 0;
   border-radius: 20px;
-  box-shadow:
-    0 18px 44px rgba(20, 50, 110, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 32px rgba(20, 50, 110, 0.12);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-card { background: rgba(255, 255, 255, 0.92); }
@@ -551,8 +548,8 @@ body[data-theme="dark"] {
 .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
   border-color: transparent;
   /* mesmo vidro dos cartões do Dashboard (sem o desfoque do fundo, para listas longas não pesarem) */
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.52) 50%, rgba(255, 255, 255, 0.46) 100%);
-  box-shadow: 0 16px 40px rgba(20, 50, 110, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 12px 32px rgba(20, 50, 110, 0.12);
 }
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
 :is(.dark, [data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
