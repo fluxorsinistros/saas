@@ -2,7 +2,7 @@ import { GroupChip } from "@/lib/group-icons";
 import { getMemberGroups } from "@/lib/active-group";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, LayoutGrid, RotateCcw, SearchX, Table2, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, FileWarning, Layers, ArrowDown, ArrowUp, LayoutGrid, RotateCcw, SearchX, Table2, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
@@ -71,6 +71,8 @@ type SearchParams = {
   visao?: string;
   agrupar?: string;
   por?: string;
+  ordem?: string;
+  dir?: string;
 };
 
 export default async function SinistrosPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -122,6 +124,9 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
   // Quantos sinistros aparecem por vez (10, 30 ou 50): a lista nunca monta centenas de linhas de uma vez.
   const PAGE_SIZE = [10, 30, 50].includes(Number(sp.por)) ? Number(sp.por) : 10;
   const visao = sp.visao === "tabela" ? "tabela" : "cartoes";
+  // Classificação: padrão = data de criação, mais recentes primeiro.
+  const ordem = (["criacao", "situacao", "grupo", "fluxo"].includes(sp.ordem ?? "") ? sp.ordem : "criacao") as "criacao" | "situacao" | "grupo" | "fluxo";
+  const dir = sp.dir === "asc" ? "asc" : ordem === "criacao" ? "desc" : sp.dir === "desc" ? "desc" : "asc";
   const agrupar = ["situacao", "grupo", "fluxo"].includes(sp.agrupar ?? "") ? (sp.agrupar as "situacao" | "grupo" | "fluxo") : "";
   const page = Math.max(1, Number.parseInt(sp.pagina ?? "1", 10) || 1);
 
@@ -413,11 +418,26 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     }
     return { key: "", order: 0 };
   };
+  const sortValue = (c: (typeof visibleClaims)[number]): string | number => {
+    const cycle = currentCycleByClaim.get(c.id);
+    if (ordem === "criacao") return new Date(c.created_at).getTime();
+    if (ordem === "situacao") return CYCLE_STATUS_LABEL[cycle?.status ?? c.status] ?? "";
+    if (ordem === "grupo") return cycle ? ([...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id) ?? "").sort()[0] ?? "~") : "~";
+    const wf = cycle ? workflowById.get(versionToWorkflow.get(cycle.workflow_version_id) ?? "") : undefined;
+    return wf?.name ?? "~";
+  };
+  const sortedClaims = [...visibleClaims].sort((a, b) => {
+    const x = sortValue(a);
+    const y = sortValue(b);
+    const cmp = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "pt-BR");
+    const byCreated = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return (dir === "asc" ? cmp : -cmp) || byCreated;
+  });
   const orderedClaims = agrupar
-    ? visibleClaims
+    ? sortedClaims
         .map((c) => ({ c, g: groupOf(c) }))
         .sort((a, b) => a.g.order - b.g.order || a.g.key.localeCompare(b.g.key, "pt-BR"))
-    : visibleClaims.map((c) => ({ c, g: { key: "", order: 0 } }));
+    : sortedClaims.map((c) => ({ c, g: { key: "", order: 0 } }));
   const shownClaims = orderedClaims.slice(0, page * PAGE_SIZE);
   const groupCounts = new Map<string, number>();
   for (const { g } of orderedClaims) groupCounts.set(g.key, (groupCounts.get(g.key) ?? 0) + 1);
@@ -501,6 +521,23 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                   {label}
                 </Link>
               ))}
+            </div>
+            <div className="flex items-center gap-1.5" role="group" aria-label="Ordenar por">
+              <span className="font-medium">Ordenar por</span>
+              {([["criacao", "Data de criação"], ["situacao", "Situação"], ["grupo", "Grupo"], ["fluxo", "Fluxo"]] as const).map(([v, label]) => (
+                <Link key={v} href={paramsWith({ ordem: v === "criacao" ? "" : v, dir: "" })} scroll={false} className={seg(ordem === v)}>
+                  {label}
+                </Link>
+              ))}
+              <Link
+                href={paramsWith({ ordem: ordem === "criacao" ? "" : ordem, dir: dir === "asc" ? "desc" : "asc" })}
+                scroll={false}
+                className={seg(false)}
+                title="Inverter a ordem"
+              >
+                {dir === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+                {ordem === "criacao" ? (dir === "desc" ? "Mais recentes" : "Mais antigos") : dir === "asc" ? "A a Z" : "Z a A"}
+              </Link>
             </div>
             <div className="flex items-center gap-1.5" role="group" aria-label="Quantidade por vez">
               <span className="font-medium">Mostrar</span>
