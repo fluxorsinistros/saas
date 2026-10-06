@@ -405,7 +405,7 @@ body[data-theme="dark"] {
      esquerda e some aos poucos para a direita, então a borda do menu se mistura com o fundo (sem linha nem sombra). */
   background-color: transparent;
   background-image:
-    linear-gradient(90deg, rgba(10, 56, 120, 0.7) 0%, rgba(18, 75, 143, 0.58) 62%, rgba(18, 75, 143, 0.28) 100%);
+    linear-gradient(90deg, rgba(10, 56, 120, 0.77) 0%, rgba(18, 75, 143, 0.65) 62%, rgba(18, 75, 143, 0.35) 100%);
 }
 /* Faixa de baixo (tema, e-mail, sair): vidro azul mais escuro para o texto branco continuar legível sobre a base clara */
 .sidebar-glass [data-sidebar-footer] {
