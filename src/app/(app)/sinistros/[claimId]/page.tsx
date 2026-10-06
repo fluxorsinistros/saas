@@ -654,7 +654,7 @@ export default async function ClaimPage({
 
         {cycle.status === "completed" && cycle.id === allCycles[0].id && perms.has("claim.reopen") && (
           <details className="mt-3 group">
-            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-700">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md bg-white/85 px-2 py-0.5 text-[12px] font-medium text-slate-700 hover:bg-white hover:text-slate-900">
               Reabrir este ciclo
             </summary>
             <form
@@ -671,7 +671,7 @@ export default async function ClaimPage({
 
         {cycle.status !== "completed" && cycle.status !== "discarded" && cycle.id === allCycles[0].id && perms.has("claim.discard") && (
           <details className="mt-3 group">
-            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-rose-600 hover:text-rose-700">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md bg-white/85 px-2 py-0.5 text-[12px] font-medium text-rose-700 hover:bg-white hover:text-rose-800">
               Descartar e reiniciar este ciclo
             </summary>
             <form

@@ -392,16 +392,8 @@ body[data-theme="dark"] {
    Regras de desempenho: desfoque só no menu e em poucos painéis grandes; nunca em cada linha de uma lista.
    ========================================================================== */
 :root {
-  /* Cores da referência: #124B92 (canto superior esquerdo, sob o menu) até #BEC1D2 (canto inferior direito).
-     O trecho escuro fica restrito à faixa do menu; a área de conteúdo começa clara para o texto escuro ter contraste. */
-  --app-bg:
-    radial-gradient(760px 480px at 100% 100%, rgba(190, 193, 210, 0.9), transparent 70%),
-    linear-gradient(105deg, #124b92 0%, #5a88c6 12%, #c3d3ec 21%, #d6deef 56%, #bec1d2 100%);
-}
-@media (max-width: 767px) {
-  :root {
-    --app-bg: linear-gradient(160deg, #a9c1e3 0%, #c9d7ee 38%, #bec1d2 100%);
-  }
+  /* O menu (.sidebar-glass) e o painel de dados (.app-content-bg) têm fundos próprios. */
+  --app-bg: #bec1d2;
 }
 
 /* Menu lateral: vidro azul. As cores "navy" viram brancos translúcidos só dentro do menu. */
@@ -480,3 +472,37 @@ body[data-theme="dark"] {
   border-color: rgba(255, 255, 255, 0.09);
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+
+/* Painel de dados (área à direita do menu): #3067AD no canto superior esquerdo até #BEC1D2 no inferior direito, com
+   "formas desfocadas" por baixo dos cartões de vidro. A faixa azul forte fica no TOPO, onde estão o título e a descrição
+   da página (em branco); abaixo dela o fundo clareia e o texto escuro dos cartões mantém o contraste. */
+.app-content-bg {
+  background-color: #bec1d2;
+  background-image:
+    radial-gradient(1500px 230px at 0% 0%, rgba(48, 103, 173, 0.98), rgba(48, 103, 173, 0.6) 55%, transparent 100%),
+    radial-gradient(520px 380px at 34% 24%, rgba(104, 148, 212, 0.5), transparent 72%),
+    radial-gradient(560px 400px at 78% 52%, rgba(150, 178, 224, 0.5), transparent 72%),
+    radial-gradient(620px 440px at 100% 100%, rgba(190, 193, 210, 1), transparent 72%),
+    linear-gradient(150deg, #3067ad 0%, #6f98cf 22%, #a9bde0 50%, #bec1d2 100%);
+}
+.app-content-bg h1 {
+  color: #ffffff;
+  text-shadow: 0 1px 14px rgba(10, 40, 90, 0.35);
+}
+.app-content-bg h1 + p {
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 10px rgba(10, 40, 90, 0.3);
+}
+.app-content-bg h1 + p a { color: #ffffff; text-decoration: underline; }
+.app-content-bg a:has(.lucide-arrow-left) {
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 10px rgba(10, 40, 90, 0.3);
+}
+:is(.dark, [data-theme="dark"]) .app-content-bg {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Títulos de seção em caixa-alta que ficam direto sobre o fundo (ex.: "EXECUÇÃO E DETALHES"): azul-marinho legível no degradê */
+.app-content-bg h2.uppercase { color: #0f2747; }
+:is(.dark, [data-theme="dark"]) .app-content-bg h2.uppercase { color: #94a3b8; }
