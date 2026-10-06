@@ -41,15 +41,15 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
   }
 
   const select =
-    "field-on-glass h-9 rounded-lg border-0 pl-2.5 pr-7 text-[13px] font-medium outline-none pointer-coarse:h-11";
+    "field-on-glass h-9 rounded-lg border-0 pl-2 pr-6 text-[13px] font-medium outline-none pointer-coarse:h-11";
   const label = "inline-flex items-center gap-1.5 text-[13px] text-white";
   const seg = (on: boolean) =>
-    `inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition pointer-coarse:h-10 ${on ? "bg-selected text-white" : "text-white hover:bg-white/15"}`;
+    `inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition pointer-coarse:h-10 ${on ? "bg-selected text-white" : "text-white hover:bg-white/15"}`;
   const dirText = DIR_TEXT[ordem][dir === (ordem === "criacao" || ordem === "urgencia" ? "desc" : "asc") ? 0 : 1];
 
   return (
     <div
-      className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-xl px-3 py-2.5"
+      className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-2.5 rounded-xl px-3 py-2.5"
       style={{ background: "rgba(10, 56, 120, 0.62)", WebkitBackdropFilter: "blur(14px)", backdropFilter: "blur(14px)" }}
     >
       <form
@@ -58,14 +58,14 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
           e.preventDefault();
           go({ q: query.trim() });
         }}
-        className="relative min-w-[11rem] flex-1 sm:max-w-xs"
+        className="relative min-w-[11rem] flex-1 md:w-36 md:flex-none"
       >
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-white/80" aria-hidden />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar número ou placa"
+          placeholder="Número ou placa"
           aria-label="Buscar por número do sinistro ou placa"
           className="field-on-glass h-9 w-full rounded-lg border-0 pl-8 pr-2.5 text-[13px] outline-none pointer-coarse:h-11"
         />
@@ -80,7 +80,7 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
         <SlidersHorizontal className="size-4" aria-hidden /> Exibição
       </button>
 
-      <div className={`${moreOpen ? "flex" : "hidden"} w-full flex-wrap items-center gap-x-4 gap-y-2.5 md:contents`}>
+      <div className={`${moreOpen ? "flex" : "hidden"} w-full flex-wrap items-center gap-x-2.5 gap-y-2.5 md:contents`}>
       <div className="inline-flex rounded-lg bg-white/15 p-0.5" role="group" aria-label="Forma de exibição">
         <button type="button" onClick={() => go({ visao: "" })} aria-pressed={visao === "cartoes"} className={seg(visao === "cartoes")}>
           <LayoutGrid className="size-4" /> Cartões
