@@ -197,6 +197,11 @@ function toPayload(nodes: FlowNode[], edges: FlowEdge[]): SavePayload {
   };
 }
 
+const PANEL_DEFAULT = 288;
+const PANEL_MIN = 240;
+const PANEL_MAX = 720;
+const PANEL_STORAGE_KEY = "fluxor.builder.panelWidth";
+
 // Cores dos ramos de uma saída com mais de uma opção (decisão, paralelo, etapa que segue por campo)
 const BRANCH_COLORS = ["#2563eb", "#db2777", "#16a34a", "#d97706", "#7c3aed", "#0891b2", "#dc2626", "#65a30d"];
 
@@ -217,6 +222,32 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(toFlowNodes(initialNodes));
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(toFlowEdges(initialEdges));
   const [fields, setFields] = useState<WorkflowField[]>(initialFields);
+  // Largura do painel da direita: o usuário arrasta a borda para alargar ou estreitar, e o navegador lembra
+  const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(PANEL_STORAGE_KEY));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage só existe no cliente; sincroniza uma vez após montar
+      if (saved >= PANEL_MIN && saved <= PANEL_MAX) setPanelWidth(saved);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_STORAGE_KEY, String(panelWidth));
+    } catch {}
+  }, [panelWidth]);
+  const startPanelResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    const move = (ev: PointerEvent) => setPanelWidth(Math.min(PANEL_MAX, Math.max(PANEL_MIN, startWidth + (startX - ev.clientX))));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const handleCreateField = useCallback(
     async (formData: FormData) => {
       const res = await createWorkflowField(workflow.id, formData);
@@ -949,8 +980,21 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
             )}
           </div>
 
-          <aside className="flex w-[288px] shrink-0 flex-col border-l border-slate-200 bg-white" aria-label="Propriedades e validação">
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <aside
+            className="relative flex shrink-0 flex-col border-l border-slate-200 bg-white"
+            style={{ width: panelWidth }}
+            aria-label="Propriedades e validação"
+          >
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Arrastar para alargar ou estreitar o painel (duplo clique volta ao tamanho padrão)"
+              title="Arraste para alargar ou estreitar. Duplo clique volta ao padrão."
+              onPointerDown={startPanelResize}
+              onDoubleClick={() => setPanelWidth(PANEL_DEFAULT)}
+              className="absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:rounded-full after:bg-transparent after:transition hover:after:bg-brand/50"
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
               {selectedNode ? (
                 <NodeInspector
                   key={selectedNode.id}
