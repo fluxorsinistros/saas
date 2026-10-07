@@ -114,7 +114,7 @@ export default async function TarefasPage() {
             : `Atividades em aberto no grupo em que você atua${activeGroup ? ` (${activeGroup.name})` : ""}. Abra o sinistro para conferir os dados e concluir a etapa.`}
         </p>
         {(docsToSend.length > 0 || docsToReview.length > 0) && (
-          <section className="mt-6 space-y-4" aria-label="Documentos solicitados">
+          <section className="mt-6 space-y-6" aria-label="Documentos solicitados">
             {[
               { title: "Documentos para enviar", list: docsToSend, action: "Enviar" },
               { title: "Documentos para dar o OK", list: docsToReview, action: "Conferir" },
@@ -155,13 +155,15 @@ export default async function TarefasPage() {
               ))}
           </section>
         )}
-        {rows.length === 0 ? (
+        {rows.length === 0 && docsToSend.length === 0 && docsToReview.length === 0 ? (
           <div className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <CheckCircle2 className="mx-auto size-8 text-slate-300" />
             <p className="mt-3 text-[15px] font-medium text-slate-800">Nenhuma tarefa em aberto</p>
           </div>
-        ) : (
-          <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        ) : rows.length === 0 ? null : (
+          <section className="mt-6" aria-label="Etapas para executar">
+          <h2 className="mb-2 text-[13px] font-semibold text-slate-900">Etapas para executar ({rows.length})</h2>
+          <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {rows.map(({ activity, claim, node, enteredAt, slaMinutes }) => (
               <li key={activity.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
                 <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -194,6 +196,7 @@ export default async function TarefasPage() {
               </li>
             ))}
           </ul>
+          </section>
         )}
       </div>
     </div>
