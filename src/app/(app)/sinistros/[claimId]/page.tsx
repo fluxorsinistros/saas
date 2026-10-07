@@ -6,6 +6,7 @@ import { loadCalendarBundles, flowDeadlineIso } from "@/lib/sla-load";
 import { accumulatedMinutes, longestPath } from "@/lib/workflow/path";
 import { GroupChip } from "@/lib/group-icons";
 import { ActivityForm } from "@/components/execution/ActivityForm";
+import { AbortBranchForm } from "@/components/execution/AbortBranchForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { UNDO_WINDOW_MINUTES } from "@/lib/undo";
 import { getMemberGroups } from "@/lib/active-group";
@@ -30,6 +31,7 @@ import {
   cancelPendingItem,
   chooseDecision,
   completeActivityWithState,
+  abortBranchWithState,
   undoActivityCompletion,
   createPendingItem,
   decideDuplicate,
@@ -225,7 +227,7 @@ export default async function ClaimPage({
     supabase.from("workflow_nodes").select("id, position").eq("workflow_version_id", cycle.workflow_version_id),
     supabase
       .from("stage_instances")
-      .select("id, node_id, pass_number, status, entered_at, exited_at")
+      .select("id, node_id, pass_number, status, entered_at, exited_at, branch_instance_id")
       .eq("claim_cycle_id", cycle.id)
       .order("entered_at", { ascending: false }),
     supabase.from("decisions").select("id, stage_instance_id, question, options, selected_option, decided_at, subgroup_id").eq("claim_cycle_id", cycle.id),
@@ -472,6 +474,32 @@ export default async function ClaimPage({
   const fmtLimit = (m: number) => (flowJourney ? `${+(m / flowJourney).toFixed(1)} dias úteis` : formatDuration(m));
   const flowTookMinutes =
     cycleDone && cycle.completed_at ? Math.max(0, Math.round((new Date(cycle.completed_at).getTime() - new Date(flowStartedAt).getTime()) / 60000)) : null;
+  // Vias (caminhos simultâneos): cada uma com o estado, as etapas em andamento e, se foi abortada, o motivo
+  const { data: branchRows } = await supabase.from("branches").select("id").eq("claim_cycle_id", cycle.id);
+  const branchIdList = (branchRows ?? []).map((b) => b.id);
+  const { data: viaRows } = branchIdList.length
+    ? await supabase.from("branch_instances").select("id, status, edge_id, target_node_id, waived_reason, waived_at").in("branch_id", branchIdList).order("created_at")
+    : { data: [] as { id: string; status: string; edge_id: string | null; target_node_id: string | null; waived_reason: string | null; waived_at: string | null }[] };
+  const vias = (viaRows ?? []).map((v) => {
+    const name = graph.edges.find((e) => e.id === v.edge_id)?.label || (v.target_node_id ? nodeById.get(v.target_node_id)?.name : undefined) || "Via";
+    const viaStages = (stages ?? []).filter((st) => st.branch_instance_id === v.id);
+    const open = viaStages.filter((st) => st.status === "in_progress" || st.status === "paused");
+    const lastDone = viaStages
+      .filter((st) => st.status === "completed" && nodeById.get(st.node_id)?.type !== "end")
+      .sort((a, b) => new Date(b.exited_at ?? 0).getTime() - new Date(a.exited_at ?? 0).getTime())[0];
+    const canAbort =
+      v.status === "active" &&
+      perms.has("claim.execute") &&
+      (isAdmin ||
+        open.some((st) => {
+          const a = activityByStage.get(st.id);
+          if (a) return canActOnGroup(a.group_id, a.subgroup_id);
+          const d = decisionByStage.get(st.id);
+          return d ? canActOnGroup(nodeById.get(st.node_id)?.groupId ?? null, d.subgroup_id) : false;
+        }));
+    return { ...v, name, open, lastDoneName: lastDone ? nodeById.get(lastDone.node_id)?.name : undefined, canAbort };
+  });
+  const viaNameById = new Map(vias.map((v) => [v.id, v.name]));
   const currentStages = (stages ?? [])
     .filter((st) => st.status === "in_progress")
     .map((st) => ({ id: st.id, node: nodeById.get(st.node_id), enteredAt: st.entered_at }))
@@ -868,6 +896,64 @@ export default async function ClaimPage({
           </div>
         </section>
 
+        {vias.length > 0 && (
+          <section aria-label="Vias do sinistro" className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Vias do sinistro</h2>
+              <span className="text-[12px] text-slate-500">
+                {vias.filter((v) => v.status === "active").length} em andamento · {vias.filter((v) => v.status === "completed").length} concluída(s) ·{" "}
+                {vias.filter((v) => v.status === "waived" || v.status === "cancelled").length} abortada(s)
+              </span>
+            </div>
+            <ul className="grid gap-3 md:grid-cols-2">
+              {vias.map((v) => {
+                const aborted = v.status === "waived" || v.status === "cancelled";
+                return (
+                  <li key={v.id} className="rounded-lg border border-slate-200 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-[14px] font-semibold text-slate-900">{v.name}</h3>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                          v.status === "active"
+                            ? "bg-sky-50 text-sky-800 ring-sky-200"
+                            : v.status === "completed"
+                              ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                              : "bg-amber-50 text-amber-800 ring-amber-200"
+                        }`}
+                      >
+                        {v.status === "active" ? "Em andamento" : v.status === "completed" ? "Concluída" : "Abortada"}
+                      </span>
+                    </div>
+                    {v.status === "active" && (
+                      <div className="mt-2 space-y-1 text-[12px] text-slate-600">
+                        {v.open.length === 0 ? (
+                          <p>Sem etapa em andamento agora.</p>
+                        ) : (
+                          v.open.map((st) => (
+                            <p key={st.id}>
+                              Etapa atual: <span className="font-medium text-slate-900">{nodeById.get(st.node_id)?.name}</span>
+                              {slaByStage.get(st.id)?.target_at ? ` · prazo ${new Date(slaByStage.get(st.id)!.target_at).toLocaleDateString("pt-BR")}` : ""}
+                            </p>
+                          ))
+                        )}
+                        {v.lastDoneName && <p>Última concluída: {v.lastDoneName}</p>}
+                      </div>
+                    )}
+                    {v.status === "completed" && <p className="mt-2 text-[12px] text-slate-600">{v.lastDoneName ? `Terminou em: ${v.lastDoneName}` : "Chegou ao fim."}</p>}
+                    {aborted && (
+                      <p className="mt-2 text-[12px] text-slate-600">
+                        {v.waived_at ? `Abortada em ${new Date(v.waived_at).toLocaleDateString("pt-BR")}. ` : ""}
+                        {v.waived_reason ? `Motivo: ${v.waived_reason}` : ""}
+                      </p>
+                    )}
+                    {v.canAbort && cycle.status !== "completed" && <AbortBranchForm action={abortBranchWithState.bind(null, v.id)} viaName={v.name} />}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         <section className="mt-6">
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Execução e Detalhes</h2>
           <ExecutionViewToggle
@@ -1183,6 +1269,11 @@ export default async function ClaimPage({
                         {stage.pass_number > 1 && ` · ${stage.pass_number}ª passagem`}
                       </span>
                       <h3 className="text-[14px] font-medium text-slate-900">{node?.name ?? "-"}</h3>
+                      {stage.branch_instance_id && viaNameById.get(stage.branch_instance_id) && (
+                        <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+                          Via: {viaNameById.get(stage.branch_instance_id)}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5">
                       {liveSla && liveSla.status !== "completed" && (

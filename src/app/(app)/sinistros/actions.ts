@@ -1428,3 +1428,98 @@ export async function undoActivityCompletion(activityInstanceId: string, formDat
   revalidatePath("/sinistros");
   revalidatePath("/tarefas");
 }
+
+// Versão para o formulário da via: devolve a mensagem de erro em vez de lançar (em produção o erro lançado vira uma mensagem genérica).
+export async function abortBranchWithState(branchInstanceId: string, _prev: { error: string | null }, formData: FormData): Promise<{ error: string | null }> {
+  try {
+    await abortBranch(branchInstanceId, formData);
+    return { error: null };
+  } catch (e) {
+    const digest = (e as { digest?: string } | null)?.digest;
+    if (typeof digest === "string" && digest.startsWith("NEXT_")) throw e;
+    return { error: e instanceof Error && e.message ? e.message : "Não foi possível abortar a via. Tente de novo." };
+  }
+}
+
+// Aborta uma via (caminho simultâneo) no meio do caminho, com motivo: as etapas dela que estavam em andamento são canceladas
+// (ficam no histórico), a via vira "dispensada com justificativa" e as outras vias seguem. Se não sobrar nada em andamento, o
+// sinistro conclui. Quem pode: Administrador ou quem faz parte do grupo de uma das etapas em andamento da via.
+export async function abortBranch(branchInstanceId: string, formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.execute");
+  const supabase = await createClient();
+
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < 3) throw new Error("Explique o motivo para abortar esta via.");
+
+  const { data: bi } = await supabase.from("branch_instances").select("id, status, branch_id").eq("id", branchInstanceId).single();
+  if (!bi) throw new Error("Via não encontrada.");
+  if (bi.status !== "active") throw new Error("Esta via já terminou ou foi abortada.");
+  const { data: branch } = await supabase.from("branches").select("claim_cycle_id").eq("id", bi.branch_id).single();
+  if (!branch) throw new Error("Via sem sinistro.");
+  const { data: cycle } = await supabase.from("claim_cycles").select("id, claim_id, status, workflow_version_id").eq("id", branch.claim_cycle_id).single();
+  if (!cycle) throw new Error("Ciclo não encontrado.");
+  if (["completed", "blocked", "discarded", "cancelled", "archived"].includes(cycle.status)) {
+    throw new Error(`Este ciclo não permite abortar a via (status atual: ${cycle.status}).`);
+  }
+
+  const { data: open } = await supabase
+    .from("stage_instances")
+    .select("id, node_id")
+    .eq("branch_instance_id", bi.id)
+    .in("status", ["in_progress", "paused"]);
+  const stageIds = (open ?? []).map((s) => s.id);
+
+  if (!(await isTenantAdmin(ctx.userId, ctx.tenantId))) {
+    const [{ data: acts }, { data: decs }] = await Promise.all([
+      stageIds.length ? supabase.from("activity_instances").select("group_id, subgroup_id").in("stage_instance_id", stageIds) : { data: [] as { group_id: string | null; subgroup_id: string | null }[] },
+      stageIds.length ? supabase.from("decisions").select("node_id, subgroup_id").in("stage_instance_id", stageIds).is("selected_option", null) : { data: [] as { node_id: string | null; subgroup_id: string | null }[] },
+    ]);
+    const nodeIds = (decs ?? []).map((d) => d.node_id).filter((id): id is string => !!id);
+    const { data: decNodes } = nodeIds.length ? await supabase.from("workflow_nodes").select("id, group_id").in("id", nodeIds) : { data: [] as { id: string; group_id: string | null }[] };
+    const candidates = [
+      ...(acts ?? []).map((a) => ({ group: a.group_id, sub: a.subgroup_id })),
+      ...(decs ?? []).map((d) => ({ group: decNodes?.find((n) => n.id === d.node_id)?.group_id ?? null, sub: d.subgroup_id })),
+    ];
+    let allowed = false;
+    for (const c of candidates) {
+      try {
+        await requireGroupAccess(ctx, c.group, c.sub);
+        allowed = true;
+        break;
+      } catch {
+        // tenta o próximo grupo desta via
+      }
+    }
+    if (!allowed) throw new Error("Só um Administrador ou quem faz parte de uma etapa em andamento desta via pode abortá-la.");
+  }
+
+  const now = new Date().toISOString();
+  if (stageIds.length) {
+    await supabase.from("activity_instances").update({ status: "cancelled" }).in("stage_instance_id", stageIds).in("status", ["in_progress", "paused", "not_started"]);
+    await supabase.from("decisions").delete().in("stage_instance_id", stageIds).is("selected_option", null);
+    await supabase.from("sla_tracking").delete().in("stage_instance_id", stageIds);
+    await supabase.from("stage_instances").update({ status: "cancelled", exited_at: now }).in("id", stageIds);
+  }
+  await supabase.from("branch_instances").update({ status: "waived", waived_reason: reason, waived_by: ctx.userId, waived_at: now }).eq("id", bi.id);
+
+  const graph = await loadGraph(supabase, cycle.workflow_version_id);
+  await writeAudit(supabase, ctx.tenantId, "branch.aborted", "branch_instance", bi.id, {
+    next: { stages: (open ?? []).map((s) => graph.nodes.find((n) => n.id === s.node_id)?.name ?? s.node_id) },
+    reason,
+  });
+
+  // Nada mais em andamento: o sinistro conclui
+  const { count: stillOpen } = await supabase
+    .from("stage_instances")
+    .select("id", { count: "exact", head: true })
+    .eq("claim_cycle_id", cycle.id)
+    .in("status", ["in_progress", "paused"]);
+  if ((stillOpen ?? 0) === 0) {
+    await supabase.from("claim_cycles").update({ status: "completed", completed_at: now }).eq("id", cycle.id);
+  }
+
+  revalidatePath("/sinistros");
+  revalidatePath(`/sinistros/${cycle.claim_id}`);
+  revalidatePath("/tarefas");
+}
