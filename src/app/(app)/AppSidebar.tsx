@@ -31,6 +31,8 @@ type Props = {
   /** Grupos do Operador (só quando há mais de um a escolher) e o que está ativo agora. */
   groups?: { id: string; name: string; icon?: string | null; color?: string | null }[];
   activeGroupId?: string | null;
+  /** Pendências em Tarefas (etapas e documentos) no momento em que a tela foi montada; o menu atualiza sozinho depois. */
+  taskCount?: number;
 };
 
 // O menu recolhe e expande pelo botão do topo e a escolha fica guardada no navegador. Sem escolha, dentro
@@ -86,6 +88,7 @@ export function AppSidebar({
   currentTheme = "light",
   groups = [],
   activeGroupId = null,
+  taskCount = 0,
 }: Props) {
   const { collapsed: desktopCollapsed, toggle } = useCollapsed();
   // Abaixo de md o menu é uma gaveta: fechada some, aberta sempre expandida (a preferência de recolher é só do desktop).
@@ -277,7 +280,7 @@ export function AppSidebar({
       )}
 
       <nav className={`sidebar-scrollbar mt-4 flex-1 overflow-y-auto overflow-x-hidden ${collapsed ? "px-2" : "px-3"}`} aria-label="Principal">
-        <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} isAdmin={isAdmin} platformOnly={platformMode} hiddenScreens={hiddenScreens} />
+        <NavLinks collapsed={collapsed} isPlatformAdmin={isPlatformAdmin} isAdmin={isAdmin} platformOnly={platformMode} hiddenScreens={hiddenScreens} taskCount={taskCount} />
       </nav>
 
       <div data-sidebar-footer className={`shrink-0 border-t border-navy-700 bg-navy py-3 space-y-1 ${collapsed ? "px-2" : "px-3"}`}>

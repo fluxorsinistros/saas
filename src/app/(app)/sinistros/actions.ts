@@ -770,6 +770,19 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   redirect(`/sinistros/${claimId}`);
 }
 
+// Versão para o formulário da etapa: devolve a mensagem de erro em vez de lançar, que em produção vira um erro genérico
+// ("Minified React error") e derruba a tela. As mensagens lançadas por completeActivity são todas escritas para o usuário.
+export async function completeActivityWithState(activityInstanceId: string, _prev: { error: string | null }, formData: FormData): Promise<{ error: string | null }> {
+  try {
+    await completeActivity(activityInstanceId, formData);
+    return { error: null };
+  } catch (e) {
+    const digest = (e as { digest?: string } | null)?.digest;
+    if (typeof digest === "string" && digest.startsWith("NEXT_")) throw e; // redirecionamentos e "não encontrado" seguem o caminho normal
+    return { error: e instanceof Error && e.message ? e.message : "Não foi possível concluir a etapa. Tente de novo." };
+  }
+}
+
 export async function completeActivity(activityInstanceId: string, formData?: FormData): Promise<void> {
   const ctx = await getTenantContext();
   await requirePermission(ctx, "claim.execute");

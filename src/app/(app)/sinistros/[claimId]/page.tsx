@@ -1,5 +1,6 @@
 import { signedAvatarUrls } from "@/lib/avatars";
 import { GroupChip } from "@/lib/group-icons";
+import { ActivityForm } from "@/components/execution/ActivityForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { UNDO_WINDOW_MINUTES } from "@/lib/undo";
 import { getMemberGroups } from "@/lib/active-group";
@@ -23,7 +24,7 @@ import { ExecutionGraph } from "@/components/execution/ExecutionGraphLazy";
 import {
   cancelPendingItem,
   chooseDecision,
-  completeActivity,
+  completeActivityWithState,
   undoActivityCompletion,
   createPendingItem,
   decideDuplicate,
@@ -1256,7 +1257,7 @@ export default async function ClaimPage({
                       cycle.status !== "discarded" &&
                       perms.has("claim.execute") &&
                       canActOnGroup(activity.group_id) ? (
-                        <form action={completeActivity.bind(null, activity.id)} className="w-full space-y-2.5">
+                        <ActivityForm action={completeActivityWithState.bind(null, activity.id)} className="w-full space-y-2.5">
                           {consultFields.length > 0 && (
                             <dl className="grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-[12px] sm:grid-cols-2 lg:grid-cols-3" aria-label="Campos só para consulta">
                               {consultFields.map((f) => {
@@ -1403,7 +1404,7 @@ export default async function ClaimPage({
                               Concluir
                             </ConfirmSubmit>
                           </div>
-                        </form>
+                        </ActivityForm>
                       ) : activity.status === "in_progress" && cycle.status === "discarded" ? (
                         <span className="ml-auto text-[12px] text-slate-500">Ciclo descartado</span>
                       ) : activity.status === "in_progress" ? (

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getHiddenScreensForMember } from "@/lib/screens";
 import { getMemberGroups } from "@/lib/active-group";
 import { signedAvatarUrls } from "@/lib/avatars";
+import { loadTaskCount } from "@/lib/task-count";
 import { AppSidebar } from "./AppSidebar";
 import { AppBackdrop } from "@/components/AppBackdrop";
 
@@ -54,6 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const supabaseMe = await createClient();
   const { data: me } = await supabaseMe.from("user_profiles").select("full_name, avatar_path").eq("id", ctx.userId).maybeSingle();
   const myUrls = await signedAvatarUrls([me?.avatar_path]);
+  const taskCount = await loadTaskCount(supabaseMe, ctx.tenantId, ctx.userId, tenantAdmin, memberGroups.active?.id ?? null).catch(() => 0);
   // Cor da marca própria por tema: sem cor escolhida para o tema atual, vale o azul padrão do produto.
   const themeColor = ctx.theme === "dark" ? own?.colorDark : own?.color;
   const themeVars = themeColor
@@ -78,6 +80,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         currentTheme={ctx.theme}
         groups={tenantAdmin ? [] : memberGroups.groups.map((g) => ({ id: g.id, name: g.name, icon: g.icon, color: g.color }))}
         activeGroupId={memberGroups.active?.id ?? null}
+        taskCount={taskCount}
       />
       <main className="app-content-bg min-w-0 flex-1 h-full overflow-hidden pt-12 md:pt-0">{children}</main>
     </div>
