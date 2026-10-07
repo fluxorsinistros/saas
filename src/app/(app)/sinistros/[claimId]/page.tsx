@@ -1,4 +1,5 @@
 import { signedAvatarUrls } from "@/lib/avatars";
+import { loadCalendarBundles, flowDeadlineIso } from "@/lib/sla-load";
 import { GroupChip } from "@/lib/group-icons";
 import { ActivityForm } from "@/components/execution/ActivityForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -429,7 +430,13 @@ export default async function ClaimPage({
   const progress = computeProcessProgress(cycleDone, cycle.workflow_version_id, doneNodeIds, stepsForProgress);
   const flowLimitMinutes = stepNodes.reduce((sum, n) => sum + (slaOf(n) ?? 0), 0) || undefined;
   const flowStartedAt = cycle.formalized_at || claim.created_at;
-  const runningFlowSla = !cycleDone ? computeSla(flowStartedAt, flowLimitMinutes) : null;
+  // Prazo total em dias úteis: contado no calendário das etapas, não em horas seguidas desde a abertura.
+  const calBundles = await loadCalendarBundles(supabase, graph.nodes.map((n) => n.config.sla_calendar_id ?? ""));
+  const bundleOf = (n?: { config: { sla_calendar_id?: string | null } }) => (n?.config.sla_calendar_id ? calBundles.get(n.config.sla_calendar_id) : undefined);
+  const flowBdNode = stepNodes.find((n) => n.config.sla_unit === "bd" && n.config.sla_calendar_id);
+  const flowBundle = bundleOf(flowBdNode);
+  const flowTargetAt = flowBundle && flowLimitMinutes ? flowDeadlineIso(flowStartedAt, flowLimitMinutes, flowBundle) : undefined;
+  const runningFlowSla = !cycleDone ? computeSla(flowStartedAt, flowLimitMinutes, flowTargetAt, flowBundle) : null;
   const flowTookMinutes =
     cycleDone && cycle.completed_at ? Math.max(0, Math.round((new Date(cycle.completed_at).getTime() - new Date(flowStartedAt).getTime()) / 60000)) : null;
   const currentStages = (stages ?? [])
@@ -754,7 +761,7 @@ export default async function ClaimPage({
                     <span className="text-xs text-slate-500">
                       (há {formatDuration(minutesSince(cs.enteredAt))})
                     </span>
-                    <StageSlaBadge enteredAt={cs.enteredAt} slaMinutes={cs.node ? slaOf(cs.node) : undefined} />
+                    <StageSlaBadge enteredAt={cs.enteredAt} slaMinutes={cs.node ? slaOf(cs.node) : undefined} targetAt={slaByStage.get(cs.id)?.target_at} bundle={bundleOf(cs.node)} />
                   </span>
                 ))
               ) : (
@@ -794,7 +801,7 @@ export default async function ClaimPage({
                         : "border-sky-200 bg-sky-50 text-sky-700"
                   }`}
                 >
-                  {runningFlowSla.pct}% consumido • {runningFlowSla.formattedRemaining} (limite: {runningFlowSla.formattedLimit})
+                  {runningFlowSla.pct}% consumido • {runningFlowSla.isBreached ? "estourado há" : "restam"} {runningFlowSla.daysText} · prazo {runningFlowSla.targetLabel} (limite: {runningFlowSla.formattedLimit})
                 </span>
               </div>
             ) : (
@@ -1148,7 +1155,7 @@ export default async function ClaimPage({
                         {isPaused ? (
                           "Prazo pausado"
                         ) : node && slaOf(node) ? (
-                          <StageSlaBadge enteredAt={stage.entered_at} slaMinutes={slaOf(node)} />
+                          <StageSlaBadge enteredAt={stage.entered_at} slaMinutes={slaOf(node)} targetAt={tracking.target_at} bundle={bundleOf(node)} />
                         ) : (
                           formatMinutesRemaining(tracking.target_at)
                         )}

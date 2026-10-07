@@ -1,3 +1,4 @@
+import { describeSlaTarget, type CalendarBundle } from "@/lib/sla";
 // Um único formato de duração em todo o produto ("5h 8min", "2d 3h"), antes a Torre mostrava
 // "310min" enquanto a lista de sinistros mostrava "5h 8min" para o mesmo atraso.
 export function formatDuration(minutes: number): string {
@@ -13,16 +14,20 @@ export function formatDuration(minutes: number): string {
 
 // Prazo (SLA) de uma etapa em andamento: quanto do prazo já foi consumido e quanto resta. Uma só conta para a lista de
 // Sinistros e para Tarefas, para os dois nunca divergirem.
-export function computeSla(startedAtIso: string | null | undefined, slaMinutes: number | undefined) {
-  if (!startedAtIso || !slaMinutes || slaMinutes <= 0) return null;
+export function computeSla(startedAtIso: string | null | undefined, slaMinutes: number | undefined, targetAtIso?: string | null, bundle?: CalendarBundle) {
+  if (!startedAtIso) return null;
   const now = Date.now();
   const start = new Date(startedAtIso).getTime();
-  const slaMs = slaMinutes * 60_000;
+  // Com o prazo final já calculado no calendário (dias úteis, feriados), vale ele. Sem ele, o prazo corre em horas seguidas.
+  const target = targetAtIso ? new Date(targetAtIso).getTime() : slaMinutes && slaMinutes > 0 ? start + slaMinutes * 60_000 : NaN;
+  if (!Number.isFinite(target) || target <= start) return null;
+  const slaMs = target - start;
   const elapsedMs = Math.max(0, now - start);
-  const remainingMs = slaMs - elapsedMs;
+  const remainingMs = target - now;
   const pct = Math.round((elapsedMs / slaMs) * 100);
   const isBreached = remainingMs <= 0;
   const diffMinutes = Math.round(Math.abs(remainingMs) / 60_000);
+  const when = describeSlaTarget(new Date(target).toISOString(), now, bundle);
   const formattedRemaining = isBreached ? `estourado há ${formatDuration(diffMinutes)}` : `restam ${formatDuration(diffMinutes)}`;
 
   return {
@@ -30,7 +35,9 @@ export function computeSla(startedAtIso: string | null | undefined, slaMinutes: 
     isBreached,
     isAtRisk: !isBreached && pct >= 75,
     formattedRemaining,
-    formattedLimit: formatDuration(slaMinutes),
+    daysText: when.daysText, // "2,1 dias úteis e 3 dias corridos" (sem calendário, só os corridos)
+    targetLabel: when.targetLabel, // data prevista final, "15/10/2026 às 16:00"
+    formattedLimit: formatDuration(slaMinutes && slaMinutes > 0 ? slaMinutes : Math.round(slaMs / 60_000)),
   };
 }
 

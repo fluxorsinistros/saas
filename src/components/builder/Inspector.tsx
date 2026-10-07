@@ -9,12 +9,14 @@ import {
   NODE_META,
   type FieldType,
   type JoinRule,
+  type CalendarOption,
   type NodeConfig,
   type NodeType,
   type WorkflowField,
 } from "@/lib/workflow/types";
 import type { ActionResult, FieldResult } from "@/app/(app)/fluxos/actions";
 import type { FlowEdge, FlowEdgeData, FlowNode, FlowNodeData } from "./context";
+import { businessDaysToMinutes } from "@/lib/sla";
 
 type Group = { id: string; name: string };
 
@@ -31,6 +33,7 @@ export function NodeInspector({
   node,
   groups,
   calendars = [],
+  defaultCalendarId = null,
   fields = [],
   onCreateField,
   onUpdateField,
@@ -47,7 +50,8 @@ export function NodeInspector({
 }: {
   node: FlowNode;
   groups: Group[];
-  calendars?: { id: string; name: string }[];
+  calendars?: CalendarOption[];
+  defaultCalendarId?: string | null;
   fields?: WorkflowField[];
   onCreateField?: (formData: FormData) => Promise<FieldResult>;
   onUpdateField?: (fieldId: string, formData: FormData) => Promise<FieldResult>;
@@ -112,22 +116,32 @@ export function NodeInspector({
       )}
 
       {SLA_TYPES.includes(type) && (
-        <SlaField minutes={data.config.sla_minutes} readOnly={readOnly} onChange={(m) => setConfig({ sla_minutes: m })} />
+        <SlaField config={data.config} calendars={calendars} defaultCalendarId={defaultCalendarId} readOnly={readOnly} onChange={setConfig} />
       )}
 
       {SLA_TYPES.includes(type) && data.config.sla_minutes && calendars.length > 0 && (
         <div>
           <label className={label} htmlFor="node-sla-calendar">
-            Calendário do SLA <span className="font-normal text-slate-500">(opcional, sem isso conta corrido, 24/7)</span>
+            Calendário do SLA{" "}
+            <span className="font-normal text-slate-500">
+              {data.config.sla_unit === "bd" ? "(obrigatório em dias úteis)" : "(opcional, sem isso conta corrido, 24/7)"}
+            </span>
           </label>
           <select
             id="node-sla-calendar"
             className={input}
             value={data.config.sla_calendar_id ?? ""}
             disabled={readOnly}
-            onChange={(e) => setConfig({ sla_calendar_id: e.target.value || undefined })}
+            onChange={(e) => {
+              const id = e.target.value || undefined;
+              const cal = calendars.find((x) => x.id === id);
+              if (data.config.sla_unit === "bd") {
+                if (!cal) return;
+                setConfig({ sla_calendar_id: id, sla_minutes: data.config.sla_bd_days ? businessDaysToMinutes(data.config.sla_bd_days, cal) : undefined });
+              } else setConfig({ sla_calendar_id: id });
+            }}
           >
-            <option value="">Corrido (24/7)</option>
+            {data.config.sla_unit !== "bd" && <option value="">Corrido (24/7)</option>}
             {calendars.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -831,17 +845,35 @@ function EditFieldForm({
 }
 
 function SlaField({
-  minutes,
+  config,
+  calendars,
+  defaultCalendarId,
   readOnly,
   onChange,
 }: {
-  minutes?: number;
+  config: NodeConfig;
+  calendars: CalendarOption[];
+  defaultCalendarId: string | null;
   readOnly: boolean;
-  onChange: (m: number | undefined) => void;
+  onChange: (patch: Partial<NodeConfig>) => void;
 }) {
-  const [unit, setUnit] = useState<"h" | "d">(minutes && minutes % 1440 !== 0 ? "h" : "d");
+  const minutes = config.sla_minutes;
+  type Unit = "h" | "d" | "bd";
+  const [unit, setUnit] = useState<Unit>(config.sla_unit ?? (minutes && minutes % 1440 !== 0 ? "h" : "d"));
   const factor = unit === "d" ? 1440 : 60;
-  const value = minutes ? String(+(minutes / factor).toFixed(2)) : "";
+  const value = unit === "bd" ? (config.sla_bd_days ? String(config.sla_bd_days) : "") : minutes ? String(+(minutes / factor).toFixed(2)) : "";
+  // calendário que vale para os dias úteis: o escolhido na etapa, senão o padrão da empresa, senão o primeiro cadastrado
+  const calendar = calendars.find((c) => c.id === config.sla_calendar_id) ?? calendars.find((c) => c.id === defaultCalendarId) ?? calendars[0];
+
+  function setBusinessDays(days: number | undefined) {
+    if (!calendar) return;
+    onChange({
+      sla_unit: "bd",
+      sla_bd_days: days,
+      sla_minutes: days ? businessDaysToMinutes(days, calendar) : undefined,
+      sla_calendar_id: calendar.id,
+    });
+  }
 
   return (
     <div>
@@ -860,24 +892,41 @@ function SlaField({
           placeholder="Sem prazo"
           onChange={(e) => {
             const n = Number(e.target.value);
-            onChange(e.target.value && n > 0 ? Math.round(n * factor) : undefined);
+            if (unit === "bd") return setBusinessDays(e.target.value && n > 0 ? n : undefined);
+            onChange({ sla_unit: unit, sla_bd_days: undefined, sla_minutes: e.target.value && n > 0 ? Math.round(n * factor) : undefined });
           }}
         />
         <select
           aria-label="Unidade do SLA"
-          className={`${input} w-28`}
+          className={`${input} w-32`}
           value={unit}
           disabled={readOnly}
           onChange={(e) => {
-            const next = e.target.value as "h" | "d";
+            const next = e.target.value as Unit;
+            const current = unit === "bd" ? config.sla_bd_days : minutes ? minutes / factor : undefined;
             setUnit(next);
-            if (minutes) onChange(Math.round((minutes / factor) * (next === "d" ? 1440 : 60)));
+            if (next === "bd") {
+              if (current) setBusinessDays(current);
+              else if (calendar) onChange({ sla_unit: "bd", sla_calendar_id: calendar.id });
+            } else {
+              onChange({ sla_unit: next, sla_bd_days: undefined, sla_minutes: current ? Math.round(current * (next === "d" ? 1440 : 60)) : undefined });
+            }
           }}
         >
-          <option value="d">dias</option>
+          <option value="bd" disabled={calendars.length === 0}>
+            dias úteis
+          </option>
+          <option value="d">dias de 24h</option>
           <option value="h">horas</option>
         </select>
       </div>
+      {unit === "bd" && calendar && (
+        <p className="mt-1 text-xs text-slate-500">
+          1 dia útil = uma jornada do calendário {calendar.name}
+          {calendar.business_start && calendar.business_end ? ` (${calendar.business_start.slice(0, 5)} às ${calendar.business_end.slice(0, 5)})` : ""}. Fins de semana e feriados não contam.
+        </p>
+      )}
+      {calendars.length === 0 && <p className="mt-1 text-xs text-slate-500">Para usar dias úteis, cadastre um calendário em Calendários.</p>}
     </div>
   );
 }

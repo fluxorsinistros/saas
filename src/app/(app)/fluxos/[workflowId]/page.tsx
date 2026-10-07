@@ -44,7 +44,7 @@ export default async function WorkflowPage({
       .eq("workflow_version_id", version.id)
       .order("order_index"),
     supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
-    supabase.from("sla_calendars").select("id, name").eq("tenant_id", ctx.tenantId).order("name"),
+    supabase.from("sla_calendars").select("id, name, business_start, business_end").eq("tenant_id", ctx.tenantId).order("name"),
     supabase
       .from("workflow_fields")
       .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position")
@@ -54,6 +54,8 @@ export default async function WorkflowPage({
   ]);
 
   const perms = await getPermissionCodes(ctx.userId, ctx.tenantId);
+  const { data: tenantRow } = await supabase.from("tenants").select("settings").eq("id", ctx.tenantId).maybeSingle();
+  const defaultCalendarId = ((tenantRow?.settings as { sla?: { default_calendar_id?: string | null } } | null)?.sla?.default_calendar_id ?? null) as string | null;
 
   return (
     <WorkflowBuilder
@@ -65,6 +67,7 @@ export default async function WorkflowPage({
       initialEdges={edges ?? []}
       groups={groups ?? []}
       calendars={calendars ?? []}
+      defaultCalendarId={defaultCalendarId}
       initialFields={(fields ?? []).map((f) => ({
         ...f,
         field_type: f.field_type as WorkflowField["field_type"],

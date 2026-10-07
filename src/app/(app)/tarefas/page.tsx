@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2, FileText } from "lucide-react";
 import { isPastIso } from "@/lib/format";
+import { loadCalendarBundles } from "@/lib/sla-load";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
@@ -55,6 +56,16 @@ export default async function TarefasPage() {
     : { data: [] as { id: string; name: string; node_type: string; config: unknown }[] };
   const nodeById = new Map((nodes ?? []).map((n) => [n.id, n]));
 
+  // Prazo real de cada etapa (calendário, dias úteis e feriados já considerados), gravado quando a etapa começa.
+  const { data: trackRows } = stageIds.length
+    ? await supabase.from("sla_tracking").select("stage_instance_id, target_at").in("stage_instance_id", stageIds).neq("status", "completed")
+    : { data: [] as { stage_instance_id: string; target_at: string }[] };
+  const targetByStage = new Map((trackRows ?? []).map((t) => [t.stage_instance_id, t.target_at]));
+  const calBundles = await loadCalendarBundles(
+    supabase,
+    (nodes ?? []).map((n) => ((n.config ?? {}) as { sla_calendar_id?: string }).sla_calendar_id ?? ""),
+  );
+
   const { data: groups } = await supabase.from("groups").select("id, name, icon, color").eq("tenant_id", ctx.tenantId);
   const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
 
@@ -93,12 +104,14 @@ export default async function TarefasPage() {
       const claim = cycle ? claimById.get(cycle.claim_id) : undefined;
       const node = stage ? nodeById.get(stage.node_id) : undefined;
       if (!stage || !cycle || !claim || !node || cycle.status === "blocked" || cycle.status === "completed") return null;
-      const cfg = (node.config ?? {}) as { sla_minutes?: number };
+      const cfg = (node.config ?? {}) as { sla_minutes?: number; sla_calendar_id?: string };
       return {
         activity: a,
         claim,
         node,
         enteredAt: stage.entered_at,
+        targetAt: targetByStage.get(a.stage_instance_id) ?? null,
+        bundle: cfg.sla_calendar_id ? calBundles.get(cfg.sla_calendar_id) : undefined,
         slaMinutes: typeof cfg.sla_minutes === "number" && cfg.sla_minutes > 0 ? cfg.sla_minutes : undefined,
       };
     })
@@ -164,7 +177,7 @@ export default async function TarefasPage() {
           <section className="mt-6" aria-label="Etapas para executar">
           <h2 className="mb-2 text-[13px] font-semibold text-slate-900">Etapas para executar ({rows.length})</h2>
           <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            {rows.map(({ activity, claim, node, enteredAt, slaMinutes }) => (
+            {rows.map(({ activity, claim, node, enteredAt, slaMinutes, targetAt, bundle }) => (
               <li key={activity.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
                 <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   {NODE_META[node.node_type as NodeType]?.label ?? node.node_type}
@@ -182,7 +195,7 @@ export default async function TarefasPage() {
                     )}
                   </div>
                 </Link>
-                {activity.status === "in_progress" && <StageSlaBadge enteredAt={enteredAt} slaMinutes={slaMinutes} />}
+                {activity.status === "in_progress" && <StageSlaBadge enteredAt={enteredAt} slaMinutes={slaMinutes} targetAt={targetAt} bundle={bundle} />}
                 {activity.status === "in_progress" ? (
                   <Link
                     href={`/sinistros/${claim.id}#etapa-${activity.stage_instance_id}`}

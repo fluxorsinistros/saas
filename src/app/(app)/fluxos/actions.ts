@@ -12,6 +12,7 @@ import { hasPermission, requirePermission } from "@/lib/permissions";
 import { validateGraph, type Issue } from "@/lib/workflow/validator";
 import type { Graph, NodeConfig, NodeType } from "@/lib/workflow/types";
 import type { Json } from "@/lib/supabase/database.types";
+import { businessDaysToMinutes } from "@/lib/sla";
 
 export type SavePayload = {
   nodes: {
@@ -442,6 +443,25 @@ export async function saveDraft(versionId: string, payload: SavePayload): Promis
   await requirePermission(ctx, "workflow.edit");
   if (!(await hasPermission(ctx, "workflow.edit"))) return { ok: false, error: "Você não tem permissão para editar fluxos." };
   const supabase = await createClient();
+
+  // Prazo em dias úteis: o navegador manda os dias e o servidor refaz os minutos com a jornada atual do calendário. Assim a conta
+  // nunca fica velha se o horário do calendário mudou, e nenhum navegador define o prazo de verdade.
+  const bdNodes = payload.nodes.filter((n) => n.config.sla_unit === "bd" && (n.config.sla_bd_days ?? 0) > 0);
+  if (bdNodes.length) {
+    const { data: tenantRow } = await supabase.from("tenants").select("settings").eq("id", ctx.tenantId).maybeSingle();
+    const defaultId = (tenantRow?.settings as { sla?: { default_calendar_id?: string | null } } | null)?.sla?.default_calendar_id ?? null;
+    const { data: cals } = await supabase.from("sla_calendars").select("id, business_start, business_end").eq("tenant_id", ctx.tenantId);
+    const calById = new Map((cals ?? []).map((x) => [x.id, x]));
+    for (const n of bdNodes) {
+      const cal = calById.get(n.config.sla_calendar_id ?? "") ?? calById.get(defaultId ?? "") ?? (cals ?? [])[0];
+      if (!cal) return { ok: false, error: `A etapa "${n.name}" usa dias úteis, mas a empresa não tem calendário. Cadastre um em Calendários.` };
+      const days = Number(n.config.sla_bd_days);
+      if (!Number.isFinite(days) || days <= 0 || days > 365) return { ok: false, error: `Prazo inválido na etapa "${n.name}".` };
+      n.config.sla_calendar_id = cal.id;
+      n.config.sla_minutes = businessDaysToMinutes(days, cal);
+    }
+  }
+
   const { error } = await supabase.rpc("save_workflow_draft", {
     p_version_id: versionId,
     p_nodes: payload.nodes as unknown as Json,

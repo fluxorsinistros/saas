@@ -28,7 +28,7 @@ function IssueDot({ issue, className = "" }: { issue?: "error" | "warning"; clas
 function Chips({ data }: { data: FlowNode["data"] }) {
   const { groups } = useBuilder();
   const group = data.groupId ? groups.get(data.groupId) : null;
-  const sla = formatSla(data.config.sla_minutes);
+  const sla = formatSla(data.config.sla_minutes, data.config);
   if (!group && !sla && !data.config.loop_max) return null;
   return (
     <div className="flex flex-wrap gap-1">

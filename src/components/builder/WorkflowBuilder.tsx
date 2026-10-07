@@ -50,7 +50,7 @@ import { BuilderContext, type FlowEdge, type FlowEdgeData, type FlowNode, type F
 import { nodeTypes } from "./nodes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EdgeInspector, NodeInspector } from "./Inspector";
-import { NODE_META, NODE_TYPES, toDbEdgeType, type Graph, type NodeConfig, type NodeType, type WorkflowField } from "@/lib/workflow/types";
+import { NODE_META, NODE_TYPES, toDbEdgeType, type CalendarOption, type Graph, type NodeConfig, type NodeType, type WorkflowField } from "@/lib/workflow/types";
 import { validateGraph, type Issue } from "@/lib/workflow/validator";
 import { TEMPLATES, type WorkflowTemplate } from "@/lib/workflow/templates";
 import {
@@ -91,7 +91,8 @@ type Props = {
   initialNodes: DbNode[];
   initialEdges: DbEdge[];
   groups: { id: string; name: string }[];
-  calendars?: { id: string; name: string }[];
+  calendars?: CalendarOption[];
+  defaultCalendarId?: string | null;
   initialFields?: WorkflowField[];
   canEdit: boolean;
   canPublish: boolean;
@@ -196,7 +197,7 @@ export function WorkflowBuilder(props: Props) {
   );
 }
 
-function Builder({ workflow, version, versions, initialNodes, initialEdges, groups, calendars = [], initialFields = [], canEdit, canPublish }: Props) {
+function Builder({ workflow, version, versions, initialNodes, initialEdges, groups, calendars = [], defaultCalendarId = null, initialFields = [], canEdit, canPublish }: Props) {
   const router = useRouter();
   const { screenToFlowPosition, setCenter, fitView, zoomIn, zoomOut, deleteElements, getViewport } = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -933,6 +934,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   node={selectedNode}
                   groups={groups}
                   calendars={calendars}
+                  defaultCalendarId={defaultCalendarId}
                   fields={fields}
                   onCreateField={handleCreateField}
                   onUpdateField={handleUpdateField}

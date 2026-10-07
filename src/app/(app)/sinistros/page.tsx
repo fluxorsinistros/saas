@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
 import { computeProcessProgress, computeSla, formatDuration } from "@/lib/format";
+import { loadCalendarBundles, flowDeadlineIso } from "@/lib/sla-load";
+import type { CalendarBundle } from "@/lib/sla";
 import { SinistrosFilterBar } from "./SinistrosFilterBar";
 import { FormalizeButton } from "./FormalizeButton";
 import { ListControls } from "./ListControls";
@@ -229,7 +231,14 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     | undefined
   >();
   const groupsByCycle = new Map<string, Set<string>>();
-  const stagesByCycle = new Map<string, { id: string; name: string; entered_at: string; sla_minutes?: number }[]>();
+  const stagesByCycle = new Map<string, { id: string; name: string; entered_at: string; sla_minutes?: number; target_at?: string; bundle?: CalendarBundle }[]>();
+  // Calendário por versão do fluxo, quando as etapas usam dias úteis: o prazo total é contado nele, não em horas seguidas.
+  const flowCalByVersion = new Map<string, CalendarBundle>();
+  const flowSlaFor = (cycle: { workflow_version_id: string; formalized_at: string | null }, createdAt: string, minutes: number | undefined) => {
+    const start = cycle.formalized_at || createdAt;
+    const bundle = flowCalByVersion.get(cycle.workflow_version_id);
+    return computeSla(start, minutes, bundle && minutes ? flowDeadlineIso(start, minutes, bundle) : undefined, bundle);
+  };
   const completedStagesByCycle = new Map<string, Set<string>>();
   const stepsByVersion = new Map<string, { id: string; name: string; sla_minutes: number }[]>();
   const totalSlaByVersion = new Map<string, number>();
@@ -307,6 +316,18 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
         totalSlaByVersion.set(n.workflow_version_id, (totalSlaByVersion.get(n.workflow_version_id) ?? 0) + slaMin);
       }
     }
+    const calIdByVersion = new Map<string, string>();
+    const calIdByNode = new Map<string, string>();
+    for (const n of allVersionNodes ?? []) {
+      const cfg = (n.config ?? {}) as { sla_unit?: string; sla_calendar_id?: string };
+      if (cfg.sla_calendar_id) calIdByNode.set(n.id, cfg.sla_calendar_id);
+      if (cfg.sla_unit === "bd" && cfg.sla_calendar_id && !calIdByVersion.has(n.workflow_version_id)) calIdByVersion.set(n.workflow_version_id, cfg.sla_calendar_id);
+    }
+    const bundles = await loadCalendarBundles(supabase, [...new Set([...calIdByVersion.values(), ...calIdByNode.values()])]);
+    for (const [versionId, calId] of calIdByVersion) {
+      const bundle = bundles.get(calId);
+      if (bundle) flowCalByVersion.set(versionId, bundle);
+    }
 
     // Carrega todas as etapas dos ciclos para saber quais foram concluídas e quais estão em andamento
     const { data: allCycleStages } = cycleIds.length
@@ -327,6 +348,12 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       }
     }
 
+    // Prazo real de cada etapa aberta (calendário, dias úteis e feriados), gravado quando a etapa começa.
+    const { data: openTracking } = openStages.length
+      ? await supabase.from("sla_tracking").select("stage_instance_id, target_at").in("stage_instance_id", openStages.map((x) => x.id)).neq("status", "completed")
+      : { data: [] as { stage_instance_id: string; target_at: string }[] };
+    const targetByStage = new Map((openTracking ?? []).map((t) => [t.stage_instance_id, t.target_at]));
+
     for (const s of openStages) {
       if (!stagesByCycle.has(s.claim_cycle_id)) {
         stagesByCycle.set(s.claim_cycle_id, []);
@@ -337,6 +364,8 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
         name: node?.name || "Etapa",
         entered_at: s.entered_at,
         sla_minutes: node?.sla_minutes,
+        target_at: targetByStage.get(s.id),
+        bundle: bundles.get(calIdByNode.get(s.node_id) ?? ""),
       });
     }
 
@@ -363,7 +392,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
       const activeStages = cycle ? (stagesByCycle.get(cycle.id) ?? []) : [];
       const activeGroups = cycle ? (groupsByCycle.get(cycle.id) ?? new Set()) : new Set();
       const totalFlowSlaMinutes = cycle ? totalSlaByVersion.get(cycle.workflow_version_id) : undefined;
-      const totalFlowSla = !isCompleted && cycle ? computeSla(cycle.formalized_at || c.created_at, totalFlowSlaMinutes) : null;
+      const totalFlowSla = !isCompleted && cycle ? flowSlaFor(cycle, c.created_at, totalFlowSlaMinutes) : null;
 
       // 1. Filtro de Fluxo (independente da versão)
       if (requestedWorkflow && cycleWfId !== requestedWorkflow) {
@@ -383,10 +412,10 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 
       // 4. Filtro de SLA da Etapa
       if (requestedSlaEtapa === "atrasado") {
-        const hasBreachedStage = activeStages.some((st) => computeSla(st.entered_at, st.sla_minutes)?.isBreached);
+        const hasBreachedStage = activeStages.some((st) => computeSla(st.entered_at, st.sla_minutes, st.target_at, st.bundle)?.isBreached);
         if (isCompleted || !hasBreachedStage) return false;
       } else if (requestedSlaEtapa === "no_prazo") {
-        const hasBreachedStage = activeStages.some((st) => computeSla(st.entered_at, st.sla_minutes)?.isBreached);
+        const hasBreachedStage = activeStages.some((st) => computeSla(st.entered_at, st.sla_minutes, st.target_at, st.bundle)?.isBreached);
         if (isCompleted || activeStages.length === 0 || hasBreachedStage) return false;
       }
 
@@ -445,7 +474,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
     if (!cycle || closedStatuses.includes(status)) return null;
     let worst: { sla: NonNullable<ReturnType<typeof computeSla>>; name: string } | null = null;
     for (const st of stagesByCycle.get(cycle.id) ?? []) {
-      const sla = computeSla(st.entered_at, st.sla_minutes);
+      const sla = computeSla(st.entered_at, st.sla_minutes, st.target_at, st.bundle);
       if (sla && (!worst || sla.pct > worst.sla.pct)) worst = { sla, name: st.name };
     }
     return worst;
@@ -667,7 +696,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
               const activeGroups = cycle ? [...(groupsByCycle.get(cycle.id) ?? [])].map((id) => groupNameById.get(id)).filter(Boolean) : [];
               const activeStages = cycle ? (stagesByCycle.get(cycle.id) ?? []) : [];
               const totalFlowSlaMinutes = cycle ? totalSlaByVersion.get(cycle.workflow_version_id) : undefined;
-              const totalFlowSla = !isCompleted && cycle ? computeSla(cycle.formalized_at || c.created_at, totalFlowSlaMinutes) : null;
+              const totalFlowSla = !isCompleted && cycle ? flowSlaFor(cycle, c.created_at, totalFlowSlaMinutes) : null;
               const completedNodeIds = cycle ? completedStagesByCycle.get(cycle.id) : undefined;
               const progressStats = computeProcessProgress(
                 isCompleted,
@@ -757,7 +786,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
                     )}
                     {flowAlert && (
                       <span className={`sla-chip ${flowAlert.isBreached ? "sla-urgent" : "sla-risk"}`} title="Prazo para concluir o fluxo inteiro, contado desde a abertura.">
-                        Fluxo: {flowAlert.formattedRemaining}
+                        Fluxo: {flowAlert.isBreached ? "estourado há" : "restam"} {flowAlert.daysText} · até {flowAlert.targetLabel}
                       </span>
                     )}
                   </div>
@@ -785,7 +814,7 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 }
 
 // Chip do prazo da etapa em andamento: atrasado, em risco ou no prazo (tokens .sla-*). Texto sempre diz o estado, a cor só reforça.
-function SlaChip({ u }: { u: { sla: { isBreached: boolean; isAtRisk: boolean; formattedRemaining: string }; name: string } | null }) {
+function SlaChip({ u }: { u: { sla: { isBreached: boolean; isAtRisk: boolean; formattedRemaining: string; daysText: string; targetLabel: string }; name: string } | null }) {
   if (!u) return <span className="text-[12px] text-slate-600">Sem prazo definido</span>;
   const { sla } = u;
   const tone = sla.isBreached ? "sla-urgent" : sla.isAtRisk ? "sla-risk" : "sla-ok";
@@ -793,7 +822,7 @@ function SlaChip({ u }: { u: { sla: { isBreached: boolean; isAtRisk: boolean; fo
   return (
     <span className={`sla-chip ${tone}`} title={`Prazo da etapa "${u.name}", contado desde que ela começou.`}>
       <Clock3 className="size-3.5 shrink-0" aria-hidden />
-      {state} · {sla.formattedRemaining}
+      {state} · {sla.isBreached ? "estourado há" : "restam"} {sla.daysText} · até {sla.targetLabel}
     </span>
   );
 }

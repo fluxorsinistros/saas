@@ -1,9 +1,10 @@
 import { Clock3 } from "lucide-react";
 import { computeSla } from "@/lib/format";
+import type { CalendarBundle } from "@/lib/sla";
 
 // Selo "SLA da Etapa: 22% (restam 18h 43min)", verde no prazo, âmbar a partir de 75%, vermelho estourado.
-export function StageSlaBadge({ enteredAt, slaMinutes }: { enteredAt: string | null | undefined; slaMinutes: number | undefined }) {
-  const sla = computeSla(enteredAt, slaMinutes);
+export function StageSlaBadge({ enteredAt, slaMinutes, targetAt, bundle }: { enteredAt: string | null | undefined; slaMinutes: number | undefined; targetAt?: string | null; bundle?: CalendarBundle }) {
+  const sla = computeSla(enteredAt, slaMinutes, targetAt, bundle);
   if (!sla) return null;
   return (
     <span
@@ -16,7 +17,7 @@ export function StageSlaBadge({ enteredAt, slaMinutes }: { enteredAt: string | n
       }`}
     >
       <Clock3 className="size-3.5" />
-      <span title="Prazo da etapa atual, contado desde que ela começou.">SLA da Etapa:</span> {sla.pct}% ({sla.formattedRemaining})
+      <span title="Prazo da etapa atual, contado desde que ela começou.">SLA da Etapa:</span> {sla.pct}% · {sla.isBreached ? "estourado há" : "restam"} {sla.daysText} · prazo {sla.targetLabel}
     </span>
   );
 }

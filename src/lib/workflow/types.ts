@@ -7,6 +7,10 @@ export type NodeConfig = {
   description?: string;
   question?: string;
   sla_minutes?: number;
+  // Unidade em que o prazo foi digitado: "h" horas, "d" dias de 24h, "bd" dias úteis. Em "bd" o prazo de verdade é sla_bd_days
+  // (número de dias úteis) e sla_minutes é derivado: dias úteis vezes a jornada do calendário, recalculado a cada salvamento.
+  sla_unit?: "h" | "d" | "bd";
+  sla_bd_days?: number;
   sla_calendar_id?: string;
   loop_max?: number;
   join_rule?: JoinRule;
@@ -143,9 +147,12 @@ export function toDbEdgeType(edge: GraphEdge, sourceType: NodeType | undefined):
   return "normal";
 }
 
-export function formatSla(minutes?: number) {
+export function formatSla(minutes?: number, config?: { sla_unit?: string; sla_bd_days?: number }) {
+  if (config?.sla_unit === "bd" && config.sla_bd_days) return `${+config.sla_bd_days.toFixed(2)} du`;
   if (!minutes) return null;
   if (minutes % 1440 === 0) return `${minutes / 1440}d`;
   if (minutes % 60 === 0) return `${minutes / 60}h`;
   return `${minutes}min`;
 }
+
+export type CalendarOption = { id: string; name: string; business_start?: string | null; business_end?: string | null };
