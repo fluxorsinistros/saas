@@ -195,6 +195,30 @@ export async function cancelInvite(_prev: AccessState, formData: FormData): Prom
 
 const ROLE_KINDS = ["transportadora", "embarcador", "seguradora", "corretora", "gerenciadora_risco", "fornecedor", "outro"] as const;
 
+export async function updateOrganization(_prev: { error: string | null; ok?: boolean }, formData: FormData): Promise<{ error: string | null; ok?: boolean }> {
+  try {
+    const ctx = await getTenantContext();
+    await requirePermission(ctx, "user.manage");
+    const supabase = await createClient();
+    const organizationId = String(formData.get("organization_id") ?? "");
+    const name = String(formData.get("name") ?? "").trim();
+    const roleKind = String(formData.get("role_kind") ?? "");
+    if (!name) return { error: "Informe o nome da organização." };
+    const kind = (ROLE_KINDS as readonly string[]).includes(roleKind) ? roleKind : undefined;
+    const { error } = await supabase.rpc("update_partner_organization", {
+      p_tenant_id: ctx.tenantId,
+      p_organization_id: organizationId,
+      p_name: name,
+      p_role_kind: kind,
+    });
+    if (error) return { error: publicDbMessage(error) };
+    revalidatePath("/usuarios");
+    return { error: null, ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Não foi possível salvar." };
+  }
+}
+
 export async function createOrganization(formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
   await requirePermission(ctx, "user.manage");

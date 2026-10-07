@@ -1,6 +1,7 @@
-import { Building2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createOrganization } from "./actions";
+import { OrganizationRow } from "./OrganizationRow";
 
 const ROLE_KIND_LABEL: Record<string, string> = {
   interno: "Interno",
@@ -22,6 +23,9 @@ export async function OrganizacoesTab({ tenantId, canManage }: { tenantId: strin
     .from("tenant_organizations")
     .select("id, role_kind, is_owner, organizations(id, name)")
     .eq("tenant_id", tenantId);
+  const roleOptions = Object.entries(ROLE_KIND_LABEL)
+    .filter(([k]) => k !== "interno")
+    .map(([value, label]) => ({ value, label }));
 
   return (
     <section>
@@ -60,15 +64,16 @@ export async function OrganizacoesTab({ tenantId, canManage }: { tenantId: strin
 
       <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
         {(tenantOrgs ?? []).map((t) => (
-          <li key={t.id} className="flex items-center gap-3 px-5 py-3">
-            <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
-              <Building2 className="size-4" />
-            </div>
-            <div className="min-w-0 flex-1 text-[14px] font-medium text-slate-900">{t.organizations?.name}</div>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-              {t.is_owner ? "Interno (dono)" : (ROLE_KIND_LABEL[t.role_kind] ?? t.role_kind)}
-            </span>
-          </li>
+          <OrganizationRow
+            key={t.id}
+            organizationId={t.organizations?.id ?? ""}
+            name={t.organizations?.name ?? ""}
+            roleKind={t.role_kind}
+            isOwner={t.is_owner}
+            roleLabel={t.is_owner ? "Interno (dono)" : (ROLE_KIND_LABEL[t.role_kind] ?? t.role_kind)}
+            roleOptions={roleOptions}
+            canManage={canManage}
+          />
         ))}
         {(tenantOrgs ?? []).length === 0 && <li className="px-5 py-6 text-center text-[13px] text-slate-500">Nenhuma organização ainda.</li>}
       </ul>

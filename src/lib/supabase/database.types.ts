@@ -3293,6 +3293,10 @@ export type Database = {
         Args: { p_version_id: string }
         Returns: string
       }
+      update_partner_organization: {
+        Args: { p_name: string; p_organization_id: string; p_role_kind?: string; p_tenant_id: string }
+        Returns: undefined
+      }
       create_partner_organization: {
         Args: { p_name: string; p_role_kind: string; p_tenant_id: string }
         Returns: string
