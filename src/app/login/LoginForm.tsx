@@ -28,14 +28,9 @@ export function LoginForm() {
           <input id="email" name="email" type="email" required autoComplete="email" className={input} />
         </div>
         <div>
-          <div className="flex items-center justify-between">
-            <label htmlFor="password" className="mb-1 block text-[13px] font-medium text-slate-700">
-              Senha
-            </label>
-            <Link href="/esqueci-senha" className="mb-1 text-[12px] font-medium text-brand hover:underline">
-              Esqueci minha senha
-            </Link>
-          </div>
+          <label htmlFor="password" className="mb-1 block text-[13px] font-medium text-slate-700">
+            Senha
+          </label>
           <div className="relative">
             <input
               id="password"
@@ -48,6 +43,7 @@ export function LoginForm() {
             />
             <button
               type="button"
+              tabIndex={-1}
               onClick={() => setShowPassword((prev) => !prev)}
               aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}
               className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:text-slate-600 focus:outline-none"
@@ -79,6 +75,12 @@ export function LoginForm() {
         >
           {pending ? "Aguarde…" : "Entrar"}
         </button>
+        {/* depois do botão na ordem do Tab: e-mail, senha, Entrar, e só então o link */}
+        <p className="text-center">
+          <Link href="/esqueci-senha" className="text-[13px] font-medium text-brand hover:underline">
+            Esqueci minha senha
+          </Link>
+        </p>
       </form>
     </div>
   );
