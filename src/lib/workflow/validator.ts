@@ -55,6 +55,15 @@ export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new
   }
 
   for (const n of nodes) {
+    if (n.config.subgroup_mode === "fixed" && !n.config.subgroup_id) {
+      issues.push({ severity: "error", message: `A etapa "${title(n.id)}" usa um subgrupo fixo, mas nenhum foi escolhido.`, nodeId: n.id });
+    }
+    if (n.config.subgroup_mode === "field" && !n.config.subgroup_field_key) {
+      issues.push({ severity: "error", message: `A etapa "${title(n.id)}" usa o subgrupo de um campo, mas nenhum campo foi escolhido.`, nodeId: n.id });
+    }
+  }
+
+  for (const n of nodes) {
     const name = title(n.id);
     const outs = out(n.id);
     const ins = inc(n.id, forward);

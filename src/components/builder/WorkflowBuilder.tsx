@@ -50,7 +50,7 @@ import { BuilderContext, type FlowEdge, type FlowEdgeData, type FlowNode, type F
 import { nodeTypes } from "./nodes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EdgeInspector, NodeInspector } from "./Inspector";
-import { NODE_META, NODE_TYPES, toDbEdgeType, type CalendarOption, type Graph, type NodeConfig, type NodeType, type WorkflowField } from "@/lib/workflow/types";
+import { NODE_META, NODE_TYPES, toDbEdgeType, type BuilderGroup, type CalendarOption, type Graph, type NodeConfig, type NodeType, type WorkflowField } from "@/lib/workflow/types";
 import { validateGraph, type Issue } from "@/lib/workflow/validator";
 import { TEMPLATES, type WorkflowTemplate } from "@/lib/workflow/templates";
 import {
@@ -90,7 +90,7 @@ type Props = {
   versions: VersionInfo[];
   initialNodes: DbNode[];
   initialEdges: DbEdge[];
-  groups: { id: string; name: string }[];
+  groups: BuilderGroup[];
   calendars?: CalendarOption[];
   defaultCalendarId?: string | null;
   initialFields?: WorkflowField[];

@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   // Administrador vê a empresa inteira; Operador, só o grupo em que está atuando.
   const { isAdmin, active } = await getMemberGroups(ctx.userId, ctx.tenantId);
-  const scope = isAdmin ? undefined : { groupId: active?.id ?? null };
+  const scope = isAdmin ? undefined : { groupId: active?.id ?? null, subgroupId: active?.subgroup_id ?? null };
   const [snap, trend] = await Promise.all([loadOperationalSnapshot(supabase, ctx.tenantId, scope), loadOperationalTrend(supabase, ctx.tenantId, scope, 30)]);
 
   const open = (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0);

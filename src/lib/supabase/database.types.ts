@@ -26,6 +26,7 @@ export type Database = {
           stage_instance_id: string
           started_at: string | null
           status: string
+          subgroup_id: string | null
           tenant_id: string
           updated_at: string
         }
@@ -40,6 +41,7 @@ export type Database = {
           stage_instance_id: string
           started_at?: string | null
           status?: string
+          subgroup_id?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -54,6 +56,7 @@ export type Database = {
           stage_instance_id?: string
           started_at?: string | null
           status?: string
+          subgroup_id?: string | null
           tenant_id?: string
           updated_at?: string
         }
@@ -743,6 +746,7 @@ export type Database = {
           question: string
           requires_approval: boolean
           selected_option: string | null
+          subgroup_id: string | null
           stage_instance_id: string | null
           tenant_id: string
           updated_at: string
@@ -761,6 +765,7 @@ export type Database = {
           question: string
           requires_approval?: boolean
           selected_option?: string | null
+          subgroup_id?: string | null
           stage_instance_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -779,6 +784,7 @@ export type Database = {
           question?: string
           requires_approval?: boolean
           selected_option?: string | null
+          subgroup_id?: string | null
           stage_instance_id?: string | null
           tenant_id?: string
           updated_at?: string
@@ -2897,6 +2903,7 @@ export type Database = {
           formula: string | null
           options: Json | null
           position: number
+          ref_group_id: string | null
           required: boolean
           tenant_id: string
           workflow_id: string
@@ -2916,6 +2923,7 @@ export type Database = {
           formula?: string | null
           options?: Json | null
           position?: number
+          ref_group_id?: string | null
           required?: boolean
           tenant_id: string
           workflow_id: string
@@ -2935,6 +2943,7 @@ export type Database = {
           formula?: string | null
           options?: Json | null
           position?: number
+          ref_group_id?: string | null
           required?: boolean
           tenant_id?: string
           workflow_id?: string
@@ -3358,11 +3367,11 @@ export type Database = {
         Args: { p_membership_id: string; p_role_id: string; p_group_id?: string | null; p_active: boolean }
         Returns: undefined
       }
-      operational_summary: { Args: { p_tenant_id: string; p_group_id?: string }; Returns: Json }
+      operational_summary: { Args: { p_tenant_id: string; p_group_id?: string; p_subgroup_id?: string; p_scope_subgroup?: boolean }; Returns: Json }
       notif_tick: { Args: { p_secret: string }; Returns: undefined }
       notif_next_batch: { Args: { p_secret: string; p_limit?: number }; Returns: Json }
       notif_mark: { Args: { p_secret: string; p_id: string; p_ok: boolean; p_error?: string }; Returns: undefined }
-      operational_trend: { Args: { p_tenant_id: string; p_group_id?: string; p_days?: number }; Returns: Json }
+      operational_trend: { Args: { p_tenant_id: string; p_group_id?: string; p_days?: number; p_subgroup_id?: string; p_scope_subgroup?: boolean }; Returns: Json }
       set_member_groups: { Args: { p_membership_id: string; p_group_ids: string[]; p_subgroups?: Json }; Returns: undefined }
       admin_create_tenant: { Args: { p_name: string; p_admin_email?: string }; Returns: string }
       admin_grant_tenant_admin: { Args: { p_tenant_id: string; p_email: string }; Returns: string }

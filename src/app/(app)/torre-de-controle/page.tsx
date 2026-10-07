@@ -48,7 +48,7 @@ export default async function TorreDeControlePage({
   const supabase = await createClient();
   // Administrador acompanha a empresa inteira; Operador, só os sinistros em que o grupo dele atua (o ativo na sessão).
   const { isAdmin, active: activeGroup } = await getMemberGroups(ctx.userId, ctx.tenantId);
-  const groupScope = isAdmin ? null : await loadGroupScope(supabase, ctx.tenantId, activeGroup?.id ?? null);
+  const groupScope = isAdmin ? null : await loadGroupScope(supabase, ctx.tenantId, activeGroup?.id ?? null, activeGroup?.subgroup_id ?? null);
 
   // Se a aba for "fluxo", carrega o grafo e as posições de cada sinistro nas etapas
   let flowViewProps = null;
@@ -251,7 +251,7 @@ export default async function TorreDeControlePage({
 
   // Carrega snapshot se estiver na aba de números/indicadores
   // Indicadores são um resumo calculado no banco (tamanho fixo, não cresce com o número de sinistros): carregam direto.
-  const numScope = isAdmin ? undefined : { groupId: activeGroup?.id ?? null };
+  const numScope = isAdmin ? undefined : { groupId: activeGroup?.id ?? null, subgroupId: activeGroup?.subgroup_id ?? null };
   const [snap, trend] =
     currentTab === "numeros"
       ? await Promise.all([loadOperationalSnapshot(supabase, ctx.tenantId, numScope), loadOperationalTrend(supabase, ctx.tenantId, numScope, 30)])

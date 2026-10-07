@@ -71,17 +71,18 @@ export async function requirePermission(ctx: TenantContext, code: PermissionCode
 // Etapa aponta pro grupo responsável, não pra pessoa (Documento 1 §5.3), ter a permissão
 // claim.execute não basta, Operador só pode agir nas etapas do(s) grupo(s) dele. Administrador
 // nunca é travado por grupo (mesma decisão já aplicada em telas, src/lib/screens.ts).
-export async function canActOnGroup(ctx: TenantContext, groupId: string | null): Promise<boolean> {
+export async function canActOnGroup(ctx: TenantContext, groupId: string | null, subgroupId: string | null = null): Promise<boolean> {
   if (!groupId) return true;
   const { membershipId, isAdmin, active } = await getMemberGroups(ctx.userId, ctx.tenantId);
   if (!membershipId) return false;
   if (isAdmin) return true;
-  // Operador só age na etapa do grupo em que está atuando agora.
-  return active?.id === groupId;
+  // Operador só age na etapa do grupo em que está atuando agora. Se a etapa é de um subgrupo, só quem está nele (nulo = todo o grupo).
+  if (active?.id !== groupId) return false;
+  return !subgroupId || active.subgroup_id === subgroupId;
 }
 
-export async function requireGroupAccess(ctx: TenantContext, groupId: string | null): Promise<void> {
-  if (!(await canActOnGroup(ctx, groupId))) {
+export async function requireGroupAccess(ctx: TenantContext, groupId: string | null, subgroupId: string | null = null): Promise<void> {
+  if (!(await canActOnGroup(ctx, groupId, subgroupId))) {
     throw new Error("Você não pertence ao grupo responsável por esta etapa.");
   }
 }

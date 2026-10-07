@@ -371,11 +371,13 @@ export default async function SinistrosPage({ searchParams }: { searchParams: Pr
 
     const stageIds = openStages.map((s) => s.id);
     const { data: openActivities } = stageIds.length
-      ? await supabase.from("activity_instances").select("stage_instance_id, group_id").in("stage_instance_id", stageIds).in("status", ["not_started", "in_progress"])
-      : { data: [] as { stage_instance_id: string; group_id: string | null }[] };
+      ? await supabase.from("activity_instances").select("stage_instance_id, group_id, subgroup_id").in("stage_instance_id", stageIds).in("status", ["not_started", "in_progress"])
+      : { data: [] as { stage_instance_id: string; group_id: string | null; subgroup_id: string | null }[] };
     const cycleOfStage = new Map(openStages.map((s) => [s.id, s.claim_cycle_id]));
     for (const a of openActivities ?? []) {
       if (!a.group_id) continue;
+      // etapa de outro subgrupo do meu grupo não entra na minha fila
+      if (!isAdmin && a.group_id === activeGroup?.id && a.subgroup_id && a.subgroup_id !== activeGroup.subgroup_id) continue;
       const cycleId = cycleOfStage.get(a.stage_instance_id);
       if (!cycleId) continue;
       if (!groupsByCycle.has(cycleId)) groupsByCycle.set(cycleId, new Set());

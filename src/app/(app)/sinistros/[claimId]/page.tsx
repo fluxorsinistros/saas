@@ -1,4 +1,5 @@
 import { signedAvatarUrls } from "@/lib/avatars";
+import { loadGroupRefNames, loadGroupRefOptions } from "@/lib/group-ref";
 import { loadCalendarBundles, flowDeadlineIso } from "@/lib/sla-load";
 import { GroupChip } from "@/lib/group-icons";
 import { ActivityForm } from "@/components/execution/ActivityForm";
@@ -146,7 +147,9 @@ export default async function ClaimPage({
   // nela. completeActivity/chooseDecision já barram isso no servidor; aqui só escondemos o botão.
   // Operador age só na etapa do grupo em que está atuando agora (o ativo na sessão).
   const myGroupIds = new Set(activeGroup ? [activeGroup.id] : []);
-  const canActOnGroup = (groupId: string | null) => isAdmin || !groupId || myGroupIds.has(groupId);
+  // Etapa de um subgrupo: só quem está nele age (nulo = todo o grupo)
+  const canActOnGroup = (groupId: string | null, subgroupId: string | null = null) =>
+    isAdmin || !groupId || (myGroupIds.has(groupId) && (!subgroupId || activeGroup?.subgroup_id === subgroupId));
 
   const customFields = (claim.custom_fields ?? {}) as Record<string, string>;
 
@@ -180,11 +183,23 @@ export default async function ClaimPage({
   if (!isAdmin && claim.created_by !== ctx.userId) {
     const { data: cycleStages } = await supabase.from("stage_instances").select("id").in("claim_cycle_id", allCycles.map((c) => c.id));
     const stageIdList = (cycleStages ?? []).map((x) => x.id);
-    const { data: mine } =
+    // Envolvido = o grupo (e o subgrupo, quando a etapa é de um) teve atividade ou decisão neste sinistro
+    const subRule = activeGroup?.subgroup_id ? `subgroup_id.is.null,subgroup_id.eq.${activeGroup.subgroup_id}` : "subgroup_id.is.null";
+    const [{ data: mineActs }, { data: decisionRows }] = await Promise.all([
       stageIdList.length && activeGroup
-        ? await supabase.from("activity_instances").select("id").in("stage_instance_id", stageIdList).eq("group_id", activeGroup.id).limit(1)
-        : { data: [] as { id: string }[] };
-    if (!mine?.length) notFound();
+        ? supabase.from("activity_instances").select("id").in("stage_instance_id", stageIdList).eq("group_id", activeGroup.id).or(subRule).limit(1)
+        : Promise.resolve({ data: [] as { id: string }[] }),
+      stageIdList.length && activeGroup
+        ? supabase.from("decisions").select("id, node_id").in("stage_instance_id", stageIdList).or(subRule)
+        : Promise.resolve({ data: [] as { id: string; node_id: string | null }[] }),
+    ]);
+    let involved = !!mineActs?.length;
+    if (!involved && decisionRows?.length && activeGroup) {
+      const nodeIds = [...new Set(decisionRows.map((d) => d.node_id).filter((x): x is string => !!x))];
+      const { data: dNodes } = nodeIds.length ? await supabase.from("workflow_nodes").select("id").in("id", nodeIds).eq("group_id", activeGroup.id) : { data: [] as { id: string }[] };
+      involved = !!dNodes?.length;
+    }
+    if (!involved) notFound();
   }
   const cycle = (ciclo ? allCycles.find((c) => c.id === ciclo) : null) ?? allCycles[0];
 
@@ -210,7 +225,7 @@ export default async function ClaimPage({
       .select("id, node_id, pass_number, status, entered_at, exited_at")
       .eq("claim_cycle_id", cycle.id)
       .order("entered_at", { ascending: false }),
-    supabase.from("decisions").select("id, stage_instance_id, question, options, selected_option, decided_at").eq("claim_cycle_id", cycle.id),
+    supabase.from("decisions").select("id, stage_instance_id, question, options, selected_option, decided_at, subgroup_id").eq("claim_cycle_id", cycle.id),
     supabase.from("groups").select("id, name, icon, color, status").eq("tenant_id", ctx.tenantId),
     supabase
       .from("documents")
@@ -228,7 +243,7 @@ export default async function ClaimPage({
     supabase.from("workflows").select("name, financial_panel").eq("id", version!.workflow_id).single(),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, ref_group_id, position")
       .order("position")
       .eq("workflow_id", version!.workflow_id),
   ]);
@@ -248,6 +263,10 @@ export default async function ClaimPage({
     .filter((x): x is { it: ReturnType<typeof readPanel>[number]; f: NonNullable<typeof x.f> } => !!x.f);
   const canEditFinancial = perms.has("financial.manage");
   const hasPersonField = (workflowFields ?? []).some((f) => f.field_type === "person");
+  // Campos "Grupo ou subgrupo": opções para escolher e nome do valor já guardado
+  const refFields = (workflowFields ?? []).filter((f) => f.field_type === "group_ref");
+  const refOptions = refFields.length ? await loadGroupRefOptions(supabase, ctx.tenantId, refFields.map((f) => f.ref_group_id ?? "")) : new Map<string, { id: string; name: string }[]>();
+  const refNames = refFields.length ? await loadGroupRefNames(supabase, ctx.tenantId, refFields.map((f) => customFields[f.key]).filter(Boolean)) : new Map<string, string>();
   const hasAttachmentField = (workflowFields ?? []).some((f) => f.field_type === "attachment");
 
   // tenant_memberships e user_profiles não têm FK direta entre si (mesma situação de
@@ -284,7 +303,7 @@ export default async function ClaimPage({
   const { data: activities } = stageIds.length
     ? await supabase
         .from("activity_instances")
-        .select("id, stage_instance_id, status, group_id, started_at, completed_at, completed_by")
+        .select("id, stage_instance_id, status, group_id, subgroup_id, started_at, completed_at, completed_by")
         .in("stage_instance_id", stageIds)
     : { data: [] as never[] };
 
@@ -411,7 +430,9 @@ export default async function ClaimPage({
         ? raw === "true"
           ? "Sim"
           : "Não"
-        : f.field_type === "person"
+        : f.field_type === "group_ref"
+          ? (refNames.get(raw) ?? raw)
+          : f.field_type === "person"
           ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
           : f.field_type === "date"
             ? new Date(`${raw}T00:00:00`).toLocaleDateString("pt-BR")
@@ -1240,7 +1261,7 @@ export default async function ClaimPage({
                         (activity.completed_by === ctx.userId &&
                           !!activity.completed_at &&
                           Date.now() - new Date(activity.completed_at).getTime() <= UNDO_WINDOW_MINUTES * 60000 &&
-                          canActOnGroup(activity.group_id))) && (
+                          canActOnGroup(activity.group_id, activity.subgroup_id))) && (
                         <details className="[&[open]]:basis-full">
                           <summary className="inline-flex cursor-pointer list-none text-[12px] font-medium text-rose-800 underline-offset-2 hover:text-rose-900 hover:underline">
                             Concluí sem querer, desfazer
@@ -1263,7 +1284,7 @@ export default async function ClaimPage({
                       {activity.status === "in_progress" &&
                       cycle.status !== "discarded" &&
                       perms.has("claim.execute") &&
-                      canActOnGroup(activity.group_id) ? (
+                      canActOnGroup(activity.group_id, activity.subgroup_id) ? (
                         <ActivityForm action={completeActivityWithState.bind(null, activity.id)} className="w-full space-y-2.5">
                           {consultFields.length > 0 && (
                             <dl className="grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-[12px] sm:grid-cols-2 lg:grid-cols-3" aria-label="Campos só para consulta">
@@ -1276,7 +1297,9 @@ export default async function ClaimPage({
                                     ? raw === "true"
                                       ? "Sim"
                                       : "Não"
-                                    : f.field_type === "person"
+                                    : f.field_type === "group_ref"
+                                      ? (refNames.get(raw) ?? raw)
+                                      : f.field_type === "person"
                                       ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
                                       : f.field_type === "date"
                                         ? new Date(`${raw}T00:00:00`).toLocaleDateString("pt-BR")
@@ -1333,6 +1356,24 @@ export default async function ClaimPage({
                                       <option value="">Selecione…</option>
                                       <option value="true">Sim</option>
                                       <option value="false">Não</option>
+                                    </select>
+                                  ) : f.field_type === "group_ref" ? (
+                                    <select
+                                      id={`field-${f.key}`}
+                                      name={`field_${f.key}`}
+                                      required={f.required}
+                                      defaultValue={customFields[f.key] ?? ""}
+                                      className={`${input} text-[13px]`}
+                                    >
+                                      <option value="">Selecione…</option>
+                                      {(refOptions.get(f.ref_group_id ?? "") ?? []).map((o) => (
+                                        <option key={o.id} value={o.id}>
+                                          {o.name}
+                                        </option>
+                                      ))}
+                                      {customFields[f.key] && !(refOptions.get(f.ref_group_id ?? "") ?? []).some((o) => o.id === customFields[f.key]) && (
+                                        <option value={customFields[f.key]}>{refNames.get(customFields[f.key]) ?? customFields[f.key]} (inativo)</option>
+                                      )}
                                     </select>
                                   ) : f.field_type === "person" ? (
                                     <select
@@ -1435,7 +1476,9 @@ export default async function ClaimPage({
                                 ? raw === "true"
                                   ? "Sim"
                                   : "Não"
-                                : f.field_type === "person"
+                                : f.field_type === "group_ref"
+                                  ? (refNames.get(raw) ?? raw)
+                                  : f.field_type === "person"
                                   ? (memberOptions.find((m) => m.id === raw)?.name ?? raw)
                                   : fmtValue(f, raw);
                             return (
@@ -1538,7 +1581,7 @@ export default async function ClaimPage({
                         </p>
                       ) : cycle.status === "discarded" ? (
                         <p className="mt-2 text-[12px] text-slate-500">Ciclo descartado</p>
-                      ) : !perms.has("claim.execute") || !canActOnGroup(node?.groupId ?? null) ? (
+                      ) : !perms.has("claim.execute") || !canActOnGroup(node?.groupId ?? null, decision.subgroup_id) ? (
                         <p className="mt-2 text-[12px] text-slate-500">Sem permissão para decidir</p>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-2">

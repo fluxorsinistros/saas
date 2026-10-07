@@ -13,7 +13,18 @@ export function activeGroupCookieName(tenantId: string) {
   return `${ACTIVE_GROUP_COOKIE}_${tenantId}`;
 }
 
-export type MemberGroup = { id: string; name: string; icon: string | null; color: string | null; hidden_screens: string[]; disabled_actions: string[]; granted_actions: string[] };
+export type MemberGroup = {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  hidden_screens: string[];
+  disabled_actions: string[];
+  granted_actions: string[];
+  // Subgrupo da pessoa neste grupo (nulo quando o grupo não usa subgrupos ou a pessoa não está em nenhum)
+  subgroup_id: string | null;
+  subgroup_name: string | null;
+};
 
 export type MemberGroups = {
   membershipId: string | null;
@@ -38,12 +49,26 @@ export const getMemberGroups = cache(async (userId: string, tenantId: string): P
   );
   const { data: rows } = await supabase
     .from("group_members")
-    .select("groups(id, name, icon, color, status, hidden_screens, disabled_actions, granted_actions)")
+    .select("subgroup_id, group_subgroups(name), groups(id, name, icon, color, status, hidden_screens, disabled_actions, granted_actions)")
     .eq("membership_id", membership.id);
-  const groups = (rows ?? [])
-    .map((r) => r.groups as unknown as (MemberGroup & { status: string }) | null)
-    .filter((g): g is MemberGroup & { status: string } => !!g && g.status === "active")
-    .map((g) => ({ id: g.id, name: g.name, icon: g.icon ?? null, color: g.color ?? null, hidden_screens: g.hidden_screens ?? [], disabled_actions: g.disabled_actions ?? [], granted_actions: g.granted_actions ?? [] }))
+  const groups: MemberGroup[] = (rows ?? [])
+    .map((r) => {
+      const g = r.groups as unknown as (Omit<MemberGroup, "subgroup_id" | "subgroup_name"> & { status: string }) | null;
+      if (!g || g.status !== "active") return null;
+      const sub = r.group_subgroups as unknown as { name: string } | null;
+      return {
+        id: g.id,
+        name: g.name,
+        icon: g.icon ?? null,
+        color: g.color ?? null,
+        hidden_screens: g.hidden_screens ?? [],
+        disabled_actions: g.disabled_actions ?? [],
+        granted_actions: g.granted_actions ?? [],
+        subgroup_id: r.subgroup_id ?? null,
+        subgroup_name: sub?.name ?? null,
+      } satisfies MemberGroup;
+    })
+    .filter((g): g is MemberGroup => g !== null)
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   const saved = (await cookies()).get(activeGroupCookieName(tenantId))?.value ?? "";

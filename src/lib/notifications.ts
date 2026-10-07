@@ -22,6 +22,7 @@ export type DeliveryItem = {
   payload: Record<string, unknown>;
   tenant_name: string;
   group_name: string | null;
+  subgroup_name?: string | null;
 };
 
 const esc = (s: unknown) =>
@@ -53,7 +54,7 @@ export function buildEmail(item: DeliveryItem, appUrl: string): { subject: strin
   const p = item.payload;
   const claimNumber = String(p.claim_number ?? "");
   const claimHref = p.claim_id ? `${appUrl}/sinistros/${p.claim_id}` : appUrl;
-  const group = item.group_name ?? "";
+  const group = item.group_name ? `${item.group_name}${item.subgroup_name ? ` · ${item.subgroup_name}` : ""}` : "";
   let b: Built;
 
   switch (item.event_type) {

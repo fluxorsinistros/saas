@@ -16,6 +16,7 @@ import { loadGraph } from "@/lib/workflow/load-graph";
 import { resolveTransition, startNode } from "@/lib/workflow/engine";
 import type { Graph, GraphNode } from "@/lib/workflow/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
+import { groupRefError } from "@/lib/group-ref";
 
 export type Supa = SupabaseClient<Database>;
 
@@ -84,6 +85,32 @@ async function ensureClaimType(supabase: Supa, tenantId: string, workflowId: str
   return type.id;
 }
 
+// Subgrupo responsável pela etapa: o fixo escolhido no fluxo, o escolhido em um campo do sinistro, ou nenhum (todo o grupo).
+// Sem um valor válido a etapa não abre (o sinistro fica bloqueado com o motivo), em vez de abrir para o grupo inteiro.
+async function resolveStageSubgroup(
+  supabase: Supa,
+  cycleId: string,
+  node: { name: string; groupId: string | null; config: { subgroup_mode?: string; subgroup_id?: string; subgroup_field_key?: string } },
+): Promise<{ subgroupId: string | null } | { error: string }> {
+  const mode = node.config.subgroup_mode;
+  if (!node.groupId || !mode || mode === "all") return { subgroupId: null };
+  let subgroupId: string | null = null;
+  if (mode === "fixed") {
+    subgroupId = node.config.subgroup_id ?? null;
+  } else {
+    const key = node.config.subgroup_field_key;
+    const { data: cycle } = await supabase.from("claim_cycles").select("claim_id").eq("id", cycleId).maybeSingle();
+    const { data: claim } = cycle ? await supabase.from("claims").select("custom_fields").eq("id", cycle.claim_id).maybeSingle() : { data: null };
+    const value = key ? ((claim?.custom_fields ?? {}) as Record<string, string>)[key] : undefined;
+    if (!value) return { error: `O campo que define o subgrupo da etapa "${node.name}" está sem valor.` };
+    subgroupId = value;
+  }
+  if (!subgroupId) return { error: `O subgrupo da etapa "${node.name}" não foi definido.` };
+  const { data: sub } = await supabase.from("group_subgroups").select("id").eq("id", subgroupId).eq("group_id", node.groupId).maybeSingle();
+  if (!sub) return { error: `O subgrupo escolhido não pertence ao grupo da etapa "${node.name}".` };
+  return { subgroupId };
+}
+
 // Cria a stage_instance (e a activity/decision/paralelo/convergência correspondente) para um nó,
 // usado na formalização e em todo avanço. Cada passagem por um nó é uma linha nova (Documento 3
 // §17): nunca sobrescreve. `branchInstanceId` amarra a passagem ao ramo de um Paralelo em curso
@@ -123,6 +150,17 @@ async function enterNode(
       reason: `"${node.name}" é um Paralelo dentro de outro Paralelo, ainda não suportado pela execução.`,
     });
     return;
+  }
+
+  let responsibleSubgroupId: string | null = null;
+  if (node.type === "stage" || node.type === "wait" || node.type === "pending" || node.type === "decision") {
+    const sub = await resolveStageSubgroup(supabase, cycleId, node);
+    if ("error" in sub) {
+      await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
+      await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, { reason: sub.error });
+      return;
+    }
+    responsibleSubgroupId = sub.subgroupId;
   }
 
   const { count } = await supabase
@@ -166,6 +204,7 @@ async function enterNode(
       node_id: nodeId,
       question: node.name,
       options: options as unknown as Json,
+      subgroup_id: responsibleSubgroupId,
     });
     await startSlaTracking(supabase, tenantId, cycleId, versionId, nodeId, stage.id);
     return;
@@ -190,6 +229,7 @@ async function enterNode(
     tenant_id: tenantId,
     stage_instance_id: stage.id,
     group_id: node.groupId,
+    subgroup_id: responsibleSubgroupId,
     status: "in_progress",
     assigned_at: now,
     started_at: now,
@@ -198,12 +238,12 @@ async function enterNode(
   await startSlaTracking(supabase, tenantId, cycleId, versionId, nodeId, stage.id);
   // A primeira etapa já é avisada pelo "sinistro aberto"; as seguintes (e as devoluções) avisam o grupo da etapa.
   if (entryReason !== "initial" && node.groupId) {
-    await emitStageAssigned(supabase, tenantId, cycleId, stage.id, node.name, node.groupId, entryReason);
+    await emitStageAssigned(supabase, tenantId, cycleId, stage.id, node.name, node.groupId, responsibleSubgroupId, entryReason);
   }
 }
 
 // Evento "etapa atribuída ao grupo" para a fila de e-mails. Falha aqui nunca atrapalha o avanço do sinistro.
-async function emitStageAssigned(supabase: Supa, tenantId: string, cycleId: string, stageId: string, stageName: string, groupId: string, entryReason: string) {
+async function emitStageAssigned(supabase: Supa, tenantId: string, cycleId: string, stageId: string, stageName: string, groupId: string, subgroupId: string | null, entryReason: string) {
   try {
     const [{ data: cycle }, { data: sla }] = await Promise.all([
       supabase.from("claim_cycles").select("claim_id, created_by").eq("id", cycleId).maybeSingle(),
@@ -221,6 +261,7 @@ async function emitStageAssigned(supabase: Supa, tenantId: string, cycleId: stri
         claim_number: claim?.claim_number ?? "",
         stage_name: stageName,
         group_id: groupId,
+        subgroup_id: subgroupId,
         entry_reason: entryReason,
         target_at: sla?.target_at ?? null,
         requested_by: cycle.created_by,
@@ -458,6 +499,8 @@ export type FormalizeClaimInput = {
   occurredAt?: string;
   location?: string;
   externalReference?: string;
+  // Valores dos campos do Início já na criação: o subgrupo da primeira etapa pode depender de um deles
+  customFields?: Record<string, string>;
 };
 
 // Detecção de duplicidade (Documento 2 §28): roda UMA VEZ, na primeira entrada do sinistro, nunca um
@@ -554,13 +597,15 @@ async function emitClaimOpened(supabase: Supa, tenantId: string, userId: string,
       .limit(1)
       .maybeSingle();
     let groupId: string | null = null;
+    let subgroupId: string | null = null;
     let stageName: string | null = null;
     if (stage) {
       const [{ data: act }, { data: node }] = await Promise.all([
-        supabase.from("activity_instances").select("group_id").eq("stage_instance_id", stage.id).limit(1).maybeSingle(),
+        supabase.from("activity_instances").select("group_id, subgroup_id").eq("stage_instance_id", stage.id).limit(1).maybeSingle(),
         supabase.from("workflow_nodes").select("name").eq("id", stage.node_id).maybeSingle(),
       ]);
       groupId = act?.group_id ?? null;
+      subgroupId = act?.subgroup_id ?? null;
       stageName = node?.name ?? null;
     }
     const { error } = await supabase.from("notifications").insert({
@@ -568,7 +613,7 @@ async function emitClaimOpened(supabase: Supa, tenantId: string, userId: string,
       event_type: "claim.opened",
       claim_cycle_id: cycleId,
       dedupe_key: `claim.opened:${cycleId}`,
-      payload: { claim_id: claimId, claim_number: claimNumber, workflow_name: workflowName, stage_name: stageName, group_id: groupId, requested_by: userId } as unknown as Json,
+      payload: { claim_id: claimId, claim_number: claimNumber, workflow_name: workflowName, stage_name: stageName, group_id: groupId, subgroup_id: subgroupId, requested_by: userId } as unknown as Json,
     });
     if (error) console.error("evento de abertura não gravado:", error.message);
   } catch (e) {
@@ -632,6 +677,7 @@ export async function createClaimAndCycle(
         occurred_at: input.occurredAt ? new Date(input.occurredAt).toISOString() : null,
         location: input.location ? ({ text: input.location } as unknown as Json) : null,
         external_reference: input.externalReference || null,
+        custom_fields: (input.customFields ?? {}) as unknown as Json,
         created_by: userId,
       })
       .select("id, claim_number")
@@ -710,10 +756,10 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   const { data: fieldDefs } = startFieldKeys.length
     ? await supabase
         .from("workflow_fields")
-        .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value")
+        .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value, ref_group_id")
         .eq("workflow_id", workflowId)
         .in("key", startFieldKeys)
-    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null }[] };
+    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null; ref_group_id: string | null }[] };
   const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
   const patch: Record<string, string> = {};
@@ -740,6 +786,8 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
     const err = patch[def.key] ? (lengthError(def, patch[def.key]) ?? valueError(def, patch[def.key])) : null;
     if (err) throw new Error(err);
   }
+  const refErr = await groupRefError(supabase, ctx.tenantId, fieldDefs ?? [], patch);
+  if (refErr) throw new Error(refErr);
   for (const def of fieldDefs ?? []) {
     if (!def.is_unique || !patch[def.key]) continue;
     const { data: dupe } = await supabase
@@ -755,6 +803,7 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   const { claimId } = await createClaimAndCycle(supabase, ctx.tenantId, ctx.userId, {
     workflowName: workflow.name,
     externalReference: String(formData.get("external_reference") ?? "").trim() || undefined,
+    customFields: { ...patch },
   });
 
   for (const { key, file } of attachments) {
@@ -790,12 +839,12 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
 
   const { data: activity, error: aErr } = await supabase
     .from("activity_instances")
-    .select("id, status, stage_instance_id, group_id")
+    .select("id, status, stage_instance_id, group_id, subgroup_id")
     .eq("id", activityInstanceId)
     .single();
   if (aErr || !activity) throw new Error("Atividade não encontrada.");
   if (activity.status === "completed") return;
-  await requireGroupAccess(ctx, activity.group_id);
+  await requireGroupAccess(ctx, activity.group_id, activity.subgroup_id);
 
   const { data: stage, error: sErr } = await supabase
     .from("stage_instances")
@@ -831,10 +880,10 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     const { data: fieldDefs } = versionRow
       ? await supabase
           .from("workflow_fields")
-          .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value")
+          .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value, ref_group_id")
           .eq("workflow_id", versionRow.workflow_id)
           .in("key", stageFieldKeys)
-      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null }[] };
+      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null; ref_group_id: string | null }[] };
     const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
     const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
@@ -865,6 +914,8 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
       const err = patch[def.key] ? (lengthError(def, patch[def.key]) ?? valueError(def, patch[def.key])) : null;
       if (err) throw new Error(err);
     }
+    const refErr = await groupRefError(supabase, ctx.tenantId, fieldDefs ?? [], patch);
+    if (refErr) throw new Error(refErr);
     for (const def of fieldDefs ?? []) {
       if (!def.is_unique || !patch[def.key]) continue;
       const { data: dupe } = await supabase
@@ -909,7 +960,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
 
   const { data: decision, error: dErr } = await supabase
     .from("decisions")
-    .select("id, claim_cycle_id, node_id, stage_instance_id, selected_option, question")
+    .select("id, claim_cycle_id, node_id, stage_instance_id, selected_option, question, subgroup_id")
     .eq("id", decisionId)
     .single();
   if (dErr || !decision) throw new Error("Decisão não encontrada.");
@@ -917,7 +968,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
   if (!decision.node_id) throw new Error("Decisão sem elemento de origem.");
 
   const { data: decisionNode } = await supabase.from("workflow_nodes").select("group_id").eq("id", decision.node_id).single();
-  await requireGroupAccess(ctx, decisionNode?.group_id ?? null);
+  await requireGroupAccess(ctx, decisionNode?.group_id ?? null, decision.subgroup_id);
 
   let branchInstanceId: string | null = null;
   if (decision.stage_instance_id) {
@@ -1200,7 +1251,7 @@ export async function undoActivityCompletion(activityInstanceId: string, formDat
 
   const { data: activity } = await supabase
     .from("activity_instances")
-    .select("id, status, stage_instance_id, group_id, completed_at, completed_by")
+    .select("id, status, stage_instance_id, group_id, subgroup_id, completed_at, completed_by")
     .eq("id", activityInstanceId)
     .single();
   if (!activity) throw new Error("Atividade não encontrada.");
@@ -1211,7 +1262,7 @@ export async function undoActivityCompletion(activityInstanceId: string, formDat
     const minutes = activity.completed_at ? (Date.now() - new Date(activity.completed_at).getTime()) / 60000 : Infinity;
     if (activity.completed_by !== ctx.userId) throw new Error("Só quem concluiu a etapa (ou um Administrador) pode desfazer.");
     if (minutes > UNDO_WINDOW_MINUTES) throw new Error(`O prazo de ${UNDO_WINDOW_MINUTES} minutos para desfazer já passou. Peça a um Administrador.`);
-    await requireGroupAccess(ctx, activity.group_id);
+    await requireGroupAccess(ctx, activity.group_id, activity.subgroup_id);
   }
 
   const { data: stage } = await supabase

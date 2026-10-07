@@ -9,6 +9,7 @@ import {
   NODE_META,
   type FieldType,
   type JoinRule,
+  type BuilderGroup,
   type CalendarOption,
   type NodeConfig,
   type NodeType,
@@ -18,7 +19,7 @@ import type { ActionResult, FieldResult } from "@/app/(app)/fluxos/actions";
 import type { FlowEdge, FlowEdgeData, FlowNode, FlowNodeData } from "./context";
 import { businessDaysToMinutes } from "@/lib/sla";
 
-type Group = { id: string; name: string };
+type Group = BuilderGroup;
 
 const label = "mb-1 block text-[12px] font-medium text-slate-600";
 const input =
@@ -69,6 +70,9 @@ export function NodeInspector({
   const type = node.type as NodeType;
   const { data } = node;
   const setConfig = (patch: Partial<NodeConfig>) => onChange({ config: { ...data.config, ...patch } });
+  const nodeGroup = groups.find((g) => g.id === data.groupId);
+  const subgroupFields = fields.filter((f) => f.field_type === "group_ref" && f.ref_group_id === data.groupId);
+  const subgroupMode = data.config.subgroup_mode ?? "all";
 
   return (
     <div className="space-y-4">
@@ -103,7 +107,9 @@ export function NodeInspector({
             className={input}
             value={data.groupId ?? ""}
             disabled={readOnly}
-            onChange={(e) => onChange({ groupId: e.target.value || null })}
+            onChange={(e) =>
+              onChange({ groupId: e.target.value || null, config: { ...data.config, subgroup_mode: undefined, subgroup_id: undefined, subgroup_field_key: undefined } })
+            }
           >
             <option value="">Selecione…</option>
             {groups.map((g) => (
@@ -112,6 +118,69 @@ export function NodeInspector({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {GROUP_TYPES.includes(type) && nodeGroup?.uses_subgroups && (
+        <div className="space-y-1.5">
+          <label className={label} htmlFor="node-subgroup-mode">
+            Quem do grupo faz esta etapa
+          </label>
+          <select
+            id="node-subgroup-mode"
+            className={input}
+            value={subgroupMode}
+            disabled={readOnly}
+            onChange={(e) => {
+              const mode = e.target.value as "all" | "fixed" | "field";
+              setConfig({
+                subgroup_mode: mode === "all" ? undefined : mode,
+                subgroup_id: mode === "fixed" ? data.config.subgroup_id : undefined,
+                subgroup_field_key: mode === "field" ? data.config.subgroup_field_key : undefined,
+              });
+            }}
+          >
+            <option value="all">Todos do grupo</option>
+            <option value="fixed">Um subgrupo fixo</option>
+            <option value="field">O subgrupo escolhido em um campo do sinistro</option>
+          </select>
+          {subgroupMode === "fixed" && (
+            <select
+              aria-label="Subgrupo fixo da etapa"
+              className={input}
+              value={data.config.subgroup_id ?? ""}
+              disabled={readOnly}
+              onChange={(e) => setConfig({ subgroup_id: e.target.value || undefined })}
+            >
+              <option value="">Escolha o subgrupo…</option>
+              {(nodeGroup.subgroups ?? []).map((sg) => (
+                <option key={sg.id} value={sg.id}>
+                  {sg.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {subgroupMode === "field" &&
+            (subgroupFields.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                Antes, crie em Campos um campo do tipo Grupo ou subgrupo apontando para {nodeGroup.name}, coloque-o no Início e marque como obrigatório.
+              </p>
+            ) : (
+              <select
+                aria-label="Campo que define o subgrupo da etapa"
+                className={input}
+                value={data.config.subgroup_field_key ?? ""}
+                disabled={readOnly}
+                onChange={(e) => setConfig({ subgroup_field_key: e.target.value || undefined })}
+              >
+                <option value="">Escolha o campo…</option>
+                {subgroupFields.map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            ))}
         </div>
       )}
 
@@ -180,6 +249,7 @@ export function NodeInspector({
             setConfig({ readonly_field_keys: [...current] });
           }}
           fields={fields}
+          groups={groups}
           readOnly={readOnly}
           onCreateField={onCreateField}
           onUpdateField={onUpdateField}
@@ -444,6 +514,7 @@ function Toggle({
 // desse catálogo ela pede pra preencher.
 function FieldsSection({
   fields,
+  groups,
   selected,
   readonlyKeys,
   allowReadonlyMode,
@@ -457,6 +528,7 @@ function FieldsSection({
   onCreated,
 }: {
   fields: WorkflowField[];
+  groups: BuilderGroup[];
   selected: string[];
   readonlyKeys: string[];
   allowReadonlyMode: boolean;
@@ -624,7 +696,23 @@ function FieldsSection({
           {fieldType === "select" && (
             <input name="options" required placeholder="Opções separadas por vírgula" className={`${input} bg-white`} />
           )}
-          {fieldType !== "attachment" && fieldType !== "calculated" && (
+          {fieldType === "group_ref" && (
+            <div className="space-y-1">
+              <select name="ref_group_id" required defaultValue="" aria-label="Grupo do campo" className={`${input} bg-white`}>
+                <option value="" disabled>
+                  Escolha o grupo…
+                </option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                    {g.uses_subgroups ? " (lista os subgrupos)" : " (sem subgrupos)"}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500">Quem preenche escolhe da lista de subgrupos do grupo. Se o grupo não usa subgrupos, vale o próprio grupo.</p>
+            </div>
+          )}
+          {fieldType !== "attachment" && fieldType !== "calculated" && fieldType !== "group_ref" && (
             <input name="default_value" placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
           )}
           {(fieldType === "number" || fieldType === "money" || fieldType === "percent") && (
@@ -646,7 +734,7 @@ function FieldsSection({
               Obrigatório, bloqueia &quot;Concluir&quot; até preencher
             </label>
           )}
-          {fieldType !== "boolean" && fieldType !== "attachment" && fieldType !== "calculated" && (
+          {fieldType !== "boolean" && fieldType !== "attachment" && fieldType !== "calculated" && fieldType !== "group_ref" && (
             <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
               <input type="checkbox" name="is_unique" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
               Não permitir duplicado entre sinistros
@@ -761,7 +849,8 @@ function EditFieldForm({
           className={`${input} bg-white`}
         />
       )}
-      {field.field_type !== "attachment" && field.field_type !== "calculated" && (
+      {field.field_type === "group_ref" && <p className="text-xs text-slate-500">O grupo do campo não muda depois de criado, porque os sinistros já guardam o valor escolhido.</p>}
+      {field.field_type !== "attachment" && field.field_type !== "calculated" && field.field_type !== "group_ref" && (
         <input name="default_value" defaultValue={field.default_value ?? ""} placeholder="Valor padrão (opcional)" className={`${input} bg-white`} />
       )}
       {(field.field_type === "number" || field.field_type === "money" || field.field_type === "percent") && (
@@ -816,7 +905,7 @@ function EditFieldForm({
           Obrigatório, bloqueia &quot;Concluir&quot; até preencher
         </label>
       )}
-      {field.field_type !== "boolean" && field.field_type !== "attachment" && field.field_type !== "calculated" && (
+      {field.field_type !== "boolean" && field.field_type !== "attachment" && field.field_type !== "calculated" && field.field_type !== "group_ref" && (
         <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
           <input
             type="checkbox"

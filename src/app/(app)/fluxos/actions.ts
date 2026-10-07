@@ -54,13 +54,14 @@ export type FieldResult =
         min_value: number | null;
         max_value: number | null;
         formula: string | null;
+        ref_group_id: string | null;
         position: number;
       };
     }
   | { ok: false; error: string };
 
-const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position";
-const FIELD_TYPES = ["text", "textarea", "number", "money", "percent", "calculated", "date", "boolean", "select", "person", "attachment"];
+const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, ref_group_id, position";
+const FIELD_TYPES = ["text", "textarea", "number", "money", "percent", "calculated", "date", "boolean", "select", "person", "attachment", "group_ref"];
 
 // Tamanho mínimo/máximo (só texto e texto longo): vazio = sem limite.
 function readLengths(formData: FormData, fieldType: string): { min_length: number | null; max_length: number | null } | { error: string } {
@@ -171,8 +172,10 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   }
 
   const required = formData.get("required") === "on";
-  const isUnique = formData.get("is_unique") === "on";
-  const defaultValue = String(formData.get("default_value") ?? "").trim() || null;
+  // Grupo ou subgrupo: o valor é sempre uma escolha da lista (nada de valor padrão nem de "duplicado entre sinistros")
+  const isRef = fieldType === "group_ref";
+  const isUnique = !isRef && formData.get("is_unique") === "on";
+  const defaultValue = isRef ? null : String(formData.get("default_value") ?? "").trim() || null;
   if (defaultValue && fieldType === "select" && !options?.includes(defaultValue)) {
     return { ok: false, error: "O valor padrão precisa ser uma das opções da lista." };
   }
@@ -182,6 +185,13 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   if ("error" in bounds) return { ok: false, error: bounds.error };
 
   const supabase = await createClient();
+  let refGroupId: string | null = null;
+  if (isRef) {
+    refGroupId = String(formData.get("ref_group_id") ?? "") || null;
+    if (!refGroupId) return { ok: false, error: "Escolha o grupo cujos subgrupos aparecem neste campo." };
+    const { data: refGroup } = await supabase.from("groups").select("id").eq("id", refGroupId).eq("tenant_id", ctx.tenantId).eq("status", "active").maybeSingle();
+    if (!refGroup) return { ok: false, error: "Grupo inválido." };
+  }
   const formulaRes = await readFormula(supabase, workflowId, key, fieldType, formData);
   if ("error" in formulaRes) return { ok: false, error: formulaRes.error };
   // campo novo entra no fim da ordem
@@ -210,6 +220,7 @@ export async function createWorkflowField(workflowId: string, formData: FormData
       min_value: bounds.min_value,
       max_value: bounds.max_value,
       formula: formulaRes.formula,
+      ref_group_id: refGroupId,
     })
     .select(FIELD_SELECT)
     .single();
@@ -247,8 +258,9 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
   }
 
   const required = formData.get("required") === "on";
-  const isUnique = formData.get("is_unique") === "on";
-  const defaultValue = String(formData.get("default_value") ?? "").trim() || null;
+  const editIsRef = existing.field_type === "group_ref";
+  const isUnique = !editIsRef && formData.get("is_unique") === "on";
+  const defaultValue = editIsRef ? null : String(formData.get("default_value") ?? "").trim() || null;
   if (defaultValue && existing.field_type === "select" && !options?.includes(defaultValue)) {
     return { ok: false, error: "O valor padrão precisa ser uma das opções da lista." };
   }
@@ -294,6 +306,14 @@ export async function deleteWorkflowField(fieldId: string, workflowId: string): 
   const supabase = await createClient();
   const { data: target } = await supabase.from("workflow_fields").select("key, label").eq("id", fieldId).eq("tenant_id", ctx.tenantId).maybeSingle();
   if (target) {
+    // um campo que define o subgrupo de uma etapa não pode sumir: a etapa ficaria sem saber para quem vai
+    const { data: versions } = await supabase.from("workflow_versions").select("id").eq("workflow_id", workflowId);
+    const versionIds = (versions ?? []).map((v) => v.id);
+    if (versionIds.length) {
+      const { data: nodeRows } = await supabase.from("workflow_nodes").select("name, config").in("workflow_version_id", versionIds);
+      const usedBy = (nodeRows ?? []).find((n) => ((n.config ?? {}) as { subgroup_field_key?: string }).subgroup_field_key === target.key);
+      if (usedBy) return { ok: false, error: `O campo "${target.label}" define o subgrupo da etapa "${usedBy.name}". Troque o subgrupo dessa etapa antes de excluir.` };
+    }
     // um campo usado na fórmula de outro não pode sumir: a conta quebraria em silêncio
     const { data: calcs } = await supabase.from("workflow_fields").select("label, formula").eq("workflow_id", workflowId).eq("field_type", "calculated");
     const user = (calcs ?? []).find((f) => f.formula && parseFormula(f.formula).ok && (parseFormula(f.formula) as { refs: string[] }).refs.includes(target.key));
@@ -509,6 +529,37 @@ export async function publishVersion(versionId: string, releaseNote: string): Pr
   const issues = validateGraph(graph);
   if (issues.some((i) => i.severity === "error")) {
     return { ok: false, error: "O fluxo tem erros e não pode ser publicado.", issues };
+  }
+
+  // Subgrupo de etapa conferido no servidor: o subgrupo fixo precisa ser do grupo da etapa, e o campo escolhido precisa ser do tipo
+  // Grupo ou subgrupo, apontar para o mesmo grupo, estar no Início e ser obrigatório (senão a etapa abriria sem saber para quem vai).
+  const subNodes = graph.nodes.filter((n) => n.config.subgroup_mode === "fixed" || n.config.subgroup_mode === "field");
+  if (subNodes.length) {
+    const { data: version } = await supabase.from("workflow_versions").select("workflow_id").eq("id", versionId).maybeSingle();
+    const [{ data: wfFields }, { data: subs }] = await Promise.all([
+      supabase.from("workflow_fields").select("key, label, field_type, required, ref_group_id").eq("workflow_id", version?.workflow_id ?? ""),
+      supabase.from("group_subgroups").select("id, group_id, status").eq("tenant_id", ctx.tenantId),
+    ]);
+    const startKeys = new Set(graph.nodes.filter((n) => n.type === "start").flatMap((n) => n.config.field_keys ?? []));
+    const problems: Issue[] = [];
+    for (const n of subNodes) {
+      if (!n.groupId) {
+        problems.push({ severity: "error", message: `A etapa "${n.name}" precisa de um grupo responsável para usar subgrupo.`, nodeId: n.id });
+      } else if (n.config.subgroup_mode === "fixed") {
+        const sub = (subs ?? []).find((x) => x.id === n.config.subgroup_id);
+        if (!sub || sub.group_id !== n.groupId || sub.status !== "active") {
+          problems.push({ severity: "error", message: `O subgrupo fixo da etapa "${n.name}" não existe mais ou não é do grupo da etapa.`, nodeId: n.id });
+        }
+      } else {
+        const f = (wfFields ?? []).find((x) => x.key === n.config.subgroup_field_key);
+        if (!f || f.field_type !== "group_ref" || f.ref_group_id !== n.groupId) {
+          problems.push({ severity: "error", message: `O campo escolhido para o subgrupo da etapa "${n.name}" não existe ou aponta para outro grupo.`, nodeId: n.id });
+        } else if (!f.required || !startKeys.has(f.key)) {
+          problems.push({ severity: "error", message: `O campo "${f.label}" define o subgrupo da etapa "${n.name}": ele precisa estar no Início e ser obrigatório.`, nodeId: n.id });
+        }
+      }
+    }
+    if (problems.length) return { ok: false, error: "O fluxo tem erros e não pode ser publicado.", issues: problems };
   }
 
   const { error } = await supabase.rpc("publish_workflow_version", {

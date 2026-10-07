@@ -53,13 +53,11 @@ export type OperationalSnapshot = {
 //
 // `groupId`: visão do Operador. Só entram os ciclos em que o grupo dele tem (ou teve) atividade, e os prazos contados são
 // os das etapas desse grupo. Sem `groupId` (Administrador) é a empresa inteira.
-export async function loadGroupScope(supabase: Supa, tenantId: string, groupId: string | null): Promise<{ cycleIds: Set<string>; stageIds: Set<string> }> {
+export async function loadGroupScope(supabase: Supa, tenantId: string, groupId: string | null, subgroupId: string | null = null): Promise<{ cycleIds: Set<string>; stageIds: Set<string> }> {
   if (!groupId) return { cycleIds: new Set(), stageIds: new Set() };
-  const { data: acts } = await supabase
-    .from("activity_instances")
-    .select("stage_instance_id")
-    .eq("tenant_id", tenantId)
-    .eq("group_id", groupId);
+  // etapa de um subgrupo só conta para quem está nele; etapa sem subgrupo, para todo o grupo
+  const query = supabase.from("activity_instances").select("stage_instance_id").eq("tenant_id", tenantId).eq("group_id", groupId);
+  const { data: acts } = await (subgroupId ? query.or(`subgroup_id.is.null,subgroup_id.eq.${subgroupId}`) : query.is("subgroup_id", null));
   const stageIds = [...new Set((acts ?? []).map((a) => a.stage_instance_id))];
   const { data: stages } = stageIds.length
     ? await supabase.from("stage_instances").select("id, claim_cycle_id").in("id", stageIds)
@@ -89,11 +87,13 @@ type RpcSummary = {
 export async function loadOperationalSnapshot(
   supabase: Supa,
   tenantId: string,
-  scope?: { groupId: string | null },
+  scope?: { groupId: string | null; subgroupId?: string | null },
 ): Promise<OperationalSnapshot> {
   const { data, error } = await supabase.rpc("operational_summary", {
     p_tenant_id: tenantId,
     p_group_id: scope ? (scope.groupId ?? NO_GROUP) : undefined,
+    p_subgroup_id: scope?.subgroupId ?? undefined,
+    p_scope_subgroup: scope ? true : undefined,
   });
   if (error) throw new Error(error.message);
   const r = data as unknown as RpcSummary;
@@ -117,11 +117,13 @@ export type OperationalTrend = { days: string[]; total: number[]; open: number[]
 
 // Linhas dos cards do Dashboard: por data de abertura (formalização), um ponto por dia. Falha aqui nunca derruba a tela:
 // sem tendência os cards só mostram o número.
-export async function loadOperationalTrend(supabase: Supa, tenantId: string, scope?: { groupId: string | null }, days = 30): Promise<OperationalTrend | null> {
+export async function loadOperationalTrend(supabase: Supa, tenantId: string, scope?: { groupId: string | null; subgroupId?: string | null }, days = 30): Promise<OperationalTrend | null> {
   const { data, error } = await supabase.rpc("operational_trend", {
     p_tenant_id: tenantId,
     p_group_id: scope ? (scope.groupId ?? NO_GROUP) : undefined,
     p_days: days,
+    p_subgroup_id: scope?.subgroupId ?? undefined,
+    p_scope_subgroup: scope ? true : undefined,
   });
   if (error || !data) return null;
   const r = data as unknown as { days: string[]; total: number[]; open: number[]; blocked: number[]; completed: number[]; overdue: number[]; at_risk: number[] };

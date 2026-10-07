@@ -12,6 +12,11 @@ export type NodeConfig = {
   sla_unit?: "h" | "d" | "bd";
   sla_bd_days?: number;
   sla_calendar_id?: string;
+  // Quem da equipe do grupo faz a etapa: "all" todos do grupo (padrão), "fixed" um subgrupo fixo, "field" o subgrupo escolhido
+  // em um campo do sinistro (campo do tipo Grupo ou subgrupo, apontando para este mesmo grupo).
+  subgroup_mode?: "all" | "fixed" | "field";
+  subgroup_id?: string;
+  subgroup_field_key?: string;
   loop_max?: number;
   join_rule?: JoinRule;
   min_count?: number;
@@ -23,7 +28,7 @@ export type NodeConfig = {
   readonly_field_keys?: string[];
 };
 
-export type FieldType = "text" | "textarea" | "number" | "money" | "percent" | "calculated" | "date" | "boolean" | "select" | "person" | "attachment";
+export type FieldType = "text" | "textarea" | "number" | "money" | "percent" | "calculated" | "date" | "boolean" | "select" | "person" | "attachment" | "group_ref";
 
 export type WorkflowField = {
   id: string;
@@ -39,6 +44,8 @@ export type WorkflowField = {
   min_value: number | null;
   max_value: number | null;
   formula: string | null;
+  // Só no tipo group_ref: o grupo cujos subgrupos (ou o próprio grupo) viram as opções do campo
+  ref_group_id: string | null;
   position: number;
 };
 
@@ -54,6 +61,7 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
   select: "Lista de opções",
   person: "Pessoa",
   attachment: "Anexo (foto/vídeo/arquivo)",
+  group_ref: "Grupo ou subgrupo",
 };
 
 // Tipos cujo valor em claims.custom_fields é o caminho de um arquivo no Storage (bucket
@@ -156,3 +164,6 @@ export function formatSla(minutes?: number, config?: { sla_unit?: string; sla_bd
 }
 
 export type CalendarOption = { id: string; name: string; business_start?: string | null; business_end?: string | null };
+
+// Grupo como o editor do fluxo enxerga: com os subgrupos ativos, quando o grupo usa subgrupos.
+export type BuilderGroup = { id: string; name: string; uses_subgroups?: boolean; subgroups?: { id: string; name: string }[] };

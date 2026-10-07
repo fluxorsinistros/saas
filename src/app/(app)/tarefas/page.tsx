@@ -24,12 +24,16 @@ export default async function TarefasPage() {
 
   let query = supabase
     .from("activity_instances")
-    .select("id, status, group_id, started_at, stage_instance_id")
+    .select("id, status, group_id, subgroup_id, started_at, stage_instance_id")
     .eq("tenant_id", ctx.tenantId)
     .in("status", ["not_started", "in_progress"])
     .order("started_at", { ascending: true })
     .limit(100);
-  if (scope === "mine") query = query.in("group_id", myGroupIds.length ? myGroupIds : ["00000000-0000-0000-0000-000000000000"]);
+  if (scope === "mine") {
+    query = query.in("group_id", myGroupIds.length ? myGroupIds : ["00000000-0000-0000-0000-000000000000"]);
+    // etapa de um subgrupo só aparece para quem está nele; etapa sem subgrupo, para todo o grupo
+    query = activeGroup?.subgroup_id ? query.or(`subgroup_id.is.null,subgroup_id.eq.${activeGroup.subgroup_id}`) : query.is("subgroup_id", null);
+  }
   const { data: activities } = await query;
 
   const stageIds = [...new Set((activities ?? []).map((a) => a.stage_instance_id))];

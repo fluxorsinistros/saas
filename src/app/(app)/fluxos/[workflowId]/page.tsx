@@ -43,11 +43,11 @@ export default async function WorkflowPage({
       .select("id, from_node_id, to_node_id, edge_type, label, is_required")
       .eq("workflow_version_id", version.id)
       .order("order_index"),
-    supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
+    supabase.from("groups").select("id, name, uses_subgroups, group_subgroups(id, name, status)").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
     supabase.from("sla_calendars").select("id, name, business_start, business_end").eq("tenant_id", ctx.tenantId).order("name"),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, position")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, ref_group_id, position")
       .order("position")
       .eq("workflow_id", workflowId)
       .order("created_at"),
@@ -65,7 +65,12 @@ export default async function WorkflowPage({
       versions={versions}
       initialNodes={nodes ?? []}
       initialEdges={edges ?? []}
-      groups={groups ?? []}
+      groups={(groups ?? []).map((g) => ({
+        id: g.id,
+        name: g.name,
+        uses_subgroups: g.uses_subgroups,
+        subgroups: (g.group_subgroups ?? []).filter((x) => x.status === "active").map((x) => ({ id: x.id, name: x.name })),
+      }))}
       calendars={calendars ?? []}
       defaultCalendarId={defaultCalendarId}
       initialFields={(fields ?? []).map((f) => ({
