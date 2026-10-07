@@ -7,6 +7,7 @@ import { accumulatedMinutes, longestPath } from "@/lib/workflow/path";
 import { GroupChip } from "@/lib/group-icons";
 import { ActivityForm } from "@/components/execution/ActivityForm";
 import { AbortBranchForm } from "@/components/execution/AbortBranchForm";
+import { AuthorizeBlockForm } from "@/components/execution/AuthorizeBlockForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { UNDO_WINDOW_MINUTES } from "@/lib/undo";
 import { getMemberGroups } from "@/lib/active-group";
@@ -32,6 +33,7 @@ import {
   chooseDecision,
   completeActivityWithState,
   abortBranchWithState,
+  authorizeBlockedCycleWithState,
   undoActivityCompletion,
   createPendingItem,
   decideDuplicate,
@@ -471,7 +473,7 @@ export default async function ClaimPage({
   const flowBundle = bundleOf(flowBdNode);
   const flowTargetAt = flowBundle && flowLimitMinutes ? flowDeadlineIso(flowStartedAt, flowLimitMinutes, flowBundle) : undefined;
   const cycleCancelled = cycle.status === "cancelled";
-  const runningFlowSla = !cycleDone && !cycleCancelled ? computeSla(flowStartedAt, flowLimitMinutes, flowTargetAt, flowBundle) : null;
+  const runningFlowSla = !cycleDone && !cycleCancelled && cycle.status !== "blocked" ? computeSla(flowStartedAt, flowLimitMinutes, flowTargetAt, flowBundle) : null;
   // O limite do fluxo vem em minutos de expediente: com calendário de dias úteis, mostra "N dias úteis" em vez de dias de 24h
   const flowJourney = flowBundle ? businessDayMinutes(flowBundle.calendar) : null;
   const fmtLimit = (m: number) => (flowJourney ? `${+(m / flowJourney).toFixed(1)} dias úteis` : formatDuration(m));
@@ -515,7 +517,9 @@ export default async function ClaimPage({
     ),
   ];
 
-  const blockedReason = auditLogs?.find((a) => a.action === "cycle.blocked")?.reason;
+  const blockedLog = auditLogs?.find((a) => a.action === "cycle.blocked");
+  const blockedReason = blockedLog?.reason;
+  const canAuthorizeBlock = isAdmin && !!(blockedLog?.new_value as { limit?: boolean } | null)?.limit;
 
   // Convergências (Documento 3 §5): mostra "aguardando N de M" enquanto o join não libera, sem
   // isso o usuário vê uma etapa "Convergência" concluída na trilha sem entender por que o processo
@@ -805,6 +809,11 @@ export default async function ClaimPage({
             <div>
               <p className="font-medium">Este ciclo está bloqueado.</p>
               <p className="mt-0.5">{blockedReason ?? "Motivo não registrado."}</p>
+              {canAuthorizeBlock ? (
+                <AuthorizeBlockForm action={authorizeBlockedCycleWithState.bind(null, cycle.id)} />
+              ) : (
+                <p className="mt-1 text-[12px] text-rose-700">Peça a um Administrador para autorizar a continuação, ou aborte a via.</p>
+              )}
             </div>
           </div>
         )}

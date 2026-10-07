@@ -568,7 +568,11 @@ async function advance(
 
   if (result.kind === "unsupported") {
     await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
-    await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, { reason: result.reason });
+    // Bloqueio por limite de repetições: guarda de onde veio e para onde ia, para um Administrador poder autorizar e continuar
+    await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, {
+      reason: result.reason,
+      next: result.limit ? { limit: true, from: fromNodeId, targets: result.blockedTargets ?? [], branchInstanceId } : undefined,
+    });
     return;
   }
   if (result.kind === "end") return;
@@ -1459,7 +1463,7 @@ export async function abortBranch(branchInstanceId: string, formData: FormData):
   if (!branch) throw new Error("Via sem sinistro.");
   const { data: cycle } = await supabase.from("claim_cycles").select("id, claim_id, status, workflow_version_id").eq("id", branch.claim_cycle_id).single();
   if (!cycle) throw new Error("Ciclo não encontrado.");
-  if (["completed", "blocked", "discarded", "cancelled", "archived"].includes(cycle.status)) {
+  if (["completed", "discarded", "cancelled", "archived"].includes(cycle.status)) {
     throw new Error(`Este ciclo não permite abortar a via (status atual: ${cycle.status}).`);
   }
 
@@ -1527,6 +1531,59 @@ export async function abortBranch(branchInstanceId: string, formData: FormData):
       await supabase.from("claim_cycles").update({ status: "cancelled" }).eq("id", cycle.id);
       await writeAudit(supabase, ctx.tenantId, "cycle.cancelled", "claim_cycle", cycle.id, { reason: "Todas as vias foram abortadas e nenhuma chegou ao fim." });
     }
+  }
+
+  revalidatePath("/sinistros");
+  revalidatePath(`/sinistros/${cycle.claim_id}`);
+  revalidatePath("/tarefas");
+}
+
+export async function authorizeBlockedCycleWithState(cycleId: string, _prev: { error: string | null }, formData: FormData): Promise<{ error: string | null }> {
+  try {
+    await authorizeBlockedCycle(cycleId, formData);
+    return { error: null };
+  } catch (e) {
+    const digest = (e as { digest?: string } | null)?.digest;
+    if (typeof digest === "string" && digest.startsWith("NEXT_")) throw e;
+    return { error: e instanceof Error && e.message ? e.message : "Não foi possível autorizar. Tente de novo." };
+  }
+}
+
+// Sinistro bloqueado porque a próxima etapa bateu no limite de repetições: um Administrador autoriza mais uma passagem, com motivo.
+// O sinistro volta a andar entrando na etapa que estava barrada.
+export async function authorizeBlockedCycle(cycleId: string, formData: FormData): Promise<void> {
+  const ctx = await getTenantContext();
+  await requirePermission(ctx, "claim.execute");
+  if (!(await isTenantAdmin(ctx.userId, ctx.tenantId))) throw new Error("Só um Administrador autoriza a continuação de um sinistro bloqueado.");
+  const supabase = await createClient();
+
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < 3) throw new Error("Explique o motivo da autorização.");
+
+  const { data: cycle } = await supabase.from("claim_cycles").select("id, claim_id, status, workflow_version_id").eq("id", cycleId).single();
+  if (!cycle) throw new Error("Ciclo não encontrado.");
+  if (cycle.status !== "blocked") throw new Error("Este ciclo não está bloqueado.");
+
+  const { data: log } = await supabase
+    .from("audit_logs")
+    .select("new_value")
+    .eq("entity_id", cycle.id)
+    .eq("action", "cycle.blocked")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const ctxBlock = (log?.new_value ?? null) as { limit?: boolean; from?: string; targets?: string[]; branchInstanceId?: string | null } | null;
+  if (!ctxBlock?.limit || !ctxBlock.targets?.length || !ctxBlock.from) {
+    throw new Error("Este bloqueio não é de limite de repetições e não pode ser autorizado por aqui. Descarte o ciclo ou aborte a via.");
+  }
+
+  const graph = await loadGraph(supabase, cycle.workflow_version_id);
+  await supabase.from("claim_cycles").update({ status: "open" }).eq("id", cycle.id);
+  await writeAudit(supabase, ctx.tenantId, "cycle.authorized", "claim_cycle", cycle.id, { reason, next: { targets: ctxBlock.targets } });
+  if (ctxBlock.targets.length > 1) {
+    await openRouteBranches(supabase, ctx.tenantId, cycle.id, cycle.workflow_version_id, graph, ctxBlock.from, ctxBlock.targets, ctxBlock.branchInstanceId ?? null);
+  } else {
+    await enterNode(supabase, ctx.tenantId, cycle.id, cycle.workflow_version_id, graph, ctxBlock.targets[0], "authorized", ctxBlock.branchInstanceId ?? null);
   }
 
   revalidatePath("/sinistros");

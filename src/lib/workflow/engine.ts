@@ -9,7 +9,7 @@ import type { Graph, GraphNode } from "./types";
 export type TransitionResult =
   | { kind: "advance"; targets: string[] }
   | { kind: "end" }
-  | { kind: "unsupported"; reason: string; limit?: boolean };
+  | { kind: "unsupported"; reason: string; limit?: boolean; blockedTargets?: string[] };
 
 export function startNode(graph: Graph): GraphNode {
   const targets = new Set(graph.edges.filter((e) => e.kind !== "return").map((e) => e.target));
@@ -88,8 +88,9 @@ function checkedAdvance(
       const name = graph.nodes.find((n) => n.id === targetId)?.name ?? targetId;
       return {
         kind: "unsupported",
-        reason: `"${name}" atingiu o limite de ${max} repetições configurado para o retorno. É preciso autorização para continuar (ainda não implementada).`,
+        reason: `"${name}" atingiu o limite de ${max} repetições configurado para o retorno. Um Administrador pode autorizar mais uma passagem.`,
         limit: true,
+        blockedTargets: targetIds,
       };
     }
   }
