@@ -4,7 +4,8 @@ import Link from "next/link";
 import { AlertTriangle, BarChart3, CheckCircle2, Clock3, GitBranch, ListChecks } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { loadGroupScope, loadOperationalSnapshot } from "@/lib/reports";
+import { loadGroupScope, loadOperationalSnapshot, loadOperationalTrend } from "@/lib/reports";
+import { Sparkline } from "@/components/reports/Sparkline";
 import { getMemberGroups } from "@/lib/active-group";
 import { MagnitudeBars } from "@/components/reports/Bars";
 import { loadGraph } from "@/lib/workflow/load-graph";
@@ -250,7 +251,11 @@ export default async function TorreDeControlePage({
 
   // Carrega snapshot se estiver na aba de números/indicadores
   // Indicadores são um resumo calculado no banco (tamanho fixo, não cresce com o número de sinistros): carregam direto.
-  const snap = currentTab === "numeros" ? await loadOperationalSnapshot(supabase, ctx.tenantId, isAdmin ? undefined : { groupId: activeGroup?.id ?? null }) : null;
+  const numScope = isAdmin ? undefined : { groupId: activeGroup?.id ?? null };
+  const [snap, trend] =
+    currentTab === "numeros"
+      ? await Promise.all([loadOperationalSnapshot(supabase, ctx.tenantId, numScope), loadOperationalTrend(supabase, ctx.tenantId, numScope, 30)])
+      : [null, null];
   const open = snap
     ? (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0)
     : 0;
@@ -292,15 +297,15 @@ export default async function TorreDeControlePage({
         {currentTab === "numeros" && snap && (
           <div className="mt-6 space-y-8">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="Total" value={snap.totalCycles} tone="neutral" />
-              <Stat label="Em andamento" value={open} tone="brand" />
-              <Stat label="Bloqueados" value={blocked} tone="danger" />
-              <Stat label="Concluídos" value={completed} tone="ok" />
+              <Stat label="Total" value={snap.totalCycles} tone="neutral" series={trend?.total} />
+              <Stat label="Em andamento" value={open} tone="brand" series={trend?.open} />
+              <Stat label="Bloqueados" value={blocked} tone="danger" series={trend?.blocked} />
+              <Stat label="Concluídos" value={completed} tone="ok" series={trend?.completed} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Stat label="Atrasados (SLA)" value={snap.slaOverdueCount} tone="danger" />
-              <Stat label="Próximos do prazo" value={snap.slaAtRiskCount} tone="warning" />
+              <Stat label="Atrasados (SLA)" value={snap.slaOverdueCount} tone="danger" series={trend?.overdue} />
+              <Stat label="Próximos do prazo" value={snap.slaAtRiskCount} tone="warning" series={trend?.atRisk} />
             </div>
 
             {(snap.slaOverdueCount > 0 || snap.slaAtRiskCount > 0) && (
@@ -416,7 +421,7 @@ export default async function TorreDeControlePage({
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: "neutral" | "brand" | "danger" | "ok" | "warning" }) {
+function Stat({ label, value, tone, series }: { label: string; value: number; tone: "neutral" | "brand" | "danger" | "ok" | "warning"; series?: number[] }) {
   const toneClass =
     tone === "danger"
       ? "text-rose-600"
@@ -427,10 +432,24 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: "neu
           : tone === "brand"
             ? "text-brand"
             : "text-slate-900";
+  const lineClass = tone === "danger" ? "text-rose-500" : tone === "warning" ? "text-amber-500" : tone === "ok" ? "text-emerald-500" : tone === "brand" ? "text-sky-500" : "text-blue-500";
+  const sum = series?.reduce((x, y) => x + y, 0) ?? 0;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <div className="text-[12px] text-slate-500">{label}</div>
-      <div className={`mt-1 text-[22px] font-semibold tracking-tight ${toneClass}`}>{value}</div>
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="px-4 pt-3">
+        <div className="text-[12px] text-slate-500">{label}</div>
+        <div className={`mt-1 text-[22px] font-semibold tracking-tight ${toneClass}`}>{value}</div>
+      </div>
+      {series && series.length > 1 ? (
+        <Sparkline
+          values={series}
+          id={`torre-${label.replace(/\W+/g, "-")}`}
+          className={`mt-1 block h-8 w-full ${lineClass}`}
+          summary={`Por data de abertura, últimos 30 dias: ${sum} sinistro(s) nesta situação`}
+        />
+      ) : (
+        <div className="h-3" />
+      )}
     </div>
   );
 }

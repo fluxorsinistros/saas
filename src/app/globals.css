@@ -590,9 +590,19 @@ div[data-theme="dark"] {
 .sidebar-glass nav::-webkit-scrollbar { display: none; }
 :is(.dark, [data-theme="dark"]) .sidebar-glass nav { scrollbar-width: thin; }
 
+/* Barra de controles da lista de sinistros: vidro azul mais leve no claro; no escuro o mesmo vidro neutro dos cartões */
+.list-toolbar {
+  background: rgba(48, 103, 173, 0.5);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+:is(.dark, [data-theme="dark"]) .list-toolbar { background: rgba(17, 24, 39, 0.62); }
+
 /* Tabelas no mesmo vidro: cabeçalho com a tinta azul do menu, linhas translúcidas (listras bem leves) */
 .app-content-bg .bg-navy {
-  background-color: rgba(18, 75, 143, 0.62);
+  background-color: rgba(48, 103, 173, 0.5);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 .app-content-bg tbody tr {
   background-color: transparent !important;

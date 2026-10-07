@@ -3,9 +3,10 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock3, FolderOpen, Hourglass, Loader2, OctagonAlert, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { loadOperationalSnapshot } from "@/lib/reports";
+import { loadOperationalSnapshot, loadOperationalTrend } from "@/lib/reports";
 import { getMemberGroups } from "@/lib/active-group";
 import { MagnitudeBars } from "@/components/reports/Bars";
+import { Sparkline } from "@/components/reports/Sparkline";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -17,7 +18,8 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   // Administrador vê a empresa inteira; Operador, só o grupo em que está atuando.
   const { isAdmin, active } = await getMemberGroups(ctx.userId, ctx.tenantId);
-  const snap = await loadOperationalSnapshot(supabase, ctx.tenantId, isAdmin ? undefined : { groupId: active?.id ?? null });
+  const scope = isAdmin ? undefined : { groupId: active?.id ?? null };
+  const [snap, trend] = await Promise.all([loadOperationalSnapshot(supabase, ctx.tenantId, scope), loadOperationalTrend(supabase, ctx.tenantId, scope, 30)]);
 
   const open = (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0);
   const blocked = snap.statusCounts.blocked ?? 0;
@@ -37,15 +39,15 @@ export default async function DashboardPage() {
         </p>
 
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card label="Total de sinistros" value={snap.totalCycles} icon={FolderOpen} tone="blue" />
-          <Card label="Em andamento" value={open} icon={Loader2} tone="sky" />
-          <Card label="Bloqueados" value={blocked} accent={blocked > 0 ? "text-rose-600" : undefined} icon={OctagonAlert} tone="rose" />
-          <Card label="Taxa de conclusão" value={`${completionRate}%`} icon={CheckCircle2} tone="emerald" />
+          <Card label="Total de sinistros" value={snap.totalCycles} icon={FolderOpen} tone="blue" series={trend?.total} />
+          <Card label="Em andamento" value={open} icon={Loader2} tone="sky" series={trend?.open} />
+          <Card label="Bloqueados" value={blocked} accent={blocked > 0 ? "text-rose-600" : undefined} icon={OctagonAlert} tone="rose" series={trend?.blocked} />
+          <Card label="Taxa de conclusão" value={`${completionRate}%`} icon={CheckCircle2} tone="emerald" series={trend?.completed} />
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <Card label="Atrasados (SLA)" value={snap.slaOverdueCount} accent={snap.slaOverdueCount > 0 ? "text-rose-600" : undefined} icon={Clock3} tone="rose" />
-          <Card label="Próximos do prazo" value={snap.slaAtRiskCount} accent={snap.slaAtRiskCount > 0 ? "text-amber-600" : undefined} icon={Hourglass} tone="amber" />
+          <Card label="Atrasados (SLA)" value={snap.slaOverdueCount} accent={snap.slaOverdueCount > 0 ? "text-rose-600" : undefined} icon={Clock3} tone="rose" series={trend?.overdue} />
+          <Card label="Próximos do prazo" value={snap.slaAtRiskCount} accent={snap.slaAtRiskCount > 0 ? "text-amber-600" : undefined} icon={Hourglass} tone="amber" series={trend?.atRisk} />
         </div>
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
@@ -95,16 +97,39 @@ const TONES: Record<string, string> = {
   amber: "bg-amber-100/80 text-amber-700",
 };
 
-function Card({ label, value, accent, icon: Icon, tone }: { label: string; value: number | string; accent?: string; icon: LucideIcon; tone: keyof typeof TONES }) {
+const LINE: Record<string, string> = {
+  blue: "text-blue-500",
+  sky: "text-sky-500",
+  rose: "text-rose-500",
+  emerald: "text-emerald-500",
+  amber: "text-amber-500",
+};
+
+// `series`: um valor por dia, pela data de abertura do sinistro (últimos 30 dias), sempre quantos dos abertos naquele dia
+// estão hoje na situação do card.
+function Card({ label, value, accent, icon: Icon, tone, series }: { label: string; value: number | string; accent?: string; icon: LucideIcon; tone: keyof typeof TONES; series?: number[] }) {
+  const sum = series?.reduce((a, b) => a + b, 0) ?? 0;
   return (
-    <div className="glass-card flex items-start justify-between gap-3 px-4 py-4">
-      <div className="min-w-0">
-        <dt className="text-[12px] font-medium text-slate-700">{label}</dt>
-        <dd className={`mt-1.5 text-[28px] font-semibold leading-none tracking-tight ${accent ?? "text-slate-900"}`}>{value}</dd>
+    <div className="glass-card overflow-hidden">
+      <div className="flex items-start justify-between gap-3 px-4 pt-4">
+        <div className="min-w-0">
+          <dt className="text-[12px] font-medium text-slate-700">{label}</dt>
+          <dd className={`mt-1.5 text-[28px] font-semibold leading-none tracking-tight ${accent ?? "text-slate-900"}`}>{value}</dd>
+        </div>
+        <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${TONES[tone]}`} aria-hidden="true">
+          <Icon className="size-5" />
+        </span>
       </div>
-      <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${TONES[tone]}`} aria-hidden="true">
-        <Icon className="size-5" />
-      </span>
+      {series && series.length > 1 ? (
+        <Sparkline
+          values={series}
+          id={label.replace(/\W+/g, "-")}
+          className={`mt-2 block h-9 w-full ${LINE[tone]}`}
+          summary={`Por data de abertura, últimos 30 dias: ${sum} sinistro(s) nesta situação`}
+        />
+      ) : (
+        <div className="h-4" />
+      )}
     </div>
   );
 }

@@ -112,3 +112,18 @@ export async function loadOperationalSnapshot(
     slaAtRiskCount: r.sla_at_risk_count,
   };
 }
+
+export type OperationalTrend = { days: string[]; total: number[]; open: number[]; blocked: number[]; completed: number[]; overdue: number[]; atRisk: number[] };
+
+// Linhas dos cards do Dashboard: por data de abertura (formalização), um ponto por dia. Falha aqui nunca derruba a tela:
+// sem tendência os cards só mostram o número.
+export async function loadOperationalTrend(supabase: Supa, tenantId: string, scope?: { groupId: string | null }, days = 30): Promise<OperationalTrend | null> {
+  const { data, error } = await supabase.rpc("operational_trend", {
+    p_tenant_id: tenantId,
+    p_group_id: scope ? (scope.groupId ?? NO_GROUP) : undefined,
+    p_days: days,
+  });
+  if (error || !data) return null;
+  const r = data as unknown as { days: string[]; total: number[]; open: number[]; blocked: number[]; completed: number[]; overdue: number[]; at_risk: number[] };
+  return { days: r.days, total: r.total, open: r.open, blocked: r.blocked, completed: r.completed, overdue: r.overdue, atRisk: r.at_risk };
+}

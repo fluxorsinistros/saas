@@ -49,8 +49,7 @@ export function ListControls({ visao, agrupar, ordem, dir, por, q, base }: Props
 
   return (
     <div
-      className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-2.5 rounded-xl px-3 py-2.5"
-      style={{ background: "rgba(10, 56, 120, 0.62)", WebkitBackdropFilter: "blur(14px)", backdropFilter: "blur(14px)" }}
+      className="list-toolbar mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-2.5 rounded-xl px-3 py-2.5"
     >
       <form
         role="search"
