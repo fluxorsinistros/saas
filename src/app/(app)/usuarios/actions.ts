@@ -23,6 +23,16 @@ async function activeUserCount(tenantId: string): Promise<number> {
   return count ?? 0;
 }
 
+// Subgrupo escolhido para cada grupo marcado (campos subgroup_<id do grupo>).
+function readSubgroups(formData: FormData, groupIds: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const gid of groupIds) {
+    const v = String(formData.get(`subgroup_${gid}`) ?? "");
+    if (v) out[gid] = v;
+  }
+  return out;
+}
+
 // Novo usuário da empresa, pelo Administrador: quem já tem conta entra na hora; quem não tem vira convite
 // (com e-mail, se marcado). Erros voltam como mensagem, porque lançar erro vira texto genérico em produção.
 export async function addUser(_prev: AccessState, formData: FormData): Promise<AccessState> {
@@ -41,11 +51,13 @@ export async function addUser(_prev: AccessState, formData: FormData): Promise<A
   }
 
   const groupIds = formData.getAll("group_ids").map(String).filter(Boolean);
+  const subgroups = readSubgroups(formData, groupIds);
   const { data, error } = await supabase.rpc("tenant_add_user", {
     p_tenant_id: ctx.tenantId,
     p_email: email,
     p_role_id: roleId,
     p_group_id: groupIds[0] ?? null,
+    p_subgroup_id: subgroups[groupIds[0] ?? ""] ?? null,
     p_full_name: String(formData.get("full_name") ?? "").trim() || null,
     p_phone: String(formData.get("phone") ?? "").trim() || null,
     p_cpf: String(formData.get("cpf") ?? "").trim() || null,
@@ -59,7 +71,7 @@ export async function addUser(_prev: AccessState, formData: FormData): Promise<A
       .eq("tenant_id", ctx.tenantId)
       .eq("user_profiles.email", email)
       .maybeSingle();
-    if (created) await supabase.rpc("set_member_groups", { p_membership_id: created.id, p_group_ids: groupIds });
+    if (created) await supabase.rpc("set_member_groups", { p_membership_id: created.id, p_group_ids: groupIds, p_subgroups: subgroups });
   }
   const orgId = String(formData.get("organization_id") ?? "");
   if (orgId) {
@@ -101,6 +113,7 @@ export async function updateMemberAccess(_prev: AccessState, formData: FormData)
   }
 
   const groupIds = formData.getAll("group_ids").map(String).filter(Boolean);
+  const subgroups = readSubgroups(formData, groupIds);
   const { error } = await supabase.rpc("tenant_update_member", {
     p_membership_id: membershipId,
     p_role_id: roleId,
@@ -109,7 +122,7 @@ export async function updateMemberAccess(_prev: AccessState, formData: FormData)
   });
   if (error) return { ok: false, message: publicDbMessage(error) };
   // As funções acima gravam só o primeiro grupo; a lista completa (Operador em vários grupos) entra aqui.
-  const { error: groupsError } = await supabase.rpc("set_member_groups", { p_membership_id: membershipId, p_group_ids: groupIds });
+  const { error: groupsError } = await supabase.rpc("set_member_groups", { p_membership_id: membershipId, p_group_ids: groupIds, p_subgroups: subgroups });
   if (groupsError) return { ok: false, message: publicDbMessage(groupsError) };
   const orgId = String(formData.get("organization_id") ?? "");
   if (orgId) {

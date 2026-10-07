@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { updateMemberAccess } from "../actions";
+import { GroupPicker, type PickerGroup } from "@/components/GroupPicker";
 
 const input =
   "w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15 disabled:bg-slate-50 disabled:text-slate-500";
@@ -20,6 +21,7 @@ export function MemberEditForm({
   tenantName,
   roleId,
   groupIds,
+  subgroupByGroup,
   active,
   roles,
   groups,
@@ -34,9 +36,10 @@ export function MemberEditForm({
   tenantName: string;
   roleId: string;
   groupIds: string[];
+  subgroupByGroup: Record<string, string>;
   active: boolean;
   roles: Option[];
-  groups: Option[];
+  groups: PickerGroup[];
   organizations: Option[];
   organizationId: string;
 }) {
@@ -121,14 +124,7 @@ export function MemberEditForm({
       ) : (
         <fieldset className="max-w-sm">
           <legend className="mb-1 block text-[12px] font-medium text-slate-600">Grupos de usuários</legend>
-          <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-2">
-            {groups.map((g) => (
-              <label key={g.id} className="flex items-center gap-2 text-[13px] text-slate-700">
-                <input type="checkbox" name="group_ids" value={g.id} defaultChecked={groupIds.includes(g.id)} /> {g.name}
-              </label>
-            ))}
-            {groups.length === 0 && <p className="text-xs text-slate-500">A empresa ainda não tem grupos.</p>}
-          </div>
+          <GroupPicker groups={groups} selectedIds={groupIds} selectedSubgroups={subgroupByGroup} />
           <p className="mt-1 text-xs text-slate-500">
             O Operador pode estar em vários grupos, mas atua em um por vez (ele escolhe no menu). É o grupo que define o acesso.
           </p>

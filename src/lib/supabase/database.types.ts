@@ -1113,20 +1113,24 @@ export type Database = {
           group_id: string
           id: string
           membership_id: string
+          subgroup_id: string | null
         }
         Insert: {
           created_at?: string
           group_id: string
           id?: string
           membership_id: string
+          subgroup_id?: string | null
         }
         Update: {
           created_at?: string
           group_id?: string
           id?: string
           membership_id?: string
+          subgroup_id?: string | null
         }
         Relationships: [
+          { foreignKeyName: "group_members_subgroup_fk"; columns: ["subgroup_id"]; isOneToOne: false; referencedRelation: "group_subgroups"; referencedColumns: ["id"] },
           {
             foreignKeyName: "group_members_group_id_fkey"
             columns: ["group_id"]
@@ -1143,6 +1147,14 @@ export type Database = {
           },
         ]
       }
+      group_subgroups: {
+        Row: { contact_email: string | null; created_at: string; group_id: string; id: string; name: string; status: string; tenant_id: string; updated_at: string }
+        Insert: { contact_email?: string | null; created_at?: string; group_id: string; id?: string; name: string; status?: string; tenant_id: string; updated_at?: string }
+        Update: { contact_email?: string | null; created_at?: string; group_id?: string; id?: string; name?: string; status?: string; tenant_id?: string; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: "group_subgroups_group_id_fkey"; columns: ["group_id"]; isOneToOne: false; referencedRelation: "groups"; referencedColumns: ["id"] },
+        ]
+      }
       groups: {
         Row: {
           created_at: string
@@ -1155,8 +1167,10 @@ export type Database = {
           id: string
           name: string
           status: string
+          subgroup_required: boolean
           tenant_id: string
           updated_at: string
+          uses_subgroups: boolean
         }
         Insert: {
           created_at?: string
@@ -1169,8 +1183,10 @@ export type Database = {
           id?: string
           name: string
           status?: string
+          subgroup_required?: boolean
           tenant_id: string
           updated_at?: string
+          uses_subgroups?: boolean
         }
         Update: {
           created_at?: string
@@ -1183,7 +1199,9 @@ export type Database = {
           id?: string
           name?: string
           status?: string
+          subgroup_required?: boolean
           tenant_id?: string
+          uses_subgroups?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -3280,6 +3298,7 @@ export type Database = {
           p_full_name?: string | null
           p_phone?: string | null
           p_cpf?: string | null
+          p_subgroup_id?: string | null
         }
         Returns: string
       }
@@ -3344,7 +3363,7 @@ export type Database = {
       notif_next_batch: { Args: { p_secret: string; p_limit?: number }; Returns: Json }
       notif_mark: { Args: { p_secret: string; p_id: string; p_ok: boolean; p_error?: string }; Returns: undefined }
       operational_trend: { Args: { p_tenant_id: string; p_group_id?: string; p_days?: number }; Returns: Json }
-      set_member_groups: { Args: { p_membership_id: string; p_group_ids: string[] }; Returns: undefined }
+      set_member_groups: { Args: { p_membership_id: string; p_group_ids: string[]; p_subgroups?: Json }; Returns: undefined }
       admin_create_tenant: { Args: { p_name: string; p_admin_email?: string }; Returns: string }
       admin_grant_tenant_admin: { Args: { p_tenant_id: string; p_email: string }; Returns: string }
       admin_add_tenant_user: { Args: { p_tenant_id: string; p_email: string; p_role_id: string }; Returns: string }

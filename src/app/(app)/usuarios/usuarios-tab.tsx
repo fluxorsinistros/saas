@@ -86,6 +86,17 @@ export async function UsuariosTab({
   const { data: rows, error } = searchResult;
   if (searched && (error || !rows?.length) && page > 1) redirect(pageHref(1));
 
+  // Subgrupo de cada pessoa na lista ("Transportador · TecPet"): a busca devolve só o nome do grupo
+  const membershipIds = (rows ?? []).map((r) => r.membership_id).filter((x): x is string => !!x);
+  const { data: subRows } = membershipIds.length
+    ? await supabase.from("group_members").select("membership_id, groups(name), group_subgroups(name)").in("membership_id", membershipIds).not("subgroup_id", "is", null)
+    : { data: [] as { membership_id: string; groups: { name: string } | null; group_subgroups: { name: string } | null }[] };
+  const subgroupLabel = new Map<string, string[]>();
+  for (const r of (subRows ?? []) as unknown as { membership_id: string; groups: { name: string } | null; group_subgroups: { name: string } | null }[]) {
+    if (!r.groups || !r.group_subgroups) continue;
+    subgroupLabel.set(r.membership_id, [...(subgroupLabel.get(r.membership_id) ?? []), `${r.groups.name} · ${r.group_subgroups.name}`]);
+  }
+
   const total = Number(rows?.[0]?.total ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / size));
   const firstShown = total === 0 ? 0 : (page - 1) * size + 1;
@@ -269,7 +280,7 @@ export async function UsuariosTab({
                   <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "-"}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">-</span>}</td>
                   <td className="px-3 py-2.5 text-slate-600">
-                    {u.groups ??
+                    {(u.membership_id ? subgroupLabel.get(u.membership_id)?.join(", ") : undefined) ?? u.groups ??
                       (u.role_name === "Administrador" ? (
                         <span className="text-slate-400">-</span>
                       ) : (

@@ -35,8 +35,13 @@ export default async function EditTenantUserPage({ params }: { params: Promise<{
 
   const [{ data: profile }, { data: memberGroup }, { data: groups }, roles, { data: roleRows }, organizations] = await Promise.all([
     supabase.from("user_profiles").select("full_name, email, phone, cpf").eq("id", membership.user_id).maybeSingle(),
-    supabase.from("group_members").select("group_id").eq("membership_id", id),
-    supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
+    supabase.from("group_members").select("group_id, subgroup_id").eq("membership_id", id),
+    supabase
+      .from("groups")
+      .select("id, name, uses_subgroups, subgroup_required, group_subgroups(id, name, status)")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("status", "active")
+      .order("name"),
     getRoleOptions(supabase, ctx.tenantId),
     supabase.from("roles").select("id, name").in("id", (membership.membership_roles ?? []).map((r) => r.role_id)),
     getTenantOrganizations(supabase, ctx.tenantId),
@@ -68,11 +73,18 @@ export default async function EditTenantUserPage({ params }: { params: Promise<{
           tenantName={ctx.tenantName}
           roleId={formRoleId}
           groupIds={(memberGroup ?? []).map((m) => m.group_id)}
+          subgroupByGroup={Object.fromEntries((memberGroup ?? []).filter((m) => m.subgroup_id).map((m) => [m.group_id, m.subgroup_id as string]))}
           active={membership.status === "active"}
           roles={roles}
           organizations={organizations}
           organizationId={membership.organization_id ?? ""}
-          groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name }))}
+          groups={(groups ?? []).map((g) => ({
+            id: g.id,
+            name: g.name,
+            usesSubgroups: g.uses_subgroups,
+            subgroupRequired: g.subgroup_required,
+            subgroups: (g.group_subgroups ?? []).filter((x) => x.status === "active" || x.id === (memberGroup ?? []).find((m) => m.group_id === g.id)?.subgroup_id).map((x) => ({ id: x.id, name: x.name })),
+          }))}
         />
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">

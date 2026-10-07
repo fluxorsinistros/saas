@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { addUser } from "../actions";
+import { GroupPicker, type PickerGroup } from "@/components/GroupPicker";
 
 const input =
   "w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
@@ -17,7 +18,7 @@ export function NewUserForm({
   organizations,
 }: {
   roles: Option[];
-  groups: Option[];
+  groups: PickerGroup[];
   tenantName: string;
   organizations: Option[];
 }) {
@@ -92,14 +93,7 @@ export function NewUserForm({
       ) : (
         <fieldset className="max-w-sm">
           <legend className="mb-1 block text-[12px] font-medium text-slate-600">Grupos de usuários</legend>
-          <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-2">
-            {groups.map((g) => (
-              <label key={g.id} className="flex items-center gap-2 text-[13px] text-slate-700">
-                <input type="checkbox" name="group_ids" value={g.id} /> {g.name}
-              </label>
-            ))}
-            {groups.length === 0 && <p className="text-xs text-slate-500">A empresa ainda não tem grupos.</p>}
-          </div>
+          <GroupPicker groups={groups} />
           <p className="mt-1 text-xs text-slate-500">
             O Operador pode estar em vários grupos, mas atua em um por vez (ele escolhe no menu). É o grupo que define o acesso.
           </p>

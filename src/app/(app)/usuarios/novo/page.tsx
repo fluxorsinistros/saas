@@ -19,7 +19,12 @@ export default async function NewTenantUserPage() {
   const supabase = await createClient();
   const [roles, { data: groups }, organizations] = await Promise.all([
     getRoleOptions(supabase, ctx.tenantId),
-    supabase.from("groups").select("id, name").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),
+    supabase
+      .from("groups")
+      .select("id, name, uses_subgroups, subgroup_required, group_subgroups(id, name, status)")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("status", "active")
+      .order("name"),
     getTenantOrganizations(supabase, ctx.tenantId),
   ]);
 
@@ -36,7 +41,14 @@ export default async function NewTenantUserPage() {
             Operador, o grupo.
           </p>
         </div>
-        <NewUserForm organizations={organizations} tenantName={ctx.tenantName} roles={roles} groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name }))} />
+        <NewUserForm organizations={organizations} tenantName={ctx.tenantName} roles={roles} groups={(groups ?? []).map((g) => ({
+            id: g.id,
+            name: g.name,
+            usesSubgroups: g.uses_subgroups,
+            subgroupRequired: g.subgroup_required,
+            subgroups: (g.group_subgroups ?? []).filter((x) => x.status === "active").map((x) => ({ id: x.id, name: x.name })),
+          }))}
+        />
       </div>
     </div>
   );
