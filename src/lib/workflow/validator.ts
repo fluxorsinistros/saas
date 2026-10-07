@@ -83,6 +83,7 @@ export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new
       issues.push({ severity: "error", message: `"${name}" não tem saída.`, nodeId: n.id });
     }
     if (n.type === "decision") {
+      const outs = out(n.id).filter((e) => !e.onLimit);
       if (outs.length < 2) {
         issues.push({ severity: "error", message: `Decisão "${name}" precisa de ao menos 2 opções.`, nodeId: n.id });
       }
@@ -104,7 +105,7 @@ export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new
       } else if (routeFields && !options) {
         issues.push({ severity: "error", message: `"${name}" segue conforme um campo que não existe mais ou não é uma lista de opções.`, nodeId: n.id });
       } else {
-        const labels = outs.map((e) => e.label.trim());
+        const labels = outs.filter((e) => !e.onLimit).map((e) => e.label.trim());
         if (labels.some((l) => !l)) {
           issues.push({ severity: "error", message: `"${name}" tem uma saída sem opção do campo.`, nodeId: n.id });
         }
@@ -122,7 +123,7 @@ export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new
           }
         }
       }
-    } else if (["stage", "wait", "pending", "start"].includes(n.type) && out(n.id, forward).length > 1) {
+    } else if (["stage", "wait", "pending", "start"].includes(n.type) && out(n.id, forward).filter((e) => !e.onLimit).length > 1) {
       issues.push({
         severity: "error",
         message: `"${name}" tem mais de uma saída. Use uma Decisão ou um Paralelo para dividir o caminho.`,

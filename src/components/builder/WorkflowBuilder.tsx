@@ -140,6 +140,7 @@ function toFlowEdges(rows: DbEdge[]): FlowEdge[] {
       label: r.label ?? "",
       isRequired: r.is_required,
       color: (r.config as { color?: string } | null)?.color || undefined,
+      onLimit: !!(r.config as { onLimit?: boolean } | null)?.onLimit || undefined,
     },
   }));
 }
@@ -160,6 +161,7 @@ function toGraph(nodes: FlowNode[], edges: FlowEdge[]): Graph {
       kind: e.data?.kind ?? "normal",
       label: e.data?.label ?? "",
       isRequired: e.data?.isRequired ?? true,
+      onLimit: e.data?.onLimit,
     })),
   };
 }
@@ -191,7 +193,7 @@ function toPayload(nodes: FlowNode[], edges: FlowEdge[]): SavePayload {
         is_required: data.isRequired,
         order_index: order,
         label: data.label || null,
-        config: data.color ? { color: data.color } : {},
+        config: { ...(data.color ? { color: data.color } : {}), ...(data.onLimit ? { onLimit: true } : {}) },
       };
     }),
   };
@@ -675,8 +677,8 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
               : fromParallel
                 ? "#0e7490"
                 : "#94a3b8";
-        const dashed = isReturn || (fromParallel && !data.isRequired);
-        const text = [isReturn ? "↺" : "", data.label, fromParallel && !data.isRequired ? "(opcional)" : ""]
+        const dashed = isReturn || !!data.onLimit || (fromParallel && !data.isRequired);
+        const text = [isReturn ? "↺" : "", data.onLimit ? "⏹" : "", data.label, fromParallel && !data.isRequired ? "(opcional)" : ""]
           .filter(Boolean)
           .join(" ");
         return {

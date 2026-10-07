@@ -9,7 +9,7 @@ import type { Graph, GraphNode } from "./types";
 export type TransitionResult =
   | { kind: "advance"; targets: string[] }
   | { kind: "end" }
-  | { kind: "unsupported"; reason: string };
+  | { kind: "unsupported"; reason: string; limit?: boolean };
 
 export function startNode(graph: Graph): GraphNode {
   const targets = new Set(graph.edges.filter((e) => e.kind !== "return").map((e) => e.target));
@@ -41,14 +41,19 @@ export function resolveTransition(
     };
   }
 
-  const outs = graph.edges.filter((e) => e.source === fromNodeId);
+  const allOuts = graph.edges.filter((e) => e.source === fromNodeId);
+  // Conexões "ao atingir o limite" não são opções: só valem quando o destino escolhido já bateu no limite de repetições
+  const outs = allOuts.filter((e) => !e.onLimit);
+  const fallback = allOuts.find((e) => e.onLimit);
+  const withFallback = (result: TransitionResult): TransitionResult =>
+    result.kind === "unsupported" && result.limit && fallback ? { kind: "advance", targets: [fallback.target] } : result;
 
   if (node.type === "decision") {
     const edge = outs.find((e) => e.label === opts.selectedOption);
     if (!edge) {
       return { kind: "unsupported", reason: `Opção "${opts.selectedOption ?? ""}" não corresponde a nenhum caminho desta decisão.` };
     }
-    return checkedAdvance(graph, [edge.target], opts);
+    return withFallback(checkedAdvance(graph, [edge.target], opts));
   }
 
   if (node.config.route_field_key) {
@@ -62,13 +67,13 @@ export function resolveTransition(
       if (!edge) return { kind: "unsupported", reason: `"${node.name}" não tem caminho para a opção "${value}".` };
       if (!chosen.includes(edge.target)) chosen.push(edge.target);
     }
-    return checkedAdvance(graph, chosen, opts);
+    return withFallback(checkedAdvance(graph, chosen, opts));
   }
 
   // stage / wait / pending: uma única saída, normal ou de retorno (o Workflow Validator já garante isso).
   const edge = outs[0];
   if (!edge) return { kind: "unsupported", reason: "Elemento sem saída configurada." };
-  return checkedAdvance(graph, [edge.target], opts);
+  return withFallback(checkedAdvance(graph, [edge.target], opts));
 }
 
 function checkedAdvance(
@@ -84,6 +89,7 @@ function checkedAdvance(
       return {
         kind: "unsupported",
         reason: `"${name}" atingiu o limite de ${max} repetições configurado para o retorno. É preciso autorização para continuar (ainda não implementada).`,
+        limit: true,
       };
     }
   }

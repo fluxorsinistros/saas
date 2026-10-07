@@ -16,6 +16,8 @@ export type FlowEdgeData = {
   isRequired: boolean;
   // Cor escolhida para a linha (vazio = automática)
   color?: string;
+  // Caminho quando o limite de repetições do destino é atingido (ver GraphEdge.onLimit)
+  onLimit?: boolean;
 };
 
 export type FlowNode = Node<FlowNodeData, NodeType>;

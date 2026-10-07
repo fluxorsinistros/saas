@@ -588,6 +588,13 @@ export function EdgeInspector({
         <p className="mt-1 text-xs text-slate-500">Automática: quando o elemento tem mais de uma saída, o sistema dá uma cor para cada ramo.</p>
       </div>
       <Toggle
+        checked={!!data.onLimit}
+        disabled={readOnly}
+        onChange={(v) => onChange({ onLimit: v || undefined })}
+        title="Caminho ao atingir o limite de repetições"
+        hint="Se o destino escolhido já chegou ao limite de repetições, o sinistro segue por esta conexão em vez de ficar bloqueado. Ela não aparece como opção da decisão."
+      />
+      <Toggle
         checked={data.kind === "return"}
         disabled={readOnly}
         onChange={(v) => onChange({ kind: v ? "return" : "normal" })}

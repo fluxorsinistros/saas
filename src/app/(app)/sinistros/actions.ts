@@ -259,7 +259,7 @@ async function enterNode(
 
   if (node.type === "decision") {
     const options = graph.edges
-      .filter((e) => e.source === nodeId)
+      .filter((e) => e.source === nodeId && !e.onLimit)
       .map((e) => e.label)
       .filter(Boolean);
     await supabase.from("decisions").insert({

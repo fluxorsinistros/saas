@@ -13,7 +13,7 @@ export async function loadGraph(supabase: SupabaseClient<Database>, versionId: s
     supabase.from("workflow_nodes").select("id, node_type, name, group_id, config").eq("workflow_version_id", versionId),
     supabase
       .from("workflow_edges")
-      .select("id, from_node_id, to_node_id, edge_type, label, is_required")
+      .select("id, from_node_id, to_node_id, edge_type, label, is_required, config")
       .eq("workflow_version_id", versionId),
   ]);
   if (nErr) throw new Error(nErr.message);
@@ -34,6 +34,7 @@ export async function loadGraph(supabase: SupabaseClient<Database>, versionId: s
       kind: e.edge_type === "return" ? "return" : "normal",
       label: e.label ?? "",
       isRequired: e.is_required,
+      onLimit: !!(e.config as { onLimit?: boolean } | null)?.onLimit,
     })),
   };
 }

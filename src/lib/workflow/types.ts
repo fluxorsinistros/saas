@@ -100,6 +100,9 @@ export type GraphEdge = {
   kind: EdgeKind;
   label: string;
   isRequired: boolean;
+  // Caminho alternativo: quando a passagem seguinte já bateu no limite de repetições, o sinistro segue por esta conexão em vez de
+  // ficar bloqueado. Não aparece como opção da decisão.
+  onLimit?: boolean;
 };
 
 export type Graph = { nodes: GraphNode[]; edges: GraphEdge[] };
