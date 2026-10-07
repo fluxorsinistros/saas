@@ -878,7 +878,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
               minZoom={0.15}
               proOptions={{ hideAttribution: true }}
             >
-              <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="rgba(148, 163, 184, 0.11)" />
+              <Background variant={BackgroundVariant.Dots} gap={24} size={1.3} color="rgba(148, 163, 184, 0.2)" />
               <MiniMap
                 pannable
                 zoomable
