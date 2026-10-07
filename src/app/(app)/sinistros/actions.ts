@@ -515,32 +515,20 @@ async function runDuplicateCheck(
 ): Promise<void> {
   const candidates: { claimId: string; confidence: number; matchedFields: string[] }[] = [];
 
-  if (input.externalReference) {
-    const { data: refMatches } = await supabase
-      .from("claims")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("external_reference", input.externalReference)
-      .neq("id", claimId);
-    for (const m of refMatches ?? []) candidates.push({ claimId: m.id, confidence: 0.95, matchedFields: ["external_reference"] });
-  }
-
-  if (input.occurredAt) {
-    const day = input.occurredAt.slice(0, 10);
-    const { data: dayMatches } = await supabase
-      .from("claims")
-      .select("id, location")
-      .eq("tenant_id", tenantId)
-      .eq("claim_category_id", claimCategoryId)
-      .gte("occurred_at", `${day}T00:00:00`)
-      .lt("occurred_at", `${day}T23:59:59.999`)
-      .neq("id", claimId);
-    for (const m of dayMatches ?? []) {
-      if (candidates.some((c) => c.claimId === m.id)) continue;
-      const sameLocation =
-        input.location && (m.location as { text?: string } | null)?.text?.toLowerCase().trim() === input.location.toLowerCase().trim();
-      const matchedFields = ["claim_category_id", "occurred_at", ...(sameLocation ? ["location"] : [])];
-      candidates.push({ claimId: m.id, confidence: sameLocation ? 0.8 : 0.5, matchedFields });
+  // Candidatos a duplicidade vêm do banco, que compara com todos os sinistros da empresa, não só com os que a pessoa enxerga
+  const { data: found } = await supabase.rpc("find_duplicate_claim_candidates", {
+    p_tenant_id: tenantId,
+    p_claim_id: claimId,
+    p_category_id: claimCategoryId,
+    p_external_reference: input.externalReference || undefined,
+    p_day: input.occurredAt ? input.occurredAt.slice(0, 10) : undefined,
+  });
+  for (const m of found ?? []) {
+    if (m.kind === "external_reference") {
+      candidates.push({ claimId: m.candidate_claim_id, confidence: 0.95, matchedFields: ["external_reference"] });
+    } else if (!candidates.some((x) => x.claimId === m.candidate_claim_id)) {
+      const sameLocation = input.location && (m.location as { text?: string } | null)?.text?.toLowerCase().trim() === input.location.toLowerCase().trim();
+      candidates.push({ claimId: m.candidate_claim_id, confidence: sameLocation ? 0.8 : 0.5, matchedFields: ["claim_category_id", "occurred_at", ...(sameLocation ? ["location"] : [])] });
     }
   }
 
@@ -661,12 +649,9 @@ export async function createClaimAndCycle(
   const year = new Date().getFullYear();
   let claim: { id: string; claim_number: string } | null = null;
   for (let attempt = 0; attempt < 5 && !claim; attempt++) {
-    const { count } = await supabase
-      .from("claims")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .like("claim_number", `${year}-%`);
-    const claimNumber = `${year}-${String((count ?? 0) + 1 + attempt).padStart(5, "0")}`;
+    // O número vem do banco, que enxerga todos os sinistros da empresa (quem abre pode ver só os seus)
+    const { data: claimNumber, error: numberError } = await supabase.rpc("next_claim_number", { p_tenant_id: tenantId, p_year: year, p_attempt: attempt });
+    if (numberError || !claimNumber) throw new Error("Não foi possível gerar o número do sinistro. Tente de novo.");
     const { data, error } = await supabase
       .from("claims")
       .insert({
@@ -790,13 +775,7 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   if (refErr) throw new Error(refErr);
   for (const def of fieldDefs ?? []) {
     if (!def.is_unique || !patch[def.key]) continue;
-    const { data: dupe } = await supabase
-      .from("claims")
-      .select("id")
-      .eq("tenant_id", ctx.tenantId)
-      .eq(`custom_fields->>${def.key}`, patch[def.key])
-      .limit(1)
-      .maybeSingle();
+    const { data: dupe } = await supabase.rpc("claim_field_value_in_use", { p_tenant_id: ctx.tenantId, p_key: def.key, p_value: patch[def.key] });
     if (dupe) throw new Error(`O valor informado em "${def.label}" já está em uso em outro sinistro.`);
   }
 
@@ -918,14 +897,7 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     if (refErr) throw new Error(refErr);
     for (const def of fieldDefs ?? []) {
       if (!def.is_unique || !patch[def.key]) continue;
-      const { data: dupe } = await supabase
-        .from("claims")
-        .select("id")
-        .eq("tenant_id", ctx.tenantId)
-        .neq("id", cycle.claim_id)
-        .eq(`custom_fields->>${def.key}`, patch[def.key])
-        .limit(1)
-        .maybeSingle();
+      const { data: dupe } = await supabase.rpc("claim_field_value_in_use", { p_tenant_id: ctx.tenantId, p_key: def.key, p_value: patch[def.key], p_exclude_claim: cycle.claim_id });
       if (dupe) throw new Error(`O valor informado em "${def.label}" já está em uso em outro sinistro.`);
     }
 

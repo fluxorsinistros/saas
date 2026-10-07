@@ -37,13 +37,8 @@ async function validateRow(supabase: Supa, tenantId: string, raw: ImportRowData)
   if (errors.length > 0) return { status: "error", errors };
 
   if (raw.referencia_externa.trim()) {
-    const { data: existing } = await supabase
-      .from("claims")
-      .select("id, claim_number")
-      .eq("tenant_id", tenantId)
-      .eq("external_reference", raw.referencia_externa.trim())
-      .maybeSingle();
-    if (existing) return { status: "duplicate_candidate", errors: [`Referência já usada pelo sinistro ${existing.claim_number}.`] };
+    const { data: existingNumber } = await supabase.rpc("claim_number_by_external_reference", { p_tenant_id: tenantId, p_reference: raw.referencia_externa.trim() });
+    if (existingNumber) return { status: "duplicate_candidate", errors: [`Referência já usada pelo sinistro ${existingNumber}.`] };
   }
 
   return { status: "valid", errors: null };

@@ -284,25 +284,6 @@ export function AppSidebar({
       </nav>
 
       <div data-sidebar-footer className={`shrink-0 border-t border-navy-700 bg-navy py-3 space-y-1 ${collapsed ? "px-2" : "px-3"}`}>
-        {/* Alternador Rápido de Tema (Claro / Escuro) */}
-        <form action={toggleQuickTheme.bind(null, currentTheme, tenantId)}>
-          <button
-            type="submit"
-            title={currentTheme === "dark" ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}
-            aria-label={currentTheme === "dark" ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}
-            className={`flex items-center gap-2 rounded-md py-1.5 text-[12px] font-medium text-slate-300 transition hover:bg-navy-700 hover:text-white ${
-              collapsed ? "w-full justify-center px-0" : "w-full px-2"
-            }`}
-          >
-            {currentTheme === "dark" ? (
-              <Sun className="size-4 shrink-0 text-amber-400" />
-            ) : (
-              <Moon className="size-4 shrink-0 text-cyan" />
-            )}
-            {!collapsed && (currentTheme === "dark" ? "Modo Claro" : "Modo Escuro")}
-          </button>
-        </form>
-
         <div ref={userMenuRef} className="relative">
           {userOpen && (
             <div
@@ -327,6 +308,16 @@ export function AppSidebar({
               >
                 <Bell className="size-4 shrink-0" /> Minhas notificações
               </Link>
+              <form action={toggleQuickTheme.bind(null, currentTheme, tenantId)}>
+                <button
+                  type="submit"
+                  role="menuitem"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-slate-200 transition hover:bg-white/10 hover:text-white"
+                >
+                  {currentTheme === "dark" ? <Sun className="size-4 shrink-0 text-amber-400" /> : <Moon className="size-4 shrink-0 text-cyan" />}
+                  {currentTheme === "dark" ? "Modo claro" : "Modo escuro"}
+                </button>
+              </form>
               <form action={signOut}>
                 <button
                   type="submit"

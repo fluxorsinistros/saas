@@ -3368,6 +3368,13 @@ export type Database = {
         Returns: undefined
       }
       operational_summary: { Args: { p_tenant_id: string; p_group_id?: string; p_subgroup_id?: string; p_scope_subgroup?: boolean }; Returns: Json }
+      next_claim_number: { Args: { p_tenant_id: string; p_year: number; p_attempt?: number }; Returns: string }
+      claim_field_value_in_use: { Args: { p_tenant_id: string; p_key: string; p_value: string; p_exclude_claim?: string }; Returns: boolean }
+      claim_number_by_external_reference: { Args: { p_tenant_id: string; p_reference: string }; Returns: string | null }
+      find_duplicate_claim_candidates: {
+        Args: { p_tenant_id: string; p_claim_id: string; p_category_id: string; p_external_reference?: string; p_day?: string }
+        Returns: { candidate_claim_id: string; kind: string; location: Json | null }[]
+      }
       notif_tick: { Args: { p_secret: string }; Returns: undefined }
       notif_next_batch: { Args: { p_secret: string; p_limit?: number }; Returns: Json }
       notif_mark: { Args: { p_secret: string; p_id: string; p_ok: boolean; p_error?: string }; Returns: undefined }
