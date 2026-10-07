@@ -395,7 +395,7 @@ body[data-theme="dark"] {
 /* O fundo de verdade (uma só imagem para menu + dados) é o <AppBackdrop />; a cor de segurança abaixo vale só nas telas do app
    (as que têm o degradê). Telas públicas, como o login, mantêm o fundo claro padrão (--color-canvas). */
 body:has(.app-backdrop) {
-  background: #bec1d2;
+  background: #dde3f0;
 }
 
 /* Menu lateral: vidro azul. As cores "navy" viram brancos translúcidos só dentro do menu. */
@@ -500,7 +500,7 @@ div[data-theme="dark"] {
   inset: 0;
   z-index: -1;
   overflow: hidden;
-  background: linear-gradient(150deg, #3067ad 0%, #6f98cf 28%, #a9bde0 58%, #bec1d2 100%);
+  background: linear-gradient(150deg, #4f84c4 0%, #8fb2e0 26%, #c3d3ee 55%, #dde3f0 100%);
   pointer-events: none;
 }
 /* faixa azul forte no topo: garante o contraste do título e da descrição (brancos) em qualquer ponto da animação */
@@ -508,7 +508,7 @@ div[data-theme="dark"] {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(135vw 230px at 0% 0%, rgba(48, 103, 173, 0.95), rgba(48, 103, 173, 0.5) 55%, transparent 100%);
+  background: radial-gradient(135vw 200px at 0% 0%, rgba(48, 103, 173, 0.92), rgba(48, 103, 173, 0.42) 55%, transparent 100%);
 }
 .app-backdrop-blobs {
   position: absolute;
@@ -526,10 +526,10 @@ div[data-theme="dark"] {
   opacity: 0.8;
   will-change: transform;
 }
-.app-blob-1 { background: radial-gradient(circle at center, rgba(18, 75, 143, 0.8) 0, rgba(18, 75, 143, 0) 62%) no-repeat; transform-origin: center center; animation: app-move-vertical 34s ease infinite; }
-.app-blob-2 { background: radial-gradient(circle at center, rgba(110, 152, 215, 0.8) 0, rgba(110, 152, 215, 0) 62%) no-repeat; transform-origin: calc(50% - 360px); animation: app-move-circle 24s reverse infinite; }
+.app-blob-1 { background: radial-gradient(circle at center, rgba(18, 75, 143, 0.38) 0, rgba(18, 75, 143, 0) 62%) no-repeat; transform-origin: center center; animation: app-move-vertical 34s ease infinite; }
+.app-blob-2 { background: radial-gradient(circle at center, rgba(140, 175, 228, 0.6) 0, rgba(110, 152, 215, 0) 62%) no-repeat; transform-origin: calc(50% - 360px); animation: app-move-circle 24s reverse infinite; }
 .app-blob-3 { background: radial-gradient(circle at center, rgba(214, 220, 240, 0.85) 0, rgba(214, 220, 240, 0) 62%) no-repeat; transform-origin: calc(50% + 380px); animation: app-move-circle 46s linear infinite; }
-.app-blob-4 { background: radial-gradient(circle at center, rgba(48, 103, 173, 0.7) 0, rgba(48, 103, 173, 0) 62%) no-repeat; transform-origin: calc(50% - 220px); animation: app-move-horizontal 44s ease infinite; opacity: 0.7; }
+.app-blob-4 { background: radial-gradient(circle at center, rgba(48, 103, 173, 0.32) 0, rgba(48, 103, 173, 0) 62%) no-repeat; transform-origin: calc(50% - 220px); animation: app-move-horizontal 44s ease infinite; opacity: 0.7; }
 .app-blob-5 { background: radial-gradient(circle at center, rgba(190, 193, 210, 0.9) 0, rgba(190, 193, 210, 0) 62%) no-repeat; transform-origin: calc(50% - 900px) calc(50% + 500px); animation: app-move-circle 28s ease infinite; }
 
 @keyframes app-move-circle { 0% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
