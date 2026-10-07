@@ -1,4 +1,4 @@
-import { describeSlaTarget, type CalendarBundle } from "@/lib/sla";
+import { businessDayMinutes, describeSlaTarget, type CalendarBundle } from "@/lib/sla";
 // Um único formato de duração em todo o produto ("5h 8min", "2d 3h"), antes a Torre mostrava
 // "310min" enquanto a lista de sinistros mostrava "5h 8min" para o mesmo atraso.
 export function formatDuration(minutes: number): string {
@@ -37,7 +37,11 @@ export function computeSla(startedAtIso: string | null | undefined, slaMinutes: 
     formattedRemaining,
     daysText: when.daysText, // "2,1 dias úteis e 3 dias corridos" (sem calendário, só os corridos)
     targetLabel: when.targetLabel, // data prevista final, "15/10/2026 às 16:00"
-    formattedLimit: formatDuration(slaMinutes && slaMinutes > 0 ? slaMinutes : Math.round(slaMs / 60_000)),
+    // com calendário de dias úteis o limite vem em minutos de expediente: mostra em dias úteis, não em dias de 24h
+    formattedLimit:
+      bundle && slaMinutes && slaMinutes > 0
+        ? `${+(slaMinutes / businessDayMinutes(bundle.calendar)).toFixed(1)} dias úteis`
+        : formatDuration(slaMinutes && slaMinutes > 0 ? slaMinutes : Math.round(slaMs / 60_000)),
   };
 }
 

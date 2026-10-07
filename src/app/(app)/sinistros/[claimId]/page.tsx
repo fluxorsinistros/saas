@@ -3,6 +3,7 @@ import { MultiCheckField } from "@/components/execution/MultiCheckField";
 import { splitFieldValues } from "@/lib/workflow/types";
 import { loadGroupRefNames, loadGroupRefOptions } from "@/lib/group-ref";
 import { loadCalendarBundles, flowDeadlineIso } from "@/lib/sla-load";
+import { longestPath } from "@/lib/workflow/path";
 import { GroupChip } from "@/lib/group-icons";
 import { ActivityForm } from "@/components/execution/ActivityForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -16,7 +17,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
-import { computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
+import { businessDayMinutes, computeLiveSlaStatus, formatMinutesRemaining } from "@/lib/sla";
 import { computeProcessProgress, computeSla, formatDuration, isPastIso, minutesSince } from "@/lib/format";
 import { computeCalculatedValues } from "@/lib/formula";
 import { readPanel } from "@/lib/financial-panel";
@@ -449,11 +450,15 @@ export default async function ClaimPage({
   // Resumo do topo: andamento pelas etapas, etapa atual, prazo da etapa e prazo total do fluxo (mesmas contas da lista).
   const stepNodes = graph.nodes.filter((n) => n.type === "stage" || n.type === "wait" || n.type === "decision");
   const slaOf = (n: { config: { sla_minutes?: number | null } }) => (typeof n.config.sla_minutes === "number" && n.config.sla_minutes > 0 ? n.config.sla_minutes : undefined);
-  const stepsForProgress = new Map([[cycle.workflow_version_id, stepNodes.map((n) => ({ id: n.id, name: n.name, sla_minutes: slaOf(n) ?? 60 }))]]);
   const doneNodeIds = new Set((stages ?? []).filter((st) => st.status === "completed").map((st) => st.node_id));
+  // Vias que se excluem não se somam: o andamento e o prazo total valem para o caminho mais longo sem voltas, mais o que já foi feito
+  const worstPath = longestPath(graph, (n) => slaOf(n) ?? 0);
+  const pathIds = new Set(worstPath.nodeIds);
+  const progressNodes = stepNodes.filter((n) => pathIds.has(n.id) || doneNodeIds.has(n.id));
+  const stepsForProgress = new Map([[cycle.workflow_version_id, progressNodes.map((n) => ({ id: n.id, name: n.name, sla_minutes: slaOf(n) ?? 60 }))]]);
   const cycleDone = cycle.status === "completed";
   const progress = computeProcessProgress(cycleDone, cycle.workflow_version_id, doneNodeIds, stepsForProgress);
-  const flowLimitMinutes = stepNodes.reduce((sum, n) => sum + (slaOf(n) ?? 0), 0) || undefined;
+  const flowLimitMinutes = worstPath.minutes || undefined;
   const flowStartedAt = cycle.formalized_at || claim.created_at;
   // Prazo total em dias úteis: contado no calendário das etapas, não em horas seguidas desde a abertura.
   const calBundles = await loadCalendarBundles(supabase, graph.nodes.map((n) => n.config.sla_calendar_id ?? ""));
@@ -462,6 +467,9 @@ export default async function ClaimPage({
   const flowBundle = bundleOf(flowBdNode);
   const flowTargetAt = flowBundle && flowLimitMinutes ? flowDeadlineIso(flowStartedAt, flowLimitMinutes, flowBundle) : undefined;
   const runningFlowSla = !cycleDone ? computeSla(flowStartedAt, flowLimitMinutes, flowTargetAt, flowBundle) : null;
+  // O limite do fluxo vem em minutos de expediente: com calendário de dias úteis, mostra "N dias úteis" em vez de dias de 24h
+  const flowJourney = flowBundle ? businessDayMinutes(flowBundle.calendar) : null;
+  const fmtLimit = (m: number) => (flowJourney ? `${+(m / flowJourney).toFixed(1)} dias úteis` : formatDuration(m));
   const flowTookMinutes =
     cycleDone && cycle.completed_at ? Math.max(0, Math.round((new Date(cycle.completed_at).getTime() - new Date(flowStartedAt).getTime()) / 60000)) : null;
   const currentStages = (stages ?? [])
@@ -809,8 +817,8 @@ export default async function ClaimPage({
                   Concluído em {formatDuration(flowTookMinutes)}
                   {flowLimitMinutes
                     ? flowTookMinutes > flowLimitMinutes
-                      ? ` • estourou o limite de ${formatDuration(flowLimitMinutes)} em ${formatDuration(flowTookMinutes - flowLimitMinutes)}`
-                      : ` • dentro do limite de ${formatDuration(flowLimitMinutes)}`
+                      ? ` • estourou o limite de ${fmtLimit(flowLimitMinutes)} em ${formatDuration(flowTookMinutes - flowLimitMinutes)}`
+                      : ` • dentro do limite de ${fmtLimit(flowLimitMinutes)}`
                     : ""}
                 </span>
               </div>
@@ -1243,6 +1251,8 @@ export default async function ClaimPage({
                       const limit = node ? slaOf(node) : undefined;
                       const took = Math.max(0, Math.round((new Date(stage.exited_at).getTime() - new Date(stage.entered_at).getTime()) / 60000));
                       const late = limit ? took > limit : false;
+                      const stageBundle = bundleOf(node);
+                      const fmtStageLimit = (m: number) => (stageBundle ? `${+(m / businessDayMinutes(stageBundle.calendar)).toFixed(1)} dias úteis` : formatDuration(m));
                       return (
                         <span
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
@@ -1252,8 +1262,8 @@ export default async function ClaimPage({
                             {!limit
                               ? `Levou ${formatDuration(took)} (sem prazo definido)`
                               : late
-                                ? `Fora do prazo • estourou em ${formatDuration(took - limit)} (levou ${formatDuration(took)} de ${formatDuration(limit)})`
-                                : `No prazo • levou ${formatDuration(took)} de ${formatDuration(limit)}`}
+                                ? `Fora do prazo • estourou em ${formatDuration(took - limit)} (levou ${formatDuration(took)} de ${fmtStageLimit(limit)})`
+                                : `No prazo • levou ${formatDuration(took)} de ${fmtStageLimit(limit)}`}
                           </span>
                       );
                     })()}
