@@ -75,19 +75,22 @@ function ExecutionNodeBox({
           {data.own && (
             <div className="flex justify-between gap-2">
               <dt className="opacity-70">Prazo da etapa</dt>
-              <dd className="font-semibold">{data.own}</dd>
+              <dd className="whitespace-nowrap font-semibold">{data.own}</dd>
             </div>
           )}
           {data.acc && (
             <div className="flex justify-between gap-2">
-              <dt className="opacity-70">Acumulado</dt>
-              <dd className="text-right font-semibold">{data.acc}</dd>
+              <dt className="shrink-0 opacity-70">Acumulado</dt>
+              <dd className="whitespace-nowrap text-right font-semibold">
+                {data.acc.split(" (")[0]}
+                {data.acc.includes(" (") && <span className="block text-[10.5px] font-normal opacity-70">({data.acc.split(" (").slice(1).join(" (")}</span>}
+              </dd>
             </div>
           )}
           {data.accDate && (
             <div className="flex justify-between gap-2">
               <dt className="opacity-70">Previsto até</dt>
-              <dd className="font-semibold">{data.accDate}</dd>
+              <dd className="whitespace-nowrap font-semibold">{data.accDate}</dd>
             </div>
           )}
         </dl>
