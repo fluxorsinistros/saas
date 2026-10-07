@@ -611,8 +611,9 @@ div[data-theme="dark"] {
   background-color: rgba(255, 255, 255, 0.2) !important;
 }
 :is(.dark, [data-theme="dark"]) .app-content-bg .bg-navy { background-color: #0b1220; }
-:is(.dark, [data-theme="dark"]) .app-content-bg tbody tr { background-color: revert-layer !important; }
-:is(.dark, [data-theme="dark"]) .app-content-bg tbody tr:nth-child(even) { background-color: revert-layer !important; }
+/* linhas de tabela no escuro: sem fundo próprio (as classes odd:bg-white / even:bg-slate-50 das telas voltariam a pintar de branco) e listra bem leve */
+:is(.dark, [data-theme="dark"]) .app-content-bg tbody tr { background-color: transparent !important; }
+:is(.dark, [data-theme="dark"]) .app-content-bg tbody tr:nth-child(even) { background-color: rgba(255, 255, 255, 0.035) !important; }
 
 /* Abas (Torre de Controle etc.): a aba ativa é um vidro claro, não um bloco branco sólido */
 .app-content-bg nav[aria-label] a.bg-white,

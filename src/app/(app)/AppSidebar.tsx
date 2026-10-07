@@ -191,10 +191,9 @@ export function AppSidebar({
               <label htmlFor="tenant" className="sr-only">
                 Empresa
               </label>
-              <div className="rounded-lg border border-navy-700 bg-navy-800 p-2">
-                <div className="mb-1 text-xs text-slate-400">Empresa</div>
+              <div className="rounded-lg border border-navy-700 bg-navy-800 px-2 py-1.5" title="Empresa">
                 <div className="flex items-center gap-2">
-                  <div className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-navy-600 bg-navy-900/60 p-0.5">
+                  <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-navy-600 bg-navy-900/60 p-0.5">
                     {companyIconUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={companyIconUrl} alt={tenantName} className="max-h-full max-w-full object-contain" />
@@ -219,10 +218,10 @@ export function AppSidebar({
               </div>
             </form>
           ) : (
-            <div className="rounded-lg border border-navy-700 bg-navy-800 p-2.5">
-              <div className="text-xs text-slate-400">Empresa</div>
-              <div className="mt-1.5 flex items-center gap-2.5">
-                <div className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-navy-600 bg-navy-900/60 p-0.5">
+            <div className="rounded-lg border border-navy-700 bg-navy-800 px-2 py-1.5" title="Empresa">
+              <span className="sr-only">Empresa</span>
+              <div className="flex items-center gap-2">
+                <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-navy-600 bg-navy-900/60 p-0.5">
                   {companyIconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={companyIconUrl} alt={tenantName} className="max-h-full max-w-full object-contain" />
