@@ -40,7 +40,7 @@ export default async function WorkflowPage({
       .eq("workflow_version_id", version.id),
     supabase
       .from("workflow_edges")
-      .select("id, from_node_id, to_node_id, edge_type, label, is_required")
+      .select("id, from_node_id, to_node_id, edge_type, label, is_required, config")
       .eq("workflow_version_id", version.id)
       .order("order_index"),
     supabase.from("groups").select("id, name, uses_subgroups, group_subgroups(id, name, status)").eq("tenant_id", ctx.tenantId).eq("status", "active").order("name"),

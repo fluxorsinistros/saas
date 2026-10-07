@@ -14,6 +14,8 @@ export type FlowEdgeData = {
   kind: EdgeKind;
   label: string;
   isRequired: boolean;
+  // Cor escolhida para a linha (vazio = automática)
+  color?: string;
 };
 
 export type FlowNode = Node<FlowNodeData, NodeType>;

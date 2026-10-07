@@ -81,6 +81,7 @@ export type DbEdge = {
   edge_type: string;
   label: string | null;
   is_required: boolean;
+  config?: unknown;
 };
 export type VersionInfo = { id: string; version_number: number; status: string };
 
@@ -134,7 +135,12 @@ function toFlowEdges(rows: DbEdge[]): FlowEdge[] {
     id: r.id,
     source: r.from_node_id,
     target: r.to_node_id,
-    data: { kind: r.edge_type === "return" ? "return" : "normal", label: r.label ?? "", isRequired: r.is_required },
+    data: {
+      kind: r.edge_type === "return" ? "return" : "normal",
+      label: r.label ?? "",
+      isRequired: r.is_required,
+      color: (r.config as { color?: string } | null)?.color || undefined,
+    },
   }));
 }
 
@@ -185,6 +191,7 @@ function toPayload(nodes: FlowNode[], edges: FlowEdge[]): SavePayload {
         is_required: data.isRequired,
         order_index: order,
         label: data.label || null,
+        config: data.color ? { color: data.color } : {},
       };
     }),
   };
@@ -628,7 +635,9 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
         const isReturn = data.kind === "return";
         const color = e.selected
           ? "var(--color-brand)"
-          : isReturn
+          : data.color
+            ? data.color
+            : isReturn
             ? "var(--color-violet)"
             : branchColor
               ? branchColor
@@ -647,7 +656,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
           labelShowBg: true,
           labelBgPadding: [6, 3] as [number, number],
           labelBgBorderRadius: 6,
-          labelStyle: { fontSize: 11, fontWeight: 500, fill: !e.selected && branchColor && !isReturn ? branchColor : isReturn ? "#6d28d9" : "#334155" },
+          labelStyle: { fontSize: 11, fontWeight: 500, fill: !e.selected && (data.color || (branchColor && !isReturn)) ? (data.color ?? branchColor!) : isReturn ? "#6d28d9" : "#334155" },
           labelBgStyle: { fill: "#ffffff", stroke: "#e2e8f0" },
           style: { stroke: color, strokeWidth: e.selected ? 2.5 : 1.6, strokeDasharray: dashed ? "6 4" : undefined },
           markerEnd: { type: MarkerType.ArrowClosed, color, width: 16, height: 16 },
@@ -869,7 +878,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
               minZoom={0.15}
               proOptions={{ hideAttribution: true }}
             >
-              <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(148, 163, 184, 0.16)" />
+              <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(148, 163, 184, 0.07)" />
               <MiniMap
                 pannable
                 zoomable

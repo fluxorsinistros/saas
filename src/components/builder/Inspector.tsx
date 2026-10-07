@@ -479,6 +479,18 @@ function RouteSection({
   );
 }
 
+const EDGE_COLORS = [
+  { name: "Azul", value: "#2563eb" },
+  { name: "Rosa", value: "#db2777" },
+  { name: "Verde", value: "#16a34a" },
+  { name: "Laranja", value: "#d97706" },
+  { name: "Roxo", value: "#7c3aed" },
+  { name: "Ciano", value: "#0891b2" },
+  { name: "Vermelho", value: "#dc2626" },
+  { name: "Lima", value: "#65a30d" },
+  { name: "Cinza", value: "#64748b" },
+];
+
 export function EdgeInspector({
   edge,
   sourceType,
@@ -545,6 +557,36 @@ export function EdgeInspector({
           hint="Ramos opcionais podem ser dispensados com justificativa durante a execução."
         />
       )}
+      <div>
+        <div className={label}>Cor da linha</div>
+        <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Cor da linha">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!data.color}
+            disabled={readOnly}
+            onClick={() => onChange({ color: undefined })}
+            className={`rounded-md border px-2 py-1 text-[12px] ${!data.color ? "border-brand bg-brand/10 font-medium text-slate-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+          >
+            Automática
+          </button>
+          {EDGE_COLORS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={data.color === c.value}
+              aria-label={c.name}
+              title={c.name}
+              disabled={readOnly}
+              onClick={() => onChange({ color: c.value })}
+              className={`size-6 rounded-full border-2 transition ${data.color === c.value ? "border-slate-900 ring-2 ring-slate-300" : "border-white/70 hover:scale-110"}`}
+              style={{ backgroundColor: c.value }}
+            />
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-500">Automática: quando o elemento tem mais de uma saída, o sistema dá uma cor para cada ramo.</p>
+      </div>
       <Toggle
         checked={data.kind === "return"}
         disabled={readOnly}

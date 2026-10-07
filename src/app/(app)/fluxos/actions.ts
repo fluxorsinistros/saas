@@ -32,6 +32,7 @@ export type SavePayload = {
     is_required: boolean;
     order_index: number;
     label: string | null;
+    config?: Json;
   }[];
 };
 
