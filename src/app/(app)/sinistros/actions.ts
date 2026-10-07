@@ -1516,7 +1516,17 @@ export async function abortBranch(branchInstanceId: string, formData: FormData):
     .eq("claim_cycle_id", cycle.id)
     .in("status", ["in_progress", "paused"]);
   if ((stillOpen ?? 0) === 0) {
-    await supabase.from("claim_cycles").update({ status: "completed", completed_at: now }).eq("id", cycle.id);
+    // Só conclui de verdade se alguma via chegou ao Fim. Se todas foram abortadas, o sinistro fica cancelado, nunca "concluído".
+    const endNodeIds = graph.nodes.filter((n) => n.type === "end").map((n) => n.id);
+    const { count: reachedEnd } = endNodeIds.length
+      ? await supabase.from("stage_instances").select("id", { count: "exact", head: true }).eq("claim_cycle_id", cycle.id).in("node_id", endNodeIds).eq("status", "completed")
+      : { count: 0 };
+    if ((reachedEnd ?? 0) > 0) {
+      await supabase.from("claim_cycles").update({ status: "completed", completed_at: now }).eq("id", cycle.id);
+    } else {
+      await supabase.from("claim_cycles").update({ status: "cancelled" }).eq("id", cycle.id);
+      await writeAudit(supabase, ctx.tenantId, "cycle.cancelled", "claim_cycle", cycle.id, { reason: "Todas as vias foram abortadas e nenhuma chegou ao fim." });
+    }
   }
 
   revalidatePath("/sinistros");

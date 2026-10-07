@@ -67,6 +67,8 @@ const AUDIT_LABEL: Record<string, string> = {
   "cycle.blocked": "Ciclo bloqueado",
   "cycle.reopened": "Ciclo reaberto",
   "cycle.discarded": "Ciclo descartado",
+  "cycle.cancelled": "Sinistro cancelado (todas as vias abortadas)",
+  "branch.aborted": "Via abortada",
   "pending_item.created": "Pendência aberta",
   "pending_item.resolved": "Pendência resolvida",
   "pending_item.cancelled": "Pendência cancelada",
@@ -468,7 +470,8 @@ export default async function ClaimPage({
   const flowBdNode = stepNodes.find((n) => n.config.sla_unit === "bd" && n.config.sla_calendar_id);
   const flowBundle = bundleOf(flowBdNode);
   const flowTargetAt = flowBundle && flowLimitMinutes ? flowDeadlineIso(flowStartedAt, flowLimitMinutes, flowBundle) : undefined;
-  const runningFlowSla = !cycleDone ? computeSla(flowStartedAt, flowLimitMinutes, flowTargetAt, flowBundle) : null;
+  const cycleCancelled = cycle.status === "cancelled";
+  const runningFlowSla = !cycleDone && !cycleCancelled ? computeSla(flowStartedAt, flowLimitMinutes, flowTargetAt, flowBundle) : null;
   // O limite do fluxo vem em minutos de expediente: com calendário de dias úteis, mostra "N dias úteis" em vez de dias de 24h
   const flowJourney = flowBundle ? businessDayMinutes(flowBundle.calendar) : null;
   const fmtLimit = (m: number) => (flowJourney ? `${+(m / flowJourney).toFixed(1)} dias úteis` : formatDuration(m));
@@ -829,6 +832,8 @@ export default async function ClaimPage({
                 <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
                   <CheckCircle2 className="size-4" /> Fluxo concluído
                 </span>
+              ) : cycleCancelled ? (
+                <span className="inline-flex items-center gap-1.5 font-medium text-amber-700">Sinistro cancelado: todas as vias foram abortadas e nenhuma chegou ao fim</span>
               ) : currentStages.length > 0 ? (
                 currentStages.map((cs) => (
                   <span key={cs.id} className="inline-flex flex-wrap items-center gap-2">
