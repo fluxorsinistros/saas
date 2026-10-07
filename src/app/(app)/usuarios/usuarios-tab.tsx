@@ -268,7 +268,16 @@ export async function UsuariosTab({
                   <td className="px-3 py-2.5 text-slate-600">{u.email}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.role_name ?? "-"}</td>
                   <td className="px-3 py-2.5 text-slate-600">{u.organization_name ?? <span className="text-slate-400">-</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{u.groups ?? <span className="text-slate-400">-</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-600">
+                    {u.groups ??
+                      (u.role_name === "Administrador" ? (
+                        <span className="text-slate-400">-</span>
+                      ) : (
+                        <span className="sla-chip sla-risk" title="Sem grupo a pessoa entra, mas não consegue usar o sistema. Edite o usuário e escolha um grupo.">
+                          Sem grupo
+                        </span>
+                      ))}
+                  </td>
                   <td className="px-3 py-2.5">
                     {u.pending ? (
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">convite pendente</span>

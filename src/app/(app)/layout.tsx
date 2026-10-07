@@ -10,6 +10,7 @@ import { signedAvatarUrls } from "@/lib/avatars";
 import { loadTaskCount } from "@/lib/task-count";
 import { AppSidebar } from "./AppSidebar";
 import { AppBackdrop } from "@/components/AppBackdrop";
+import { SemGrupo } from "./SemGrupo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [admin, brand] = await Promise.all([isPlatformAdmin(), getPlatformBrand()]);
@@ -52,6 +53,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     isTenantAdmin(ctx.userId, ctx.tenantId),
     getMemberGroups(ctx.userId, ctx.tenantId),
   ]);
+  // Operador sem grupo não tem o que ver nem fazer: mostra o que falta (e quem resolve) em vez de telas vazias ou quebradas.
+  if (!tenantAdmin && memberGroups.groups.length === 0) {
+    return (
+      <div className={`flex h-screen h-[100dvh] w-full overflow-hidden ${ctx.theme === "dark" ? "dark" : ""}`} data-theme={ctx.theme}>
+        <AppBackdrop />
+        <SemGrupo tenantName={ctx.tenantName} email={ctx.email} />
+      </div>
+    );
+  }
   const supabaseMe = await createClient();
   const { data: me } = await supabaseMe.from("user_profiles").select("full_name, avatar_path").eq("id", ctx.userId).maybeSingle();
   const myUrls = await signedAvatarUrls([me?.avatar_path]);

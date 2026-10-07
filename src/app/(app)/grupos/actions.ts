@@ -27,6 +27,10 @@ export async function createGroup(formData: FormData) {
     description: String(formData.get("description") ?? "").trim() || null,
     icon: normalizeGroupIcon(formData.get("icon")),
     color: normalizeGroupColor(formData.get("color")),
+    // Grupo novo nasce sem nenhuma ação liberada (todas as restrições ligadas, nenhuma permissão extra); o Administrador ativa
+    // o que for necessário na aba Ações do grupo. Vale para toda ação nova que entrar no catálogo.
+    disabled_actions: GROUP_ACTIONS.map((a) => a.key),
+    granted_actions: [],
   });
   if (error) throw new Error(publicDbMessage(error));
   redirect("/grupos");

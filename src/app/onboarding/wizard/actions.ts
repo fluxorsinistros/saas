@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { writeAudit } from "@/app/(app)/sinistros/actions";
 import { assertCountLimit } from "@/lib/limits";
+import { GROUP_ACTIONS } from "@/lib/group-actions";
 
 // Cada passo grava estado parcial em `tenants.onboarding_step` (Documento 5 §3: "não é uma transação
 // única no final, para permitir retomar"), nunca volta um passo já visitado, só avança.
@@ -72,7 +73,7 @@ export async function addGroupStep(formData: FormData): Promise<void> {
   if (!name) throw new Error("Informe o nome do grupo.");
   const { count: groupCount } = await supabase.from("groups").select("id", { count: "exact", head: true }).eq("tenant_id", ctx.tenantId);
   await assertCountLimit(supabase, ctx.tenantId, "groups", "grupos", groupCount ?? 0);
-  await supabase.from("groups").insert({ tenant_id: ctx.tenantId, name });
+  await supabase.from("groups").insert({ tenant_id: ctx.tenantId, name, disabled_actions: GROUP_ACTIONS.map((a) => a.key), granted_actions: [] });
   await advanceStep(ctx.tenantId, 5);
   revalidatePath("/onboarding/wizard");
 }
