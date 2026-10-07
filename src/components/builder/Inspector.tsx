@@ -742,7 +742,7 @@ function FieldsSection({
                 <EditFieldForm field={f} fields={fields} onSave={(fd) => onUpdateField(f.id, fd)} onDone={() => setEditingId(null)} />
               </li>
             ) : (
-              <li key={f.id} className="flex items-center gap-2">
+              <li key={f.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <input
                   type="checkbox"
                   id={`field-${f.id}`}
@@ -751,7 +751,7 @@ function FieldsSection({
                   disabled={readOnly}
                   onChange={(e) => onToggle(f.key, e.target.checked)}
                 />
-                <label htmlFor={`field-${f.id}`} className="flex-1 text-[13px] text-slate-800">
+                <label htmlFor={`field-${f.id}`} className="min-w-[9rem] flex-1 text-[13px] text-slate-800">
                   {f.label} <span className="text-slate-500">({FIELD_TYPE_LABEL[f.field_type as FieldType]})</span>
                   {f.required && <span className="ml-1 text-xs font-medium text-rose-600">obrigatório</span>}
                   {f.is_unique && <span className="ml-1 text-xs font-medium text-violet">único</span>}
@@ -797,11 +797,11 @@ function FieldsSection({
                   <button
                     type="button"
                     onClick={() => setEditingId(f.id)}
-                    className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-brand"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-brand"
                     aria-label={`Editar campo ${f.label}`}
                     title="Editar campo"
                   >
-                    <Pencil className="size-3.5" />
+                    <Pencil className="size-3.5" /> Editar
                   </button>
                 )}
                 {!readOnly && onDeleteField && (
