@@ -36,8 +36,7 @@ export default async function OnboardingPage() {
         <PlatformBrandMark tone="light" />
         <h1 className="mt-10 text-[22px] font-semibold tracking-tight text-slate-900">Vamos configurar sua empresa</h1>
         <p className="mt-1 text-[14px] text-slate-500">
-          Criamos o seu ambiente com grupos operacionais sugeridos (Regulação, Jurídico, Financeiro…). Você pode ajustar tudo
-          depois.
+          Criamos o seu ambiente com o grupo Operacional. Você cria os demais grupos depois.
         </p>
         <OnboardingForm />
       </div>
