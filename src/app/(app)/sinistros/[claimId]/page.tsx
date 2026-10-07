@@ -3,7 +3,7 @@ import { MultiCheckField } from "@/components/execution/MultiCheckField";
 import { splitFieldValues } from "@/lib/workflow/types";
 import { loadGroupRefNames, loadGroupRefOptions } from "@/lib/group-ref";
 import { loadCalendarBundles, flowDeadlineIso } from "@/lib/sla-load";
-import { longestPath } from "@/lib/workflow/path";
+import { accumulatedMinutes, longestPath } from "@/lib/workflow/path";
 import { GroupChip } from "@/lib/group-icons";
 import { ActivityForm } from "@/components/execution/ActivityForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -516,6 +516,7 @@ export default async function ClaimPage({
   const latestStageByNode = new Map<string, { id: string; status: string }>();
   for (const s of [...(stages ?? [])].reverse()) latestStageByNode.set(s.node_id, { id: s.id, status: s.status });
   const mostRecentStageId = stages?.[0]?.id;
+  const accByNode = accumulatedMinutes(graph, (n) => slaOf(n) ?? 0);
   const execNodes = graph.nodes.map((n) => {
     const pos = positionById.get(n.id) ?? { x: 0, y: 0 };
     const latest = latestStageByNode.get(n.id);
@@ -525,7 +526,21 @@ export default async function ClaimPage({
       else status = "in_progress";
       if (cycle.status === "blocked" && latest.id === mostRecentStageId) status = "blocked";
     }
-    return { id: n.id, type: n.type, name: n.name, x: pos.x ?? 0, y: pos.y ?? 0, status };
+    // Previsão por elemento: prazo da etapa, prazo acumulado desde a abertura (caminho mais demorado) e a data prevista em dias úteis
+    const a = accByNode.get(n.id);
+    const duText = (m: number) => `${+(m / (flowJourney ?? 1440)).toFixed(1)} ${flowJourney ? "du" : "d"}`;
+    let forecast: { own?: string; acc?: string; accDate?: string } = {};
+    if (a && (a.max > 0 || a.own > 0)) {
+      forecast = {
+        own: a.own > 0 ? duText(a.own) : undefined,
+        acc: a.min < a.max ? `até ${duText(a.max)} (a partir de ${duText(a.min)})` : duText(a.max),
+        accDate:
+          flowBundle && a.max > 0
+            ? new Date(flowDeadlineIso(flowStartedAt, a.max, flowBundle)).toLocaleDateString("pt-BR", { timeZone: flowBundle.calendar.timezone ?? undefined })
+            : undefined,
+      };
+    }
+    return { id: n.id, type: n.type, name: n.name, x: pos.x ?? 0, y: pos.y ?? 0, status, ...forecast };
   });
   const execEdges = graph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: e.label || undefined, color: e.color, isReturn: e.kind === "return" }));
 

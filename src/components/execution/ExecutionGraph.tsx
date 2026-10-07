@@ -14,6 +14,10 @@ export type ExecutionNode = {
   status: "pending" | "in_progress" | "completed" | "blocked";
   claimCount?: number;
   blockedCount?: number;
+  // Previsão: prazo da etapa, prazo acumulado desde a abertura e a data prevista (em dias úteis)
+  own?: string;
+  acc?: string;
+  accDate?: string;
 };
 export type ExecutionEdge = { id: string; source: string; target: string; label?: string; color?: string; isReturn?: boolean };
 
@@ -37,6 +41,9 @@ function ExecutionNodeBox({
     status: ExecutionNode["status"];
     claimCount?: number;
     blockedCount?: number;
+    own?: string;
+    acc?: string;
+    accDate?: string;
   }>
 >) {
   const count = data.claimCount ?? 0;
@@ -63,6 +70,28 @@ function ExecutionNodeBox({
         {data.type !== "start" && data.type !== "end" && <span className="font-medium normal-case tracking-normal">{STATUS_LABEL[data.status]}</span>}
       </div>
       <div className="mt-0.5 text-[14px] font-semibold leading-snug">{data.name}</div>
+      {(data.own || data.acc) && (
+        <dl className="mt-1.5 space-y-0.5 border-t border-current/15 pt-1.5 text-[11.5px] leading-tight">
+          {data.own && (
+            <div className="flex justify-between gap-2">
+              <dt className="opacity-70">Prazo da etapa</dt>
+              <dd className="font-semibold">{data.own}</dd>
+            </div>
+          )}
+          {data.acc && (
+            <div className="flex justify-between gap-2">
+              <dt className="opacity-70">Acumulado</dt>
+              <dd className="text-right font-semibold">{data.acc}</dd>
+            </div>
+          )}
+          {data.accDate && (
+            <div className="flex justify-between gap-2">
+              <dt className="opacity-70">Previsto até</dt>
+              <dd className="font-semibold">{data.accDate}</dd>
+            </div>
+          )}
+        </dl>
+      )}
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400" />
     </div>
   );
@@ -101,6 +130,9 @@ export function ExecutionGraph({
             status: n.status,
             claimCount: n.claimCount,
             blockedCount: n.blockedCount,
+            own: n.own,
+            acc: n.acc,
+            accDate: n.accDate,
           },
           draggable: false,
           selectable: Boolean(onNodeClick),
