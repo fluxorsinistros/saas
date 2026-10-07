@@ -190,6 +190,9 @@ function toPayload(nodes: FlowNode[], edges: FlowEdge[]): SavePayload {
   };
 }
 
+// Cores dos ramos de uma saída com mais de uma opção (decisão, paralelo, etapa que segue por campo)
+const BRANCH_COLORS = ["#2563eb", "#db2777", "#16a34a", "#d97706", "#7c3aed", "#0891b2", "#dc2626", "#65a30d"];
+
 export function WorkflowBuilder(props: Props) {
   return (
     <ReactFlowProvider>
@@ -613,19 +616,25 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
     return () => window.removeEventListener("keydown", onKey);
   }, [dirty, pending, save, readOnly, undo, redo, duplicateSelected, nodes, edges, deleteSelection]);
 
-  const displayEdges = useMemo<FlowEdge[]>(
-    () =>
-      edges.map((e) => {
+  const displayEdges = useMemo<FlowEdge[]>(() => {
+    // Saída com mais de um ramo: cada ramo ganha uma cor própria, para não confundir linhas que se cruzam
+    const siblingsOf = new Map<string, string[]>();
+    for (const e of edges) siblingsOf.set(e.source, [...(siblingsOf.get(e.source) ?? []), e.id]);
+    return edges.map((e) => {
         const data = e.data ?? { kind: "normal", label: "", isRequired: true };
+        const siblings = siblingsOf.get(e.source) ?? [];
+        const branchColor = siblings.length > 1 ? BRANCH_COLORS[siblings.indexOf(e.id) % BRANCH_COLORS.length] : null;
         const fromParallel = typeOf.get(e.source) === "parallel_split";
         const isReturn = data.kind === "return";
         const color = e.selected
           ? "var(--color-brand)"
           : isReturn
             ? "var(--color-violet)"
-            : fromParallel
-              ? "#0e7490"
-              : "#94a3b8";
+            : branchColor
+              ? branchColor
+              : fromParallel
+                ? "#0e7490"
+                : "#94a3b8";
         const dashed = isReturn || (fromParallel && !data.isRequired);
         const text = [isReturn ? "↺" : "", data.label, fromParallel && !data.isRequired ? "(opcional)" : ""]
           .filter(Boolean)
@@ -638,14 +647,13 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
           labelShowBg: true,
           labelBgPadding: [6, 3] as [number, number],
           labelBgBorderRadius: 6,
-          labelStyle: { fontSize: 11, fontWeight: 500, fill: isReturn ? "#6d28d9" : "#334155" },
+          labelStyle: { fontSize: 11, fontWeight: 500, fill: !e.selected && branchColor && !isReturn ? branchColor : isReturn ? "#6d28d9" : "#334155" },
           labelBgStyle: { fill: "#ffffff", stroke: "#e2e8f0" },
           style: { stroke: color, strokeWidth: e.selected ? 2.5 : 1.6, strokeDasharray: dashed ? "6 4" : undefined },
           markerEnd: { type: MarkerType.ArrowClosed, color, width: 16, height: 16 },
         };
-      }),
-    [edges, typeOf],
-  );
+      });
+  }, [edges, typeOf]);
 
   const selectedNode = selection.node ? nodes.find((n) => n.id === selection.node) : undefined;
   const selectedEdge = selection.edge ? edges.find((e) => e.id === selection.edge) : undefined;
@@ -861,7 +869,7 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
               minZoom={0.15}
               proOptions={{ hideAttribution: true }}
             >
-              <Background variant={BackgroundVariant.Dots} gap={18} size={1.2} color="#cbd5e1" />
+              <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(148, 163, 184, 0.16)" />
               <MiniMap
                 pannable
                 zoomable
