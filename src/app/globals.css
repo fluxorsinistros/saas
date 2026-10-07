@@ -47,6 +47,18 @@ body[data-theme="dark"] {
   color: #f1f5f9;
 }
 
+/* Grafo de execução do sinistro (e da Torre de Controle): cores dos elementos e dos nomes sobre as linhas, nos dois temas */
+:root { --exec-label-bg: #ffffff; --exec-label-fg: #334155; --exec-label-border: #cbd5e1; --exec-edge: #94a3b8; }
+.dark, [data-theme="dark"] { --exec-label-bg: #0f172a; --exec-label-fg: #e2e8f0; --exec-label-border: #334155; --exec-edge: #64748b; }
+.exec-node { background: #ffffff; border-color: #cbd5e1; color: #475569; }
+.exec-node[data-status="completed"] { background: #dcfce7; border-color: #22c55e; color: #14532d; }
+.exec-node[data-status="in_progress"] { background: #e0f2fe; border-color: #0ea5e9; color: #0c4a6e; box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.22); }
+.exec-node[data-status="blocked"] { background: #ffe4e6; border-color: #f43f5e; color: #881337; }
+.dark .exec-node, [data-theme="dark"] .exec-node { background: #141d2e; border-color: #334155; color: #cbd5e1; }
+.dark .exec-node[data-status="completed"], [data-theme="dark"] .exec-node[data-status="completed"] { background: rgba(34, 197, 94, 0.2); border-color: #22c55e; color: #dcfce7; }
+.dark .exec-node[data-status="in_progress"], [data-theme="dark"] .exec-node[data-status="in_progress"] { background: rgba(14, 165, 233, 0.24); border-color: #38bdf8; color: #e0f2fe; box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.28); }
+.dark .exec-node[data-status="blocked"], [data-theme="dark"] .exec-node[data-status="blocked"] { background: rgba(244, 63, 94, 0.22); border-color: #fb7185; color: #ffe4e6; }
+
 /* Losango da Decisão no editor de fluxos: o preenchimento é um atributo do SVG, então acompanha o tema por aqui */
 .decision-fill { fill: #ffffff; }
 .dark .decision-fill,

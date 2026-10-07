@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Background, Handle, Position, ReactFlow, ReactFlowProvider, type Node, type NodeProps } from "@xyflow/react";
+import { Background, BackgroundVariant, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { NODE_META, type NodeType } from "@/lib/workflow/types";
 
@@ -15,14 +15,17 @@ export type ExecutionNode = {
   claimCount?: number;
   blockedCount?: number;
 };
-export type ExecutionEdge = { id: string; source: string; target: string; label?: string };
+export type ExecutionEdge = { id: string; source: string; target: string; label?: string; color?: string; isReturn?: boolean };
 
-const STATUS_STYLE: Record<ExecutionNode["status"], string> = {
-  pending: "border-slate-200 bg-white text-slate-500",
-  in_progress: "border-sky-400 bg-sky-50 text-sky-900 shadow-[0_0_0_3px_rgba(56,189,248,0.15)]",
-  completed: "border-emerald-400 bg-emerald-50 text-emerald-900",
-  blocked: "border-rose-400 bg-rose-50 text-rose-900",
+const STATUS_LABEL: Record<ExecutionNode["status"], string> = {
+  pending: "A fazer",
+  in_progress: "Em andamento",
+  completed: "Concluída",
+  blocked: "Bloqueada",
 };
+
+// Cores dos ramos de uma saída com mais de uma opção (as mesmas do editor de fluxos)
+const BRANCH_COLORS = ["#2563eb", "#db2777", "#16a34a", "#d97706", "#7c3aed", "#0891b2", "#dc2626", "#65a30d"];
 
 function ExecutionNodeBox({
   data,
@@ -41,10 +44,8 @@ function ExecutionNodeBox({
 
   return (
     <div
-      className={`relative rounded-lg border-2 px-3 py-2 text-[12px] font-medium transition cursor-pointer ${
-        selected ? "ring-2 ring-brand ring-offset-2 " : ""
-      }${STATUS_STYLE[data.status]}`}
-      style={{ minWidth: 140 }}
+      data-status={data.status}
+      className={`exec-node relative w-[230px] cursor-pointer rounded-xl border-2 px-3.5 py-2.5 transition ${selected ? "ring-2 ring-brand ring-offset-2 " : ""}`}
     >
       {count > 0 && (
         <span
@@ -57,10 +58,11 @@ function ExecutionNodeBox({
         </span>
       )}
       <Handle type="target" position={Position.Top} className="!bg-slate-400" />
-      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] opacity-60">
-        {NODE_META[data.type]?.label ?? data.type}
+      <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.06em] opacity-75">
+        <span>{NODE_META[data.type]?.label ?? data.type}</span>
+        {data.type !== "start" && data.type !== "end" && <span className="font-medium normal-case tracking-normal">{STATUS_LABEL[data.status]}</span>}
       </div>
-      <div>{data.name}</div>
+      <div className="mt-0.5 text-[14px] font-semibold leading-snug">{data.name}</div>
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400" />
     </div>
   );
@@ -77,7 +79,7 @@ export function ExecutionGraph({
   edges,
   selectedNodeId,
   onNodeClick,
-  height = 420,
+  height = 680,
 }: {
   nodes: ExecutionNode[];
   edges: ExecutionEdge[];
@@ -106,17 +108,39 @@ export function ExecutionGraph({
       ),
     [nodes, selectedNodeId, onNodeClick],
   );
-  const flowEdges = useMemo(
-    () =>
-      edges.map((e) => ({
+  const flowEdges = useMemo<Edge[]>(() => {
+    const statusOf = new Map(nodes.map((n) => [n.id, n.status]));
+    const siblings = new Map<string, string[]>();
+    for (const e of edges) siblings.set(e.source, [...(siblings.get(e.source) ?? []), e.id]);
+    return edges.map((e) => {
+      const sib = siblings.get(e.source) ?? [];
+      const branchColor = sib.length > 1 ? BRANCH_COLORS[sib.indexOf(e.id) % BRANCH_COLORS.length] : null;
+      // linha já percorrida: forte; as demais ficam mais suaves, mas legíveis
+      const targetStatus = statusOf.get(e.target);
+      const taken = statusOf.get(e.source) === "completed" && targetStatus !== undefined && targetStatus !== "pending";
+      const base = e.color ?? branchColor ?? "var(--exec-edge)";
+      return {
         id: e.id,
         source: e.source,
         target: e.target,
-        label: e.label,
-        style: { stroke: "#cbd5e1" },
-      })),
-    [edges],
-  );
+        type: "smoothstep",
+        pathOptions: { borderRadius: 14, offset: 22 },
+        label: e.label ? `${e.isReturn ? "↺ " : ""}${e.label}` : undefined,
+        labelShowBg: true,
+        labelBgPadding: [8, 4] as [number, number],
+        labelBgBorderRadius: 6,
+        labelStyle: { fontSize: 12, fontWeight: 600, fill: taken ? "#16a34a" : "var(--exec-label-fg)" },
+        labelBgStyle: { fill: "var(--exec-label-bg)", stroke: taken ? "#16a34a" : "var(--exec-label-border)" },
+        style: {
+          stroke: taken ? "#22c55e" : base,
+          strokeWidth: taken ? 3 : 1.8,
+          opacity: taken ? 1 : 0.75,
+          strokeDasharray: e.isReturn ? "6 4" : undefined,
+        },
+        markerEnd: { type: MarkerType.ArrowClosed, color: taken ? "#22c55e" : (e.color ?? branchColor ?? "#94a3b8"), width: 18, height: 18 },
+      };
+    });
+  }, [edges, nodes]);
 
   return (
     <div
@@ -130,6 +154,9 @@ export function ExecutionGraph({
           nodeTypes={nodeTypes}
           onNodeClick={onNodeClick ? (_, node) => onNodeClick(node.id) : undefined}
           fitView
+          fitViewOptions={{ padding: 0.12, minZoom: 0.02, maxZoom: 1 }}
+          minZoom={0.02}
+          maxZoom={2.5}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={Boolean(onNodeClick)}
@@ -137,7 +164,19 @@ export function ExecutionGraph({
           zoomOnScroll
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={16} />
+          <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="rgba(148, 163, 184, 0.2)" />
+          <Controls showInteractive={false} position="bottom-left" />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-right"
+            maskColor="rgba(15, 23, 42, 0.35)"
+            nodeStrokeWidth={0}
+            nodeColor={(n) => {
+              const status = (n.data as { status?: ExecutionNode["status"] } | undefined)?.status;
+              return status === "completed" ? "#22c55e" : status === "in_progress" ? "#38bdf8" : status === "blocked" ? "#fb7185" : "#94a3b8";
+            }}
+          />
         </ReactFlow>
       </ReactFlowProvider>
     </div>

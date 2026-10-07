@@ -527,7 +527,7 @@ export default async function ClaimPage({
     }
     return { id: n.id, type: n.type, name: n.name, x: pos.x ?? 0, y: pos.y ?? 0, status };
   });
-  const execEdges = graph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: e.label || undefined }));
+  const execEdges = graph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: e.label || undefined, color: e.color, isReturn: e.kind === "return" }));
 
   const historyItems: HistoryItem[] = (auditLogs ?? []).map((log) => {
     const newVal = (log.new_value ?? {}) as Record<string, unknown>;

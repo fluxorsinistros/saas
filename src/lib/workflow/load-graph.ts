@@ -35,6 +35,7 @@ export async function loadGraph(supabase: SupabaseClient<Database>, versionId: s
       label: e.label ?? "",
       isRequired: e.is_required,
       onLimit: !!(e.config as { onLimit?: boolean } | null)?.onLimit,
+      color: (e.config as { color?: string } | null)?.color || undefined,
     })),
   };
 }
