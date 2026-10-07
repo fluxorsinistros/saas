@@ -5,7 +5,7 @@ import { Avatar } from "@/components/Avatar";
 import { GroupIcon } from "@/lib/group-icons";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Bell, UserRound, ChevronUp } from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Bell, UserRound, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
 import { toggleQuickTheme } from "./admin/actions";
@@ -239,7 +239,7 @@ export function AppSidebar({
       )}
 
       {groups.length > 0 && (
-        <div className={`mt-3 ${collapsed ? "flex justify-center px-2" : "px-3"}`}>
+        <div className={`mt-2 ${collapsed ? "flex justify-center px-2" : "px-3"}`}>
           {canPickGroup ? (
             <button
               type="button"
@@ -247,15 +247,16 @@ export function AppSidebar({
               title={`Grupo atual: ${activeGroupName}, clique para trocar`}
               aria-label={`Grupo atual: ${activeGroupName}. Trocar grupo`}
               className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 text-left transition hover:border-navy-600 ${
-                collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
+                collapsed ? "size-9 justify-center" : "w-full px-2 py-1.5"
               }`}
             >
               <GroupIcon icon={activeGroupData?.icon} color={activeGroupData?.color} className="size-6" iconClassName="size-3.5" />
               {!collapsed && (
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs text-slate-400">Atuando no grupo</span>
-                  <span className="block truncate text-[13px] font-medium text-white">{activeGroupName}</span>
-                </span>
+                <>
+                  <span className="sr-only">Atuando no grupo</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-white">{activeGroupName}</span>
+                  <ChevronsUpDown className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                </>
               )}
             </button>
           ) : (
@@ -263,15 +264,15 @@ export function AppSidebar({
             <div
               title={`Seu grupo: ${activeGroupName}`}
               className={`flex items-center gap-2 rounded-lg border border-navy-700 bg-navy-800 ${
-                collapsed ? "size-9 justify-center" : "w-full px-2.5 py-2"
+                collapsed ? "size-9 justify-center" : "w-full px-2 py-1.5"
               }`}
             >
               <GroupIcon icon={activeGroupData?.icon} color={activeGroupData?.color} className="size-6" iconClassName="size-3.5" />
               {!collapsed && (
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs text-slate-400">Seu grupo</span>
-                  <span className="block truncate text-[13px] font-medium text-white">{activeGroupName}</span>
-                </span>
+                <>
+                  <span className="sr-only">Seu grupo</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-white">{activeGroupName}</span>
+                </>
               )}
             </div>
           )}
