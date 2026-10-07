@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, CalendarClock, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getPermissionCodes } from "@/lib/permissions";
-import { addException, createCalendar, deleteCalendar, removeException } from "./actions";
+import { addException, createCalendar, deleteCalendar, removeException, updateCalendar } from "./actions";
+import { CALENDAR_TIMEZONES } from "@/lib/calendar-zones";
+import { CalendarEditForm } from "@/components/CalendarEditForm";
+import { ConfirmAction } from "@/components/ConfirmAction";
 
 export const metadata: Metadata = { title: "Calendários de SLA" };
 
@@ -95,9 +98,14 @@ export default async function CalendariosPage() {
                   </div>
                   {canManage && (
                     <form action={deleteCalendar.bind(null, cal.id)}>
-                      <button className="text-slate-500 hover:text-rose-600" aria-label={`Remover ${cal.name}`}>
+                      <ConfirmAction
+                        title={`Remover o calendário "${cal.name}"?`}
+                        description="Os feriados cadastrados nele também serão removidos. Se algum fluxo publicado usa este calendário, a remoção é recusada."
+                        className="cursor-pointer text-slate-500 hover:text-rose-600"
+                        ariaLabel={`Remover ${cal.name}`}
+                      >
                         <Trash2 className="size-4" />
-                      </button>
+                      </ConfirmAction>
                     </form>
                   )}
                 </div>
@@ -105,6 +113,60 @@ export default async function CalendariosPage() {
                   {WEEKDAYS.filter((d) => days.has(d.value)).map((d) => d.label).join(", ")}
                   {cal.business_start && cal.business_end ? ` · ${cal.business_start.slice(0, 5)} às ${cal.business_end.slice(0, 5)}` : " · dia inteiro"}
                 </p>
+
+                {canManage && (
+                  <details className="mt-2">
+                    <summary className="inline-flex cursor-pointer items-center gap-1.5 text-[12px] font-medium text-brand hover:underline">
+                      <Pencil className="size-3.5" aria-hidden /> Editar dias úteis, horário e fuso
+                    </summary>
+                    <CalendarEditForm action={updateCalendar.bind(null, cal.id)}>
+                      <div className="flex flex-wrap items-end gap-3">
+                        <div className="min-w-[200px] flex-1">
+                          <label htmlFor={`cal-name-${cal.id}`} className="mb-1 block text-[12px] font-medium text-slate-600">Nome</label>
+                          <input id={`cal-name-${cal.id}`} name="name" required maxLength={80} defaultValue={cal.name} className={input} />
+                        </div>
+                        <div>
+                          <label htmlFor={`cal-start-${cal.id}`} className="mb-1 block text-[12px] font-medium text-slate-600">Início</label>
+                          <input id={`cal-start-${cal.id}`} name="business_start" type="time" defaultValue={cal.business_start?.slice(0, 5) ?? ""} className={`${input} w-28`} />
+                        </div>
+                        <div>
+                          <label htmlFor={`cal-end-${cal.id}`} className="mb-1 block text-[12px] font-medium text-slate-600">Fim</label>
+                          <input id={`cal-end-${cal.id}`} name="business_end" type="time" defaultValue={cal.business_end?.slice(0, 5) ?? ""} className={`${input} w-28`} />
+                        </div>
+                      </div>
+                      <fieldset>
+                        <legend className="mb-1 text-[12px] font-medium text-slate-600">Dias úteis da semana</legend>
+                        <div className="flex flex-wrap gap-2">
+                          {WEEKDAYS.map((d) => (
+                            <label key={d.value} className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-700">
+                              <input type="checkbox" name={`day_${d.value}`} defaultChecked={days.has(d.value)} className="accent-[var(--color-brand)]" />
+                              {d.label}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <div>
+                        <label htmlFor={`cal-tz-${cal.id}`} className="mb-1 block text-[12px] font-medium text-slate-600">Fuso horário do expediente</label>
+                        <select id={`cal-tz-${cal.id}`} name="timezone" defaultValue={cal.timezone ?? "America/Sao_Paulo"} className={input}>
+                          {CALENDAR_TIMEZONES.map((z) => (
+                            <option key={z.value} value={z.value}>
+                              {z.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <ConfirmAction
+                        tone="brand"
+                        title="Salvar as alterações deste calendário?"
+                        confirmLabel="Salvar"
+                        description="Etapas que ainda vão começar passam a contar prazo com o novo calendário. Prazos já calculados em sinistros em andamento não mudam. Fluxos publicados guardam o prazo em minutos de expediente: se a jornada diária mudou, republique o fluxo para refletir isso."
+                        className="cursor-pointer rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600"
+                      >
+                        Salvar alterações
+                      </ConfirmAction>
+                    </CalendarEditForm>
+                  </details>
+                )}
 
                 {excs.length > 0 && (
                   <ul className="mt-3 space-y-1 border-t border-slate-100 pt-3">
@@ -117,7 +179,21 @@ export default async function CalendariosPage() {
                         </span>
                         {canManage && (
                           <form action={removeException.bind(null, e.id)}>
-                            <button className="text-slate-500 hover:text-rose-600">Remover</button>
+                            <ConfirmAction
+                              title={e.is_working_day ? "Remover este dia útil extra?" : "Remover este feriado?"}
+                              description={
+                                <>
+                                  <span className="font-medium">
+                                    {new Date(e.exception_date + "T00:00:00").toLocaleDateString("pt-BR")}
+                                    {e.note ? ` (${e.note})` : ""}
+                                  </span>
+                                  . Os prazos passam a contar esse dia {e.is_working_day ? "como dia normal da semana" : "como dia útil"}. Prazos de etapas que ainda vão começar mudam; os que já foram calculados não.
+                                </>
+                              }
+                              className="cursor-pointer text-slate-500 hover:text-rose-600"
+                            >
+                              Remover
+                            </ConfirmAction>
                           </form>
                         )}
                       </li>
