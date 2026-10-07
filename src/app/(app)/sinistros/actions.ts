@@ -196,6 +196,40 @@ async function enterNode(
   });
 
   await startSlaTracking(supabase, tenantId, cycleId, versionId, nodeId, stage.id);
+  // A primeira etapa já é avisada pelo "sinistro aberto"; as seguintes (e as devoluções) avisam o grupo da etapa.
+  if (entryReason !== "initial" && node.groupId) {
+    await emitStageAssigned(supabase, tenantId, cycleId, stage.id, node.name, node.groupId, entryReason);
+  }
+}
+
+// Evento "etapa atribuída ao grupo" para a fila de e-mails. Falha aqui nunca atrapalha o avanço do sinistro.
+async function emitStageAssigned(supabase: Supa, tenantId: string, cycleId: string, stageId: string, stageName: string, groupId: string, entryReason: string) {
+  try {
+    const [{ data: cycle }, { data: sla }] = await Promise.all([
+      supabase.from("claim_cycles").select("claim_id, created_by").eq("id", cycleId).maybeSingle(),
+      supabase.from("sla_tracking").select("target_at").eq("stage_instance_id", stageId).limit(1).maybeSingle(),
+    ]);
+    if (!cycle) return;
+    const { data: claim } = await supabase.from("claims").select("claim_number").eq("id", cycle.claim_id).maybeSingle();
+    const { error } = await supabase.from("notifications").insert({
+      tenant_id: tenantId,
+      event_type: "stage.assigned",
+      claim_cycle_id: cycleId,
+      dedupe_key: `stage.assigned:${stageId}`,
+      payload: {
+        claim_id: cycle.claim_id,
+        claim_number: claim?.claim_number ?? "",
+        stage_name: stageName,
+        group_id: groupId,
+        entry_reason: entryReason,
+        target_at: sla?.target_at ?? null,
+        requested_by: cycle.created_by,
+      } as unknown as Json,
+    });
+    if (error) console.error("evento de etapa não gravado:", error.message);
+  } catch (e) {
+    console.error("evento de etapa não gravado:", e);
+  }
 }
 
 // Cria o relógio de SLA (Documento 4 §1-§2) se a versão publicada tiver uma regra para este nó.

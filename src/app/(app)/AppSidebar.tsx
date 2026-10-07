@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { GroupIcon } from "@/lib/group-icons";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Bell } from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Bell, UserRound, ChevronUp } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
 import { toggleQuickTheme } from "./admin/actions";
@@ -93,6 +93,24 @@ export function AppSidebar({
   const collapsed = desktopCollapsed && !drawerOpen;
   const router = useRouter();
   const [groupOpen, setGroupOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  // menu do usuário: fecha ao clicar fora ou com Esc
+  useEffect(() => {
+    if (!userOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setUserOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setUserOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [userOpen]);
   const canPickGroup = groups.length > 1;
   const activeGroupData = groups.find((g) => g.id === activeGroupId) ?? groups[0];
   const activeGroupName = activeGroupData?.name ?? "";
@@ -116,7 +134,7 @@ export function AppSidebar({
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("a")) setDrawerOpen(false);
       }}
-      className={`sidebar-scrollbar fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col sidebar-glass bg-navy text-slate-300 transition-transform duration-200 select-none md:static md:z-auto md:translate-x-0 md:transition-[width] md:duration-150 ${
+      className={`sidebar-scrollbar fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col sidebar-glass bg-navy text-slate-300 transition-transform duration-200 select-none md:static md:z-20 md:translate-x-0 md:transition-[width] md:duration-150 ${
         drawerOpen ? "translate-x-0" : "-translate-x-full"
       } ${collapsed ? "md:w-14" : "md:w-[232px]"}`}
     >
@@ -282,34 +300,58 @@ export function AppSidebar({
           </button>
         </form>
 
-        <Link
-          href="/notificacoes"
-          title="Minhas notificações por e-mail"
-          className={`flex items-center gap-2 rounded-md py-1.5 text-[12px] font-medium text-slate-300 transition hover:bg-navy-700 hover:text-white ${collapsed ? "w-full justify-center px-0" : "w-full px-2"}`}
-        >
-          <Bell className="size-4 shrink-0" />
-          {!collapsed && "Minhas notificações"}
-        </Link>
-        <Link
-          href="/perfil"
-          title="Meu perfil: foto e dados"
-          className={`flex items-center gap-2 rounded-md py-1 text-xs text-slate-400 transition hover:bg-navy-700 hover:text-white ${collapsed ? "justify-center px-0" : "px-2"}`}
-        >
-          <Avatar name={personName || email} url={avatarUrl} className="size-6" />
-          {!collapsed && <span className="min-w-0 flex-1 truncate">{email}</span>}
-        </Link>
-        <form action={signOut}>
+        <div ref={userMenuRef} className="relative">
+          {userOpen && (
+            <div
+              role="menu"
+              aria-label="Menu do usuário"
+              className="absolute bottom-full left-0 z-50 mb-2 w-56 overflow-hidden rounded-xl border border-white/10 bg-navy p-1 shadow-xl backdrop-blur-xl"
+              style={{ backgroundColor: "rgba(11, 27, 58, 0.96)" }}
+            >
+              <Link
+                href="/perfil"
+                role="menuitem"
+                onClick={() => setUserOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-slate-200 transition hover:bg-white/10 hover:text-white"
+              >
+                <UserRound className="size-4 shrink-0" /> Meu perfil
+              </Link>
+              <Link
+                href="/notificacoes"
+                role="menuitem"
+                onClick={() => setUserOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-slate-200 transition hover:bg-white/10 hover:text-white"
+              >
+                <Bell className="size-4 shrink-0" /> Minhas notificações
+              </Link>
+              <form action={signOut}>
+                <button
+                  type="submit"
+                  role="menuitem"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-slate-200 transition hover:bg-white/10 hover:text-white"
+                >
+                  <LogOut className="size-4 shrink-0" /> Sair
+                </button>
+              </form>
+            </div>
+          )}
           <button
-            type="submit"
-            title="Sair"
-            className={`flex items-center gap-2 rounded-md py-1.5 text-[13px] text-slate-300 transition hover:bg-navy-700 hover:text-white ${
-              collapsed ? "w-full justify-center px-0" : "w-full px-2"
-            }`}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={userOpen}
+            title={email}
+            onClick={() => setUserOpen((v) => !v)}
+            className={`flex w-full cursor-pointer items-center gap-2 rounded-md py-1.5 text-xs text-slate-300 transition hover:bg-navy-700 hover:text-white ${collapsed ? "justify-center px-0" : "px-2"}`}
           >
-            <LogOut className="size-4 shrink-0" />
-            {!collapsed && "Sair"}
+            <Avatar name={personName || email} url={avatarUrl} className="size-6" />
+            {!collapsed && (
+              <>
+                <span className="min-w-0 flex-1 truncate text-left">{email}</span>
+                <ChevronUp className={`size-3.5 shrink-0 transition ${userOpen ? "" : "rotate-180"}`} aria-hidden />
+              </>
+            )}
           </button>
-        </form>
+        </div>
       </div>
     </aside>
       {groupOpen && (

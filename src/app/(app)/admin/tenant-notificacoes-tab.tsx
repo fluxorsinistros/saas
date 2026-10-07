@@ -14,6 +14,7 @@ type Rule = {
 
 const DEFAULTS: Record<RuleKey, Omit<Rule, "rule_key">> = {
   claim_opened: { enabled: false, to_event_group: true, to_requester: true, to_admins: false, to_groups: [], extra_emails: [], digest_hour: 8 },
+  stage_assigned: { enabled: false, to_event_group: true, to_requester: false, to_admins: false, to_groups: [], extra_emails: [], digest_hour: 8 },
   sla_at_risk: { enabled: false, to_event_group: true, to_requester: false, to_admins: false, to_groups: [], extra_emails: [], digest_hour: 8 },
   sla_breached: { enabled: false, to_event_group: true, to_requester: false, to_admins: true, to_groups: [], extra_emails: [], digest_hour: 8 },
   sla_digest: { enabled: false, to_event_group: false, to_requester: false, to_admins: true, to_groups: [], extra_emails: [], digest_hour: 8 },

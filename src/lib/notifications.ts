@@ -1,10 +1,11 @@
 // Notificações por e-mail: catálogo dos avisos (usado nas telas) e montagem do e-mail (usada pela rota de envio).
 
-export const RULE_KEYS = ["claim_opened", "sla_at_risk", "sla_breached", "sla_digest", "document_extra"] as const;
+export const RULE_KEYS = ["claim_opened", "stage_assigned", "sla_at_risk", "sla_breached", "sla_digest", "document_extra"] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
 export const RULE_INFO: Record<RuleKey, { label: string; hint: string; eventGroupLabel: string | null; requesterLabel: string }> = {
   claim_opened: { label: "Sinistro aberto", hint: "Ao formalizar um sinistro", eventGroupLabel: "Grupo da 1ª etapa", requesterLabel: "Quem formalizou" },
+  stage_assigned: { label: "Etapa atribuída ao grupo", hint: "Quando o sinistro chega a uma nova etapa (depois da primeira)", eventGroupLabel: "Grupo da etapa", requesterLabel: "Quem formalizou" },
   sla_at_risk: { label: "SLA em risco", hint: "Quando chega ao limite de alerta do SLA", eventGroupLabel: "Grupo da etapa", requesterLabel: "Quem formalizou" },
   sla_breached: { label: "SLA estourado", hint: "Quando o prazo vence", eventGroupLabel: "Grupo da etapa", requesterLabel: "Quem formalizou" },
   sla_digest: { label: "Resumo diário", hint: "Um e-mail por dia com o que está atrasado ou perto do prazo", eventGroupLabel: null, requesterLabel: "" },
@@ -65,6 +66,19 @@ export function buildEmail(item: DeliveryItem, appUrl: string): { subject: strin
           ["Fluxo", String(p.workflow_name ?? "")],
           ["Primeira etapa", String(p.stage_name ?? "")],
           ["Grupo", group],
+        ],
+        cta: { label: "Abrir sinistro", href: claimHref },
+      };
+      break;
+    case "stage.assigned":
+      b = {
+        subject: `Nova etapa no sinistro ${claimNumber}`,
+        headline: `O sinistro ${claimNumber} chegou à etapa "${String(p.stage_name ?? "")}"`,
+        badge: { text: p.target_at ? `Prazo ${fmtDate(p.target_at)}` : p.entry_reason === "reopen" ? "Reaberto" : "Sua vez", tone: "info" },
+        rows: [
+          ["Etapa", String(p.stage_name ?? "")],
+          ["Grupo", group],
+          ["Fluxo", String(p.workflow_name ?? "")],
         ],
         cta: { label: "Abrir sinistro", href: claimHref },
       };
