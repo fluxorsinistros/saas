@@ -55,12 +55,13 @@ export type FieldResult =
         max_value: number | null;
         formula: string | null;
         ref_group_id: string | null;
+        multiple: boolean;
         position: number;
       };
     }
   | { ok: false; error: string };
 
-const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, ref_group_id, position";
+const FIELD_SELECT = "id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, ref_group_id, multiple, position";
 const FIELD_TYPES = ["text", "textarea", "number", "money", "percent", "calculated", "date", "boolean", "select", "person", "attachment", "group_ref"];
 
 // Tamanho mínimo/máximo (só texto e texto longo): vazio = sem limite.
@@ -170,6 +171,8 @@ export async function createWorkflowField(workflowId: string, formData: FormData
   if (fieldType === "select" && (!options || options.length === 0)) {
     return { ok: false, error: "Lista de opções precisa de pelo menos um item (separado por vírgula)." };
   }
+  if (options?.some((o) => o.includes("|"))) return { ok: false, error: 'As opções não podem ter o caractere "|".' };
+  const multiple = fieldType === "select" && formData.get("multiple") === "on";
 
   const required = formData.get("required") === "on";
   // Grupo ou subgrupo: o valor é sempre uma escolha da lista (nada de valor padrão nem de "duplicado entre sinistros")
@@ -221,6 +224,7 @@ export async function createWorkflowField(workflowId: string, formData: FormData
       max_value: bounds.max_value,
       formula: formulaRes.formula,
       ref_group_id: refGroupId,
+      multiple,
     })
     .select(FIELD_SELECT)
     .single();
@@ -256,6 +260,7 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
   if (existing.field_type === "select" && (!options || options.length === 0)) {
     return { ok: false, error: "Lista de opções precisa de pelo menos um item (separado por vírgula)." };
   }
+  if (options?.some((o) => o.includes("|"))) return { ok: false, error: 'As opções não podem ter o caractere "|".' };
 
   const required = formData.get("required") === "on";
   const editIsRef = existing.field_type === "group_ref";
@@ -283,6 +288,7 @@ export async function updateWorkflowField(fieldId: string, workflowId: string, f
       max_length: lengths.max_length,
       min_value: bounds.min_value,
       max_value: bounds.max_value,
+      ...(existing.field_type === "select" ? { multiple: formData.get("multiple") === "on" } : {}),
       ...(existing.field_type === "calculated" ? { formula: formulaRes.formula } : {}),
     })
     .eq("id", fieldId)
@@ -313,6 +319,11 @@ export async function deleteWorkflowField(fieldId: string, workflowId: string): 
       const { data: nodeRows } = await supabase.from("workflow_nodes").select("name, config").in("workflow_version_id", versionIds);
       const usedBy = (nodeRows ?? []).find((n) => ((n.config ?? {}) as { subgroup_field_key?: string }).subgroup_field_key === target.key);
       if (usedBy) return { ok: false, error: `O campo "${target.label}" define o subgrupo da etapa "${usedBy.name}". Troque o subgrupo dessa etapa antes de excluir.` };
+    }
+    if (versionIds.length) {
+      const { data: routeRows } = await supabase.from("workflow_nodes").select("name, config").in("workflow_version_id", versionIds);
+      const routed = (routeRows ?? []).find((n) => ((n.config ?? {}) as { route_field_key?: string }).route_field_key === target.key);
+      if (routed) return { ok: false, error: `O campo "${target.label}" decide o caminho da etapa "${routed.name}". Troque a regra dessa etapa antes de excluir.` };
     }
     // um campo usado na fórmula de outro não pode sumir: a conta quebraria em silêncio
     const { data: calcs } = await supabase.from("workflow_fields").select("label, formula").eq("workflow_id", workflowId).eq("field_type", "calculated");
@@ -526,7 +537,11 @@ export async function publishVersion(versionId: string, releaseNote: string): Pr
     })),
   };
 
-  const issues = validateGraph(graph);
+  const { data: versionForFields } = await supabase.from("workflow_versions").select("workflow_id").eq("id", versionId).maybeSingle();
+  const { data: listFields } = await supabase.from("workflow_fields").select("key, options").eq("workflow_id", versionForFields?.workflow_id ?? "").eq("field_type", "select");
+  const routeFields: Record<string, string[]> = {};
+  for (const f of listFields ?? []) routeFields[f.key] = (f.options as string[] | null) ?? [];
+  const issues = validateGraph(graph, new Set(), routeFields);
   if (issues.some((i) => i.severity === "error")) {
     return { ok: false, error: "O fluxo tem erros e não pode ser publicado.", issues };
   }

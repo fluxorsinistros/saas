@@ -14,7 +14,7 @@ import { isActionAllowedForMember } from "@/lib/group-actions";
 import { addBusinessMinutes } from "@/lib/sla";
 import { loadGraph } from "@/lib/workflow/load-graph";
 import { resolveTransition, startNode } from "@/lib/workflow/engine";
-import type { Graph, GraphNode } from "@/lib/workflow/types";
+import { MULTI_SEPARATOR, splitFieldValues, type Graph, type GraphNode } from "@/lib/workflow/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { groupRefError } from "@/lib/group-ref";
 
@@ -111,6 +111,66 @@ async function resolveStageSubgroup(
   return { subgroupId };
 }
 
+// Lista com várias opções chega no formulário como várias entradas de mesmo nome; o valor guardado é "a|b"
+function multiValue(formData: FormData, formKey: string): string {
+  return formData
+    .getAll(formKey)
+    .map((v) => String(v).trim())
+    .filter(Boolean)
+    .join(MULTI_SEPARATOR);
+}
+
+// Confere o campo pelo qual uma etapa (ou o Início) escolhe o caminho: tem valor, o valor é do campo e cada opção tem saída.
+// Devolve a mensagem para o usuário, ou null se está tudo certo.
+async function routeError(supabase: Supa, workflowId: string, claimFields: Record<string, string>, graph: Graph, node: GraphNode): Promise<string | null> {
+  const key = node.config.route_field_key;
+  if (!key) return null;
+  const { data: def } = await supabase.from("workflow_fields").select("label, options, multiple").eq("workflow_id", workflowId).eq("key", key).maybeSingle();
+  if (!def) return `O campo que decide o caminho de "${node.name}" não existe mais.`;
+  const values = splitFieldValues(claimFields[key]);
+  if (values.length === 0) return `Escolha "${def.label}" antes de concluir: é ele que decide o próximo passo.`;
+  if (!def.multiple && values.length > 1) return `"${def.label}" aceita só uma opção.`;
+  const options = (def.options as string[] | null) ?? [];
+  const outs = graph.edges.filter((e) => e.source === node.id);
+  for (const value of values) {
+    if (!options.includes(value)) return `"${value}" não é uma opção de "${def.label}".`;
+    if (!outs.some((e) => e.label === value)) return `A opção "${value}" de "${def.label}" não tem caminho configurado em "${node.name}".`;
+  }
+  return null;
+}
+
+// Várias opções escolhidas = caminhos simultâneos: abre um evento de bifurcação (modo "exclusive": só as escolhidas seguem) com
+// um ramo por destino. Um Fim em cada ramo conclui o ramo; o sinistro só conclui quando todos os ramos terminarem.
+async function openRouteBranches(supabase: Supa, tenantId: string, cycleId: string, versionId: string, graph: Graph, fromNodeId: string, targetIds: string[], parentBranchInstanceId: string | null) {
+  if (parentBranchInstanceId) {
+    const { data: parent } = await supabase.from("branch_instances").select("branches(branch_mode)").eq("id", parentBranchInstanceId).maybeSingle();
+    if ((parent?.branches as { branch_mode?: string } | null)?.branch_mode === "parallel") {
+      await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
+      await writeAudit(supabase, tenantId, "cycle.blocked", "claim_cycle", cycleId, {
+        reason: "Escolher mais de um caminho dentro de um ramo de Paralelo ainda não é suportado pela execução.",
+      });
+      return;
+    }
+  }
+  const { data: branch, error } = await supabase
+    .from("branches")
+    .insert({ tenant_id: tenantId, claim_cycle_id: cycleId, source_node_id: fromNodeId, branch_mode: "exclusive" })
+    .select("id")
+    .single();
+  if (error || !branch) throw new Error(error?.message ?? "Falha ao abrir os caminhos.");
+  await writeAudit(supabase, tenantId, "branch.opened", "branch", branch.id, { next: { ramos: targetIds.length, por_campo: true } });
+  for (const targetId of targetIds) {
+    const edge = graph.edges.find((e) => e.source === fromNodeId && e.target === targetId);
+    const { data: bi, error: biErr } = await supabase
+      .from("branch_instances")
+      .insert({ tenant_id: tenantId, branch_id: branch.id, target_node_id: targetId, edge_id: edge?.id ?? null, is_required: true, status: "active" })
+      .select("id")
+      .single();
+    if (biErr || !bi) throw new Error(biErr?.message ?? "Falha ao abrir um caminho.");
+    await enterNode(supabase, tenantId, cycleId, versionId, graph, targetId, "advance", bi.id);
+  }
+}
+
 // Cria a stage_instance (e a activity/decision/paralelo/convergência correspondente) para um nó,
 // usado na formalização e em todo avanço. Cada passagem por um nó é uma linha nova (Documento 3
 // §17): nunca sobrescreve. `branchInstanceId` amarra a passagem ao ramo de um Paralelo em curso
@@ -131,6 +191,11 @@ async function enterNode(
   // Início não é uma etapa de verdade, é só o gate de campos da formalização (já coletados e
   // validados antes de chegar aqui, ver formalizeClaim). Não vira stage_instance; passa direto pra
   // etapa real conectada a ele.
+  if (node.type === "start" && node.config.route_field_key) {
+    // O Início escolhe o caminho pelo campo preenchido na abertura (ex.: tipo de sinistro)
+    await advance(supabase, tenantId, versionId, cycleId, nodeId, undefined, branchInstanceId);
+    return;
+  }
   if (node.type === "start") {
     const edge = graph.edges.find((e) => e.source === nodeId);
     if (!edge) {
@@ -211,7 +276,17 @@ async function enterNode(
   }
 
   if (node.type === "end") {
-    await supabase.from("claim_cycles").update({ status: "completed", completed_at: now }).eq("id", cycleId);
+    if (branchInstanceId) await supabase.from("branch_instances").update({ status: "completed" }).eq("id", branchInstanceId);
+    // Com caminhos simultâneos, o sinistro só conclui quando o último deles chega ao Fim
+    const { count: stillOpen } = await supabase
+      .from("stage_instances")
+      .select("id", { count: "exact", head: true })
+      .eq("claim_cycle_id", cycleId)
+      .in("status", ["in_progress", "paused"])
+      .neq("id", stage.id);
+    if ((stillOpen ?? 0) === 0) {
+      await supabase.from("claim_cycles").update({ status: "completed", completed_at: now }).eq("id", cycleId);
+    }
     return;
   }
 
@@ -481,7 +556,15 @@ async function advance(
   const loopPassCounts: Record<string, number> = {};
   for (const row of passRows ?? []) loopPassCounts[row.node_id] = (loopPassCounts[row.node_id] ?? 0) + 1;
 
-  const result = resolveTransition(graph, fromNodeId, { selectedOption, loopPassCounts, loopMax });
+  let routeValues: string[] | undefined;
+  const routeKey = graph.nodes.find((n) => n.id === fromNodeId)?.config.route_field_key;
+  if (routeKey) {
+    const { data: cy } = await supabase.from("claim_cycles").select("claim_id").eq("id", cycleId).maybeSingle();
+    const { data: cl } = cy ? await supabase.from("claims").select("custom_fields").eq("id", cy.claim_id).maybeSingle() : { data: null };
+    routeValues = splitFieldValues(((cl?.custom_fields ?? {}) as Record<string, string>)[routeKey]);
+  }
+
+  const result = resolveTransition(graph, fromNodeId, { selectedOption, routeValues, loopPassCounts, loopMax });
 
   if (result.kind === "unsupported") {
     await supabase.from("claim_cycles").update({ status: "blocked" }).eq("id", cycleId);
@@ -489,6 +572,10 @@ async function advance(
     return;
   }
   if (result.kind === "end") return;
+  if (result.targets.length > 1) {
+    await openRouteBranches(supabase, tenantId, cycleId, versionId, graph, fromNodeId, result.targets, branchInstanceId);
+    return;
+  }
   for (const targetId of result.targets) {
     await enterNode(supabase, tenantId, cycleId, versionId, graph, targetId, "advance", branchInstanceId);
   }
@@ -741,10 +828,10 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   const { data: fieldDefs } = startFieldKeys.length
     ? await supabase
         .from("workflow_fields")
-        .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value, ref_group_id")
+        .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value, ref_group_id, multiple")
         .eq("workflow_id", workflowId)
         .in("key", startFieldKeys)
-    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null; ref_group_id: string | null }[] };
+    : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null; ref_group_id: string | null; multiple: boolean }[] };
   const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
   const patch: Record<string, string> = {};
@@ -758,7 +845,7 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
       if (v instanceof File && v.size > 0) attachments.push({ key, file: v });
       continue;
     }
-    const value = VALUE_FIELD_TYPES.includes(def.field_type) ? String(v).trim().replace(",", ".") : String(v);
+    const value = def.multiple ? multiValue(formData, k) : VALUE_FIELD_TYPES.includes(def.field_type) ? String(v).trim().replace(",", ".") : String(v);
     if (value !== "") patch[key] = value;
   }
 
@@ -773,6 +860,14 @@ export async function formalizeClaim(formData: FormData): Promise<void> {
   }
   const refErr = await groupRefError(supabase, ctx.tenantId, fieldDefs ?? [], patch);
   if (refErr) throw new Error(refErr);
+  if (publishedVersion) {
+    const startGraph = await loadGraph(supabase, publishedVersion.id);
+    const startNodeRow = startGraph.nodes.find((n) => n.type === "start");
+    if (startNodeRow?.config.route_field_key) {
+      const problem = await routeError(supabase, workflowId, patch, startGraph, startNodeRow);
+      if (problem) throw new Error(problem);
+    }
+  }
   for (const def of fieldDefs ?? []) {
     if (!def.is_unique || !patch[def.key]) continue;
     const { data: dupe } = await supabase.rpc("claim_field_value_in_use", { p_tenant_id: ctx.tenantId, p_key: def.key, p_value: patch[def.key] });
@@ -859,10 +954,10 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     const { data: fieldDefs } = versionRow
       ? await supabase
           .from("workflow_fields")
-          .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value, ref_group_id")
+          .select("key, label, field_type, required, is_unique, min_length, max_length, min_value, max_value, ref_group_id, multiple")
           .eq("workflow_id", versionRow.workflow_id)
           .in("key", stageFieldKeys)
-      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null; ref_group_id: string | null }[] };
+      : { data: [] as { key: string; label: string; field_type: string; required: boolean; is_unique: boolean; min_length: number | null; max_length: number | null; min_value: number | null; max_value: number | null; ref_group_id: string | null; multiple: boolean }[] };
     const defByKey = new Map((fieldDefs ?? []).map((f) => [f.key, f]));
 
     const fieldEntries = [...(formData?.entries() ?? [])].filter(([k]) => k.startsWith("field_"));
@@ -877,7 +972,11 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
         if (!upErr) patch[key] = path;
         continue;
       }
-      const value = VALUE_FIELD_TYPES.includes(defByKey.get(key)?.field_type ?? "") ? String(v).trim().replace(",", ".") : String(v);
+      const value = defByKey.get(key)?.multiple
+        ? multiValue(formData!, k)
+        : VALUE_FIELD_TYPES.includes(defByKey.get(key)?.field_type ?? "")
+          ? String(v).trim().replace(",", ".")
+          : String(v);
       if (value !== "") patch[key] = value;
     }
 
@@ -906,14 +1005,21 @@ export async function completeActivity(activityInstanceId: string, formData?: Fo
     }
   }
 
+  const graph = await loadGraph(supabase, cycle.workflow_version_id);
+  const node = graph.nodes.find((n) => n.id === stage.node_id);
+  if (node?.config.route_field_key) {
+    const { data: versionRow } = await supabase.from("workflow_versions").select("workflow_id").eq("id", cycle.workflow_version_id).single();
+    const { data: claimNow } = await supabase.from("claims").select("custom_fields").eq("id", cycle.claim_id).single();
+    const problem = versionRow ? await routeError(supabase, versionRow.workflow_id, (claimNow?.custom_fields ?? {}) as Record<string, string>, graph, node) : null;
+    if (problem) throw new Error(problem);
+  }
+
   const now = new Date().toISOString();
   await supabase
     .from("activity_instances")
     .update({ status: "completed", completed_at: now, completed_by: ctx.userId })
     .eq("id", activityInstanceId);
   await supabase.from("stage_instances").update({ status: "completed", exited_at: now }).eq("id", stage.id);
-  const graph = await loadGraph(supabase, cycle.workflow_version_id);
-  const node = graph.nodes.find((n) => n.id === stage.node_id);
   await writeAudit(supabase, ctx.tenantId, "activity.completed", "activity_instance", activityInstanceId, {
     next: { node_name: node?.name, node_type: node?.type },
   });
@@ -1259,7 +1365,7 @@ export async function undoActivityCompletion(activityInstanceId: string, formDat
   const graph = await loadGraph(supabase, cycle.workflow_version_id);
   const { data: later } = await supabase
     .from("stage_instances")
-    .select("id, node_id, status, entered_at")
+    .select("id, node_id, status, entered_at, branch_instance_id")
     .eq("claim_cycle_id", cycle.id)
     .neq("id", stage.id)
     .neq("status", "cancelled")
@@ -1296,6 +1402,8 @@ export async function undoActivityCompletion(activityInstanceId: string, formDat
     await supabase.from("decisions").delete().in("stage_instance_id", laterIds).is("selected_option", null);
     await supabase.from("sla_tracking").delete().in("stage_instance_id", laterIds);
     await supabase.from("stage_instances").update({ status: "cancelled", exited_at: now }).in("id", laterIds);
+    const laterBranchIds = [...new Set(successors.map((x) => x.branch_instance_id).filter((id): id is string => !!id))];
+    if (laterBranchIds.length) await supabase.from("branch_instances").update({ status: "cancelled" }).in("id", laterBranchIds);
   }
   if (hadEnd || cycle.status === "completed") {
     await supabase.from("claim_cycles").update({ status: "in_progress", completed_at: null }).eq("id", cycle.id);

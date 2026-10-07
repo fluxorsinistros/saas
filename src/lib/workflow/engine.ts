@@ -3,9 +3,8 @@ import type { Graph, GraphNode } from "./types";
 // Motor de execução (Documento 3). Função pura, sem I/O, quem chama decide o que fazer
 // com o resultado (gravar stage_instances, marcar bloqueado, etc).
 //
-// Escopo desta fatia (ver plano): sequência, decisão exclusiva e retorno (loop) com limite.
-// Paralelo/Convergência ainda não têm runtime, resolveTransition devolve "unsupported"
-// em vez de fingir que funciona, para nunca deixar um ciclo em estado inconsistente.
+// Aqui só se decide para onde vai: sequência, decisão exclusiva, retorno (loop) com limite e etapa que segue conforme um campo
+// (uma ou várias opções escolhidas). Paralelo e Convergência têm o runtime próprio em sinistros/actions.ts, que abre os ramos.
 
 export type TransitionResult =
   | { kind: "advance"; targets: string[] }
@@ -22,7 +21,13 @@ export function startNode(graph: Graph): GraphNode {
 export function resolveTransition(
   graph: Graph,
   fromNodeId: string,
-  opts: { selectedOption?: string; loopPassCounts: Record<string, number>; loopMax: Record<string, number | undefined> },
+  opts: {
+    selectedOption?: string;
+    // Opções escolhidas no campo pelo qual a etapa segue (só usado quando a etapa tem route_field_key)
+    routeValues?: string[];
+    loopPassCounts: Record<string, number>;
+    loopMax: Record<string, number | undefined>;
+  },
 ): TransitionResult {
   const node = graph.nodes.find((n) => n.id === fromNodeId);
   if (!node) return { kind: "unsupported", reason: "Elemento não encontrado no fluxo publicado." };
@@ -32,7 +37,7 @@ export function resolveTransition(
   if (node.type === "parallel_split" || node.type === "join") {
     return {
       kind: "unsupported",
-      reason: `${node.type === "parallel_split" ? "Paralelo" : "Convergência"} ainda não é suportado pela execução, esta fatia cobre só sequência, decisão e retorno.`,
+      reason: `${node.type === "parallel_split" ? "Paralelo" : "Convergência"} não passa por aqui: a execução abre e junta os ramos por conta própria.`,
     };
   }
 
@@ -43,28 +48,44 @@ export function resolveTransition(
     if (!edge) {
       return { kind: "unsupported", reason: `Opção "${opts.selectedOption ?? ""}" não corresponde a nenhum caminho desta decisão.` };
     }
-    return checkedAdvance(graph, edge.target, opts);
+    return checkedAdvance(graph, [edge.target], opts);
+  }
+
+  if (node.config.route_field_key) {
+    const values = opts.routeValues ?? [];
+    if (values.length === 0) {
+      return { kind: "unsupported", reason: `O campo que decide o caminho de "${node.name}" está sem valor.` };
+    }
+    const chosen: string[] = [];
+    for (const value of values) {
+      const edge = outs.find((e) => e.label === value);
+      if (!edge) return { kind: "unsupported", reason: `"${node.name}" não tem caminho para a opção "${value}".` };
+      if (!chosen.includes(edge.target)) chosen.push(edge.target);
+    }
+    return checkedAdvance(graph, chosen, opts);
   }
 
   // stage / wait / pending: uma única saída, normal ou de retorno (o Workflow Validator já garante isso).
   const edge = outs[0];
   if (!edge) return { kind: "unsupported", reason: "Elemento sem saída configurada." };
-  return checkedAdvance(graph, edge.target, opts);
+  return checkedAdvance(graph, [edge.target], opts);
 }
 
 function checkedAdvance(
   graph: Graph,
-  targetId: string,
+  targetIds: string[],
   opts: { loopPassCounts: Record<string, number>; loopMax: Record<string, number | undefined> },
 ): TransitionResult {
-  const passCount = opts.loopPassCounts[targetId] ?? 0;
-  const max = opts.loopMax[targetId];
-  if (max !== undefined && passCount >= max) {
-    const name = graph.nodes.find((n) => n.id === targetId)?.name ?? targetId;
-    return {
-      kind: "unsupported",
-      reason: `"${name}" atingiu o limite de ${max} repetições configurado para o retorno. É preciso autorização para continuar (ainda não implementada).`,
-    };
+  for (const targetId of targetIds) {
+    const passCount = opts.loopPassCounts[targetId] ?? 0;
+    const max = opts.loopMax[targetId];
+    if (max !== undefined && passCount >= max) {
+      const name = graph.nodes.find((n) => n.id === targetId)?.name ?? targetId;
+      return {
+        kind: "unsupported",
+        reason: `"${name}" atingiu o limite de ${max} repetições configurado para o retorno. É preciso autorização para continuar (ainda não implementada).`,
+      };
+    }
   }
-  return { kind: "advance", targets: [targetId] };
+  return { kind: "advance", targets: targetIds };
 }

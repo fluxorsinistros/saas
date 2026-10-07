@@ -2904,6 +2904,7 @@ export type Database = {
           options: Json | null
           position: number
           ref_group_id: string | null
+          multiple: boolean
           required: boolean
           tenant_id: string
           workflow_id: string
@@ -2924,6 +2925,7 @@ export type Database = {
           options?: Json | null
           position?: number
           ref_group_id?: string | null
+          multiple?: boolean
           required?: boolean
           tenant_id: string
           workflow_id: string
@@ -2944,6 +2946,7 @@ export type Database = {
           options?: Json | null
           position?: number
           ref_group_id?: string | null
+          multiple?: boolean
           required?: boolean
           tenant_id?: string
           workflow_id?: string

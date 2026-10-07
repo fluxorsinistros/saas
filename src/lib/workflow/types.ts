@@ -17,6 +17,9 @@ export type NodeConfig = {
   subgroup_mode?: "all" | "fixed" | "field";
   subgroup_id?: string;
   subgroup_field_key?: string;
+  // Etapa (ou Início) que segue conforme o valor de um campo de lista: cada opção do campo é uma saída (rótulo da conexão = opção).
+  // Se o campo aceita várias opções, as escolhidas abrem caminhos simultâneos.
+  route_field_key?: string;
   loop_max?: number;
   join_rule?: JoinRule;
   min_count?: number;
@@ -46,8 +49,19 @@ export type WorkflowField = {
   formula: string | null;
   // Só no tipo group_ref: o grupo cujos subgrupos (ou o próprio grupo) viram as opções do campo
   ref_group_id: string | null;
+  // Só no tipo Lista de opções: aceita escolher mais de uma opção (valor guardado como "a|b")
+  multiple?: boolean;
   position: number;
 };
+
+// Valor de um campo de lista no sinistro: "a|b" quando aceita várias opções
+export const MULTI_SEPARATOR = "|";
+export function splitFieldValues(raw: string | null | undefined): string[] {
+  return String(raw ?? "")
+    .split(MULTI_SEPARATOR)
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
 
 export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
   text: "Texto",
@@ -148,10 +162,11 @@ export const REQUIRES_GROUP: NodeType[] = ["stage", "decision", "pending"];
 
 export type DbEdgeType = "normal" | "conditional" | "parallel" | "return" | "close";
 
-export function toDbEdgeType(edge: GraphEdge, sourceType: NodeType | undefined): DbEdgeType {
+export function toDbEdgeType(edge: GraphEdge, sourceType: NodeType | undefined, sourceConfig?: NodeConfig): DbEdgeType {
   if (edge.kind === "return") return "return";
   if (sourceType === "parallel_split") return "parallel";
   if (sourceType === "decision") return "conditional";
+  if (sourceConfig?.route_field_key) return "conditional";
   return "normal";
 }
 

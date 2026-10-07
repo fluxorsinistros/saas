@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MultiCheckField } from "@/components/execution/MultiCheckField";
 import { loadGroupRefOptions } from "@/lib/group-ref";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -45,11 +46,11 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
   const { data: fields } = fieldKeys.length
     ? await supabase
         .from("workflow_fields")
-        .select("id, key, label, field_type, options, required, default_value, min_length, max_length, min_value, max_value, ref_group_id")
+        .select("id, key, label, field_type, options, required, default_value, min_length, max_length, min_value, max_value, ref_group_id, multiple")
         .eq("workflow_id", workflow.id)
         .in("key", fieldKeys)
         .order("position")
-    : { data: [] as { id: string; key: string; label: string; field_type: string; options: unknown; required: boolean; default_value: string | null; min_value: number | null; max_value: number | null; min_length: number | null; max_length: number | null; ref_group_id: string | null }[] };
+    : { data: [] as { id: string; key: string; label: string; field_type: string; options: unknown; required: boolean; default_value: string | null; min_value: number | null; max_value: number | null; min_length: number | null; max_length: number | null; ref_group_id: string | null; multiple: boolean }[] };
 
   // Campos "Grupo ou subgrupo": a lista traz os subgrupos do grupo (as transportadoras, as seguradoras...) ou o próprio grupo
   const refOptions = await loadGroupRefOptions(supabase, ctx.tenantId, (fields ?? []).filter((f) => f.field_type === "group_ref").map((f) => f.ref_group_id ?? ""));
@@ -93,7 +94,9 @@ export default async function NovoSinistroPage({ searchParams }: { searchParams:
                     {f.label}
                     {f.required && <span className="text-rose-600"> *</span>}
                   </label>
-                  {f.field_type === "select" ? (
+                  {f.field_type === "select" && f.multiple ? (
+                    <MultiCheckField id={`field-${f.key}`} name={`field_${f.key}`} options={(f.options as string[] | null) ?? []} defaultValue={f.default_value} required={f.required} />
+                  ) : f.field_type === "select" ? (
                     <select id={`field-${f.key}`} name={`field_${f.key}`} required={f.required} defaultValue={f.default_value ?? ""} className={input}>
                       <option value="">Selecione…</option>
                       {((f.options as string[] | null) ?? []).map((opt) => (

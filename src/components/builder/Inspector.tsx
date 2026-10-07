@@ -267,6 +267,19 @@ export function NodeInspector({
         />
       )}
 
+      {(type === "stage" || type === "start") && (
+        <RouteSection
+          type={type}
+          config={data.config}
+          fields={fields}
+          outgoing={outgoing}
+          readOnly={readOnly}
+          onConfig={setConfig}
+          onEdgeChange={onEdgeChange}
+          onSelectEdge={onSelectEdge}
+        />
+      )}
+
       {(type === "decision" || type === "parallel_split") && (
         <div>
           <div className={label}>{type === "decision" ? "Opções (uma por conexão de saída)" : "Ramos"}</div>
@@ -370,16 +383,114 @@ export function NodeInspector({
   );
 }
 
+// "Seguir conforme um campo": o caminho sai de uma lista de opções do sinistro. O valor pode ter sido preenchido antes (na abertura,
+// por exemplo) ou nesta própria etapa; cada opção do campo é uma saída. Se o campo aceita várias opções, as escolhidas seguem juntas.
+function RouteSection({
+  type,
+  config,
+  fields,
+  outgoing,
+  readOnly,
+  onConfig,
+  onEdgeChange,
+  onSelectEdge,
+}: {
+  type: NodeType;
+  config: NodeConfig;
+  fields: WorkflowField[];
+  outgoing: FlowEdge[];
+  readOnly: boolean;
+  onConfig: (patch: Partial<NodeConfig>) => void;
+  onEdgeChange: (edgeId: string, patch: Partial<FlowEdgeData>) => void;
+  onSelectEdge: (edgeId: string) => void;
+}) {
+  const listFields = fields.filter((f) => f.field_type === "select");
+  if (listFields.length === 0 && !config.route_field_key) return null;
+  const routeField = listFields.find((f) => f.key === config.route_field_key);
+  const options = routeField?.options ?? [];
+  const used = new Set(outgoing.map((e) => e.data?.label ?? "").filter(Boolean));
+  const missing = options.filter((o) => !used.has(o));
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className={label} htmlFor="node-route-field">
+          {type === "start" ? "Depois da abertura, seguir conforme" : "Ao concluir, seguir conforme"}
+        </label>
+        <select
+          id="node-route-field"
+          className={input}
+          value={config.route_field_key ?? ""}
+          disabled={readOnly}
+          onChange={(e) => onConfig({ route_field_key: e.target.value || undefined })}
+        >
+          <option value="">Um único caminho (padrão)</option>
+          {listFields.map((f) => (
+            <option key={f.key} value={f.key}>
+              {f.label}
+              {f.multiple ? " (várias opções)" : ""}
+            </option>
+          ))}
+          {config.route_field_key && !routeField && <option value={config.route_field_key}>Campo removido</option>}
+        </select>
+      </div>
+      {config.route_field_key && routeField && (
+        <>
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+            Cada opção de &quot;{routeField.label}&quot; é uma saída. O valor pode ser preenchido antes ou nesta etapa
+            {routeField.multiple ? "; se mais de uma opção for escolhida, os caminhos seguem ao mesmo tempo." : "."}
+          </p>
+          {outgoing.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+              Arraste do ponto inferior deste elemento até o próximo passo para criar uma saída e escolha a opção dela.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {outgoing.map((e, i) => (
+                <li key={e.id} className="flex items-center gap-1.5">
+                  <label htmlFor={`route-opt-${e.id}`} className="sr-only">
+                    {`Opção da saída ${i + 1}`}
+                  </label>
+                  <select
+                    id={`route-opt-${e.id}`}
+                    className={input}
+                    value={e.data?.label ?? ""}
+                    disabled={readOnly}
+                    onChange={(ev) => onEdgeChange(e.id, { label: ev.target.value })}
+                  >
+                    <option value="">Escolha a opção…</option>
+                    {options.map((o) => (
+                      <option key={o} value={o} disabled={used.has(o) && e.data?.label !== o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="shrink-0 rounded-md px-2 py-1 text-xs text-brand hover:bg-brand/5" onClick={() => onSelectEdge(e.id)}>
+                    Editar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {missing.length > 0 && <p className="text-xs text-amber-700">Sem caminho ainda: {missing.join(", ")}.</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function EdgeInspector({
   edge,
   sourceType,
   sourceName,
   targetName,
+  routeOptions,
   readOnly,
   onChange,
   onDelete,
 }: {
   edge: FlowEdge;
+  routeOptions?: string[];
   sourceType: NodeType | undefined;
   sourceName: string;
   targetName: string;
@@ -404,15 +515,26 @@ export function EdgeInspector({
       </p>
       <div>
         <label className={label} htmlFor="edge-label">
-          {isDecision ? "Opção" : isParallel ? "Nome do ramo" : "Rótulo (opcional)"}
+          {isDecision ? "Opção" : routeOptions ? "Opção do campo" : isParallel ? "Nome do ramo" : "Rótulo (opcional)"}
         </label>
-        <input
-          id="edge-label"
-          className={input}
-          value={data.label}
-          disabled={readOnly}
-          onChange={(e) => onChange({ label: e.target.value })}
-        />
+        {routeOptions ? (
+          <select id="edge-label" className={input} value={data.label} disabled={readOnly} onChange={(e) => onChange({ label: e.target.value })}>
+            <option value="">Escolha a opção…</option>
+            {routeOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id="edge-label"
+            className={input}
+            value={data.label}
+            disabled={readOnly}
+            onChange={(e) => onChange({ label: e.target.value })}
+          />
+        )}
       </div>
       {isParallel && (
         <Toggle
@@ -694,7 +816,13 @@ function FieldsSection({
             ))}
           </select>
           {fieldType === "select" && (
-            <input name="options" required placeholder="Opções separadas por vírgula" className={`${input} bg-white`} />
+            <>
+              <input name="options" required placeholder="Opções separadas por vírgula" className={`${input} bg-white`} />
+              <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+                <input type="checkbox" name="multiple" className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30" />
+                Permite escolher mais de uma opção
+              </label>
+            </>
           )}
           {fieldType === "group_ref" && (
             <div className="space-y-1">
@@ -841,13 +969,24 @@ function EditFieldForm({
     <form action={handleSave} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
       <input name="label" required defaultValue={field.label} className={`${input} bg-white`} autoFocus />
       {field.field_type === "select" && (
-        <input
-          name="options"
-          required
-          defaultValue={(field.options ?? []).join(", ")}
-          placeholder="Opções separadas por vírgula"
-          className={`${input} bg-white`}
-        />
+        <>
+          <input
+            name="options"
+            required
+            defaultValue={(field.options ?? []).join(", ")}
+            placeholder="Opções separadas por vírgula"
+            className={`${input} bg-white`}
+          />
+          <label className="flex items-center gap-1.5 text-[12px] text-slate-700">
+            <input
+              type="checkbox"
+              name="multiple"
+              defaultChecked={!!field.multiple}
+              className="size-3.5 rounded border-slate-300 text-brand focus:ring-brand/30"
+            />
+            Permite escolher mais de uma opção
+          </label>
+        </>
       )}
       {field.field_type === "group_ref" && <p className="text-xs text-slate-500">O grupo do campo não muda depois de criado, porque os sinistros já guardam o valor escolhido.</p>}
       {field.field_type !== "attachment" && field.field_type !== "calculated" && field.field_type !== "group_ref" && (

@@ -1,4 +1,6 @@
 import { signedAvatarUrls } from "@/lib/avatars";
+import { MultiCheckField } from "@/components/execution/MultiCheckField";
+import { splitFieldValues } from "@/lib/workflow/types";
 import { loadGroupRefNames, loadGroupRefOptions } from "@/lib/group-ref";
 import { loadCalendarBundles, flowDeadlineIso } from "@/lib/sla-load";
 import { GroupChip } from "@/lib/group-icons";
@@ -243,7 +245,7 @@ export default async function ClaimPage({
     supabase.from("workflows").select("name, financial_panel").eq("id", version!.workflow_id).single(),
     supabase
       .from("workflow_fields")
-      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, ref_group_id, position")
+      .select("id, key, label, field_type, options, required, is_unique, default_value, min_length, max_length, min_value, max_value, formula, ref_group_id, multiple, position")
       .order("position")
       .eq("workflow_id", version!.workflow_id),
   ]);
@@ -430,6 +432,8 @@ export default async function ClaimPage({
         ? raw === "true"
           ? "Sim"
           : "Não"
+        : f.field_type === "select" && f.multiple
+          ? splitFieldValues(raw).join(", ")
         : f.field_type === "group_ref"
           ? (refNames.get(raw) ?? raw)
           : f.field_type === "person"
@@ -1297,6 +1301,8 @@ export default async function ClaimPage({
                                     ? raw === "true"
                                       ? "Sim"
                                       : "Não"
+                                    : f.field_type === "select" && f.multiple
+                                      ? splitFieldValues(raw).join(", ")
                                     : f.field_type === "group_ref"
                                       ? (refNames.get(raw) ?? raw)
                                       : f.field_type === "person"
@@ -1330,7 +1336,16 @@ export default async function ClaimPage({
                                     {f.label}
                                     {f.required && <span className="text-rose-600"> *</span>}
                                   </label>
-                                  {f.field_type === "select" ? (
+                                  {f.field_type === "select" && f.multiple ? (
+                                    <MultiCheckField
+                                      id={`field-${f.key}`}
+                                      name={`field_${f.key}`}
+                                      options={(f.options as string[] | null) ?? []}
+                                      defaultValue={customFields[f.key] ?? f.default_value}
+                                      required={f.required}
+                                      compact
+                                    />
+                                  ) : f.field_type === "select" ? (
                                     <select
                                       id={`field-${f.key}`}
                                       name={`field_${f.key}`}
@@ -1447,6 +1462,19 @@ export default async function ClaimPage({
                                 </>
                               }
                               confirmLabel="Concluir etapa"
+                              route={(() => {
+                                const key = node?.config.route_field_key;
+                                if (!node || !key) return undefined;
+                                const def = (workflowFields ?? []).find((f) => f.key === key);
+                                return {
+                                  fieldKey: key,
+                                  fieldLabel: def?.label ?? key,
+                                  stored: customFields[key] ?? "",
+                                  options: graph.edges
+                                    .filter((e) => e.source === node.id)
+                                    .map((e) => ({ option: e.label, target: nodeById.get(e.target)?.name ?? "-" })),
+                                };
+                              })()}
                               className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white shadow-sm transition hover:bg-brand-600"
                             >
                               Concluir
@@ -1476,6 +1504,8 @@ export default async function ClaimPage({
                                 ? raw === "true"
                                   ? "Sim"
                                   : "Não"
+                                : f.field_type === "select" && f.multiple
+                                  ? splitFieldValues(raw).join(", ")
                                 : f.field_type === "group_ref"
                                   ? (refNames.get(raw) ?? raw)
                                   : f.field_type === "person"

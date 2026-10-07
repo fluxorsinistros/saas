@@ -160,6 +160,7 @@ function toGraph(nodes: FlowNode[], edges: FlowEdge[]): Graph {
 
 function toPayload(nodes: FlowNode[], edges: FlowEdge[]): SavePayload {
   const typeOf = new Map(nodes.map((n) => [n.id, n.type as NodeType]));
+  const configOf = new Map(nodes.map((n) => [n.id, n.data.config]));
   const siblingIndex = new Map<string, number>();
   return {
     nodes: nodes.map((n) => ({
@@ -179,8 +180,8 @@ function toPayload(nodes: FlowNode[], edges: FlowEdge[]): SavePayload {
         id: e.id,
         from_node_id: e.source,
         to_node_id: e.target,
-        edge_type: toDbEdgeType({ ...data, id: e.id, source: e.source, target: e.target }, sourceType),
-        condition: sourceType === "decision" && data.kind !== "return" ? { option: data.label } : null,
+        edge_type: toDbEdgeType({ ...data, id: e.id, source: e.source, target: e.target }, sourceType, configOf.get(e.source)),
+        condition: (sourceType === "decision" || configOf.get(e.source)?.route_field_key) && data.kind !== "return" ? { option: data.label } : null,
         is_required: data.isRequired,
         order_index: order,
         label: data.label || null,
@@ -283,7 +284,12 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
   const payloadJson = useMemo(() => JSON.stringify(payload), [payload]);
   const dirty = !readOnly && payloadJson !== savedJson;
 
-  const issues = useMemo(() => validateGraph(toGraph(nodes, edges), pendingIds), [nodes, edges, pendingIds]);
+  const routeFields = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const f of fields) if (f.field_type === "select") map[f.key] = f.options ?? [];
+    return map;
+  }, [fields]);
+  const issues = useMemo(() => validateGraph(toGraph(nodes, edges), pendingIds, routeFields), [nodes, edges, pendingIds, routeFields]);
   const errors = issues.filter((i) => i.severity === "error");
   const warnings = issues.filter((i) => i.severity === "warning");
 
@@ -959,6 +965,10 @@ function Builder({ workflow, version, versions, initialNodes, initialEdges, grou
                   sourceType={typeOf.get(selectedEdge.source)}
                   sourceName={nameOf.get(selectedEdge.source) ?? ""}
                   targetName={nameOf.get(selectedEdge.target) ?? ""}
+                  routeOptions={(() => {
+                    const key = nodes.find((n) => n.id === selectedEdge.source)?.data.config.route_field_key;
+                    return key ? fields.find((f) => f.key === key)?.options ?? undefined : undefined;
+                  })()}
                   readOnly={readOnly}
                   onChange={(patch) => patchEdge(selectedEdge.id, patch)}
                   onDelete={() => deleteSelection({ edges: [{ id: selectedEdge.id }] })}

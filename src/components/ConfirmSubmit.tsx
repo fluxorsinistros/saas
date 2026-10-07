@@ -1,8 +1,18 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
+import { splitFieldValues } from "@/lib/workflow/types";
 
 type Summary = { label: string; value: string };
+
+// Para onde o sinistro vai ao concluir uma etapa que segue conforme um campo: cada opção do campo leva a um próximo passo.
+export type RoutePreview = {
+  fieldKey: string;
+  fieldLabel: string;
+  // Valor já guardado no sinistro, usado quando o campo não aparece neste formulário (preenchido antes)
+  stored: string;
+  options: { option: string; target: string }[];
+};
 
 // Botão que NÃO envia o formulário de primeira: valida os campos, abre uma janela com o resumo do que está sendo
 // feito (e os dados preenchidos) e só envia depois do "Confirmar". Evita concluir etapa ou escolher decisão por clique
@@ -13,31 +23,60 @@ export function ConfirmSubmit({
   description,
   confirmLabel = "Confirmar",
   className,
+  route,
 }: {
   children: ReactNode;
   title: string;
   description?: ReactNode;
   confirmLabel?: string;
   className?: string;
+  route?: RoutePreview;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<Summary[]>([]);
+  const [destinations, setDestinations] = useState<string[] | null>(null);
 
   function collect(form: HTMLFormElement): Summary[] {
     const rows: Summary[] = [];
+    const checkboxRows = new Map<string, Summary>();
     for (const el of Array.from(form.elements)) {
       if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement)) continue;
       if (!el.name.startsWith("field_")) continue;
       const label = el.id ? form.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.textContent?.replace("*", "").trim() : "";
+      if (el instanceof HTMLInputElement && el.type === "checkbox") {
+        // lista com várias opções: junta as marcadas numa só linha
+        let row = checkboxRows.get(el.name);
+        if (!row) {
+          const groupLabel = el.closest("[role=group]")?.id ? form.querySelector(`label[for="${CSS.escape(el.closest("[role=group]")!.id)}"]`)?.textContent?.replace("*", "").trim() : "";
+          row = { label: groupLabel || el.name.replace("field_", ""), value: "" };
+          checkboxRows.set(el.name, row);
+          rows.push(row);
+        }
+        if (el.checked) row.value = row.value ? `${row.value}, ${el.value}` : el.value;
+        continue;
+      }
       let value = "";
       if (el instanceof HTMLSelectElement) value = el.selectedOptions[0]?.text ?? "";
       else if (el instanceof HTMLInputElement && el.type === "file") value = el.files?.[0]?.name ?? "";
-      else if (el instanceof HTMLInputElement && el.type === "checkbox") value = el.checked ? "Sim" : "Não";
       else value = el.value;
       rows.push({ label: label || el.name.replace("field_", ""), value: value.trim() || "-" });
     }
+    for (const row of rows) if (!row.value) row.value = "-";
     return rows;
+  }
+
+  // Valores escolhidos agora no campo que decide o caminho, ou o valor guardado antes se o campo não está neste formulário
+  function chosenValues(form: HTMLFormElement, r: RoutePreview): string[] {
+    const els = Array.from(form.elements).filter((e) => (e as HTMLInputElement).name === `field_${r.fieldKey}`) as (HTMLInputElement | HTMLSelectElement)[];
+    if (els.length === 0) return splitFieldValues(r.stored);
+    const values: string[] = [];
+    for (const el of els) {
+      if (el instanceof HTMLInputElement && el.type === "checkbox") {
+        if (el.checked) values.push(el.value);
+      } else if (el.value) values.push(el.value);
+    }
+    return values;
   }
 
   function ask() {
@@ -45,6 +84,10 @@ export function ConfirmSubmit({
     if (!form) return;
     if (!form.reportValidity()) return; // campo obrigatório vazio: o navegador aponta antes de qualquer confirmação
     setSummary(collect(form));
+    if (route) {
+      const values = chosenValues(form, route);
+      setDestinations(values.map((v) => route.options.find((o) => o.option === v)?.target ?? `(sem caminho para "${v}")`));
+    } else setDestinations(null);
     setOpen(true);
   }
 
@@ -79,6 +122,24 @@ export function ConfirmSubmit({
                   </div>
                 ))}
               </dl>
+            )}
+            {destinations && destinations.length > 0 && (
+              <div className="mt-3 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2.5 text-[13px]">
+                {destinations.length === 1 ? (
+                  <p>
+                    Com essa escolha, o sinistro segue para: <span className="font-semibold text-slate-900">{destinations[0]}</span>.
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-medium text-slate-900">Com essa escolha, o fluxo se divide em {destinations.length} caminhos ao mesmo tempo:</p>
+                    <ul className="mt-1 list-disc pl-5 text-slate-800">
+                      {destinations.map((d) => (
+                        <li key={d}>{d}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
             )}
             <p className="mt-3 text-xs text-slate-500">Confira antes de continuar. Depois de confirmar, a etapa segue o fluxo.</p>
             <div className="mt-4 flex justify-end gap-2">

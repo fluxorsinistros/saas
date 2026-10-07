@@ -10,7 +10,8 @@ export type Issue = {
 // Workflow Validator (Documento 3 §7). Erro bloqueia publicação; aviso não.
 // `untouched` (crítica de design, P2): nós recém-criados que ainda não perderam o foco uma vez.
 // Enquanto "intocados", seus próprios problemas ficam em silêncio, evita punir quem acabou de arrastar um elemento.
-export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new Set()): Issue[] {
+// `routeFields`: opções de cada campo de lista do fluxo (chave do campo), para conferir as etapas que seguem conforme um campo.
+export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new Set(), routeFields?: Record<string, string[]>): Issue[] {
   const { nodes, edges } = graph;
   if (nodes.length === 0) return [];
 
@@ -96,7 +97,32 @@ export function validateGraph(graph: Graph, untouched: ReadonlySet<string> = new
     if (n.type === "parallel_split" && outs.length < 2) {
       issues.push({ severity: "error", message: `Paralelo "${name}" precisa de ao menos 2 ramos.`, nodeId: n.id });
     }
-    if (["stage", "wait", "pending", "start"].includes(n.type) && out(n.id, forward).length > 1) {
+    if (n.config.route_field_key) {
+      const options = routeFields?.[n.config.route_field_key];
+      if (!["stage", "start"].includes(n.type)) {
+        issues.push({ severity: "error", message: `"${name}" não pode seguir por campo: só etapa e início.`, nodeId: n.id });
+      } else if (routeFields && !options) {
+        issues.push({ severity: "error", message: `"${name}" segue conforme um campo que não existe mais ou não é uma lista de opções.`, nodeId: n.id });
+      } else {
+        const labels = outs.map((e) => e.label.trim());
+        if (labels.some((l) => !l)) {
+          issues.push({ severity: "error", message: `"${name}" tem uma saída sem opção do campo.`, nodeId: n.id });
+        }
+        if (new Set(labels.filter(Boolean)).size !== labels.filter(Boolean).length) {
+          issues.push({ severity: "error", message: `"${name}" tem duas saídas para a mesma opção.`, nodeId: n.id });
+        }
+        if (options) {
+          const strange = labels.filter((l) => l && !options.includes(l));
+          if (strange.length) {
+            issues.push({ severity: "error", message: `"${name}" tem saída para "${strange[0]}", que não é uma opção do campo.`, nodeId: n.id });
+          }
+          const missing = options.filter((o) => !labels.includes(o));
+          if (missing.length) {
+            issues.push({ severity: "error", message: `"${name}" não tem caminho para a opção "${missing[0]}"${missing.length > 1 ? ` e mais ${missing.length - 1}` : ""}.`, nodeId: n.id });
+          }
+        }
+      }
+    } else if (["stage", "wait", "pending", "start"].includes(n.type) && out(n.id, forward).length > 1) {
       issues.push({
         severity: "error",
         message: `"${name}" tem mais de uma saída. Use uma Decisão ou um Paralelo para dividir o caminho.`,
