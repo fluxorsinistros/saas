@@ -47,6 +47,11 @@ body[data-theme="dark"] {
   color: #f1f5f9;
 }
 
+/* Losango da Decisão no editor de fluxos: o preenchimento é um atributo do SVG, então acompanha o tema por aqui */
+.decision-fill { fill: #ffffff; }
+.dark .decision-fill,
+[data-theme="dark"] .decision-fill { fill: #141d2e; }
+
 /* Superfícies, Painéis e Cards */
 .dark .bg-white,
 [data-theme="dark"] .bg-white {

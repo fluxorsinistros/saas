@@ -141,7 +141,7 @@ export function DecisionNode(props: NodeProps<FlowNode>) {
       <svg className="absolute inset-0" viewBox="0 0 190 124" aria-hidden>
         <polygon
           points="95,2 188,62 95,122 2,62"
-          fill="white"
+          className="decision-fill"
           stroke={stroke}
           strokeWidth={props.selected || issue ? 2.5 : 1.5}
           style={{ filter: "drop-shadow(0 2px 6px rgba(15,23,42,0.08))" }}
