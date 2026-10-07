@@ -5,7 +5,7 @@ import { Avatar } from "@/components/Avatar";
 import { GroupIcon } from "@/lib/group-icons";
 import { useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X } from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Building2, Sun, Moon, X, Bell } from "lucide-react";
 import { BrandMark, type Brand } from "@/components/BrandMark";
 import { signOut } from "@/app/login/actions";
 import { toggleQuickTheme } from "./admin/actions";
@@ -282,6 +282,14 @@ export function AppSidebar({
           </button>
         </form>
 
+        <Link
+          href="/notificacoes"
+          title="Minhas notificações por e-mail"
+          className={`flex items-center gap-2 rounded-md py-1.5 text-[12px] font-medium text-slate-300 transition hover:bg-navy-700 hover:text-white ${collapsed ? "w-full justify-center px-0" : "w-full px-2"}`}
+        >
+          <Bell className="size-4 shrink-0" />
+          {!collapsed && "Minhas notificações"}
+        </Link>
         <Link
           href="/perfil"
           title="Meu perfil: foto e dados"

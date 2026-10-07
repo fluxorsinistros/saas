@@ -1513,6 +1513,54 @@ export type Database = {
           },
         ]
       }
+      notification_rules: {
+        Row: {
+          digest_hour: number
+          enabled: boolean
+          extra_emails: string[]
+          rule_key: string
+          tenant_id: string
+          to_admins: boolean
+          to_event_group: boolean
+          to_groups: string[]
+          to_requester: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          digest_hour?: number
+          enabled?: boolean
+          extra_emails?: string[]
+          rule_key: string
+          tenant_id: string
+          to_admins?: boolean
+          to_event_group?: boolean
+          to_groups?: string[]
+          to_requester?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          digest_hour?: number
+          enabled?: boolean
+          extra_emails?: string[]
+          rule_key?: string
+          tenant_id?: string
+          to_admins?: boolean
+          to_event_group?: boolean
+          to_groups?: string[]
+          to_requester?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      notification_preferences: {
+        Row: { email_enabled: boolean; rule_key: string; tenant_id: string; updated_at: string; user_id: string }
+        Insert: { email_enabled?: boolean; rule_key: string; tenant_id: string; updated_at?: string; user_id: string }
+        Update: { email_enabled?: boolean; rule_key?: string; tenant_id?: string; updated_at?: string; user_id?: string }
+        Relationships: []
+      }
       notification_deliveries: {
         Row: {
           channel: string
@@ -1578,25 +1626,31 @@ export type Database = {
         Row: {
           claim_cycle_id: string | null
           created_at: string
+          dedupe_key: string | null
           event_type: string
           id: string
           payload: Json
+          processed_at: string | null
           tenant_id: string
         }
         Insert: {
           claim_cycle_id?: string | null
           created_at?: string
+          dedupe_key?: string | null
           event_type: string
           id?: string
           payload?: Json
+          processed_at?: string | null
           tenant_id: string
         }
         Update: {
           claim_cycle_id?: string | null
           created_at?: string
+          dedupe_key?: string | null
           event_type?: string
           id?: string
           payload?: Json
+          processed_at?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -3286,6 +3340,9 @@ export type Database = {
         Returns: undefined
       }
       operational_summary: { Args: { p_tenant_id: string; p_group_id?: string }; Returns: Json }
+      notif_tick: { Args: { p_secret: string }; Returns: undefined }
+      notif_next_batch: { Args: { p_secret: string; p_limit?: number }; Returns: Json }
+      notif_mark: { Args: { p_secret: string; p_id: string; p_ok: boolean; p_error?: string }; Returns: undefined }
       operational_trend: { Args: { p_tenant_id: string; p_group_id?: string; p_days?: number }; Returns: Json }
       set_member_groups: { Args: { p_membership_id: string; p_group_ids: string[] }; Returns: undefined }
       admin_create_tenant: { Args: { p_name: string; p_admin_email?: string }; Returns: string }

@@ -31,8 +31,8 @@ async function ensureDocumentType(supabase: Supa, tenantId: string, name: string
   return data.id;
 }
 
-// Fila de eventos (tabela notifications): cada fato do documento extra é gravado aqui. Nenhum e-mail sai ainda; quando o envio
-// for ligado (integrações), os gatilhos já existem. Falha ao gravar o evento nunca derruba a ação principal.
+// Fila de eventos (tabela notifications): cada fato do documento extra é gravado aqui. O envio por e-mail lê esta fila (rota
+// /api/notificacoes/processar), conforme as regras da empresa. Falha ao gravar o evento nunca derruba a ação principal.
 async function emitDocumentEvent(
   supabase: Supa,
   tenantId: string,
@@ -40,7 +40,24 @@ async function emitDocumentEvent(
   claimCycleId: string,
   payload: Record<string, unknown>,
 ) {
-  const { error } = await supabase.from("notifications").insert({ tenant_id: tenantId, event_type: eventType, claim_cycle_id: claimCycleId, payload: payload as never });
+  // O e-mail precisa saber o grupo, quem pediu, o nome do documento e o número do sinistro: completa o evento aqui.
+  const enriched: Record<string, unknown> = { ...payload };
+  const pendingId = typeof payload.pending_item_id === "string" ? payload.pending_item_id : null;
+  if (pendingId) {
+    const { data: pend } = await supabase.from("pending_items").select("title, requested_by, responsible_group_id, due_at").eq("id", pendingId).maybeSingle();
+    if (pend) {
+      enriched.document_name = pend.title;
+      enriched.requested_by = pend.requested_by;
+      enriched.group_id = pend.responsible_group_id;
+      enriched.due_at = pend.due_at;
+    }
+  }
+  const claimId = typeof payload.claim_id === "string" ? payload.claim_id : null;
+  if (claimId) {
+    const { data: cl } = await supabase.from("claims").select("claim_number").eq("id", claimId).maybeSingle();
+    if (cl) enriched.claim_number = cl.claim_number;
+  }
+  const { error } = await supabase.from("notifications").insert({ tenant_id: tenantId, event_type: eventType, claim_cycle_id: claimCycleId, payload: enriched as never });
   if (error) console.error("evento de documento não gravado:", error.message);
 }
 

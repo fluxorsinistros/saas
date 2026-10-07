@@ -508,6 +508,40 @@ export async function decideDuplicate(checkId: string, decision: "confirmed_dupl
   revalidatePath(`/sinistros/${claimId}`);
 }
 
+// Evento "sinistro aberto" para a fila de e-mails (regras da empresa decidem quem recebe). Guarda o grupo da primeira etapa,
+// quem formalizou e o nome do fluxo. Falha aqui nunca impede a abertura do sinistro.
+async function emitClaimOpened(supabase: Supa, tenantId: string, userId: string, claimId: string, claimNumber: string, cycleId: string, workflowName: string) {
+  try {
+    const { data: stage } = await supabase
+      .from("stage_instances")
+      .select("id, node_id")
+      .eq("claim_cycle_id", cycleId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    let groupId: string | null = null;
+    let stageName: string | null = null;
+    if (stage) {
+      const [{ data: act }, { data: node }] = await Promise.all([
+        supabase.from("activity_instances").select("group_id").eq("stage_instance_id", stage.id).limit(1).maybeSingle(),
+        supabase.from("workflow_nodes").select("name").eq("id", stage.node_id).maybeSingle(),
+      ]);
+      groupId = act?.group_id ?? null;
+      stageName = node?.name ?? null;
+    }
+    const { error } = await supabase.from("notifications").insert({
+      tenant_id: tenantId,
+      event_type: "claim.opened",
+      claim_cycle_id: cycleId,
+      dedupe_key: `claim.opened:${cycleId}`,
+      payload: { claim_id: claimId, claim_number: claimNumber, workflow_name: workflowName, stage_name: stageName, group_id: groupId, requested_by: userId } as unknown as Json,
+    });
+    if (error) console.error("evento de abertura não gravado:", error.message);
+  } catch (e) {
+    console.error("evento de abertura não gravado:", e);
+  }
+}
+
 // Rotina única de criação de sinistro (Documento 5 §29: a importação em massa "usa as mesmas regras
 // de criação manual", não existe caminho de escrita paralelo para `claims`). formalizeClaim (form da
 // UI) e a importação em massa (createImport/confirmImport) chamam exatamente esta função.
@@ -605,6 +639,7 @@ export async function createClaimAndCycle(
     next: { cycle_number: cycle.cycle_number, workflow_name: workflowName },
   });
   await enterNode(supabase, tenantId, cycle.id, version.id, graph, start.id, "initial");
+  await emitClaimOpened(supabase, tenantId, userId, claim.id, claim.claim_number, cycle.id, workflowName);
 
   return { claimId: claim.id, claimNumber: claim.claim_number };
 }

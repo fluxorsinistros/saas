@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Palette, Clock, Building2, CircleDollarSign } from "lucide-react";
+import { Palette, Clock, Building2, CircleDollarSign, Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { TenantMarcaTab } from "./tenant-marca-tab";
 import { TenantSlaTab } from "./tenant-sla-tab";
 import { TenantEmpresaTab } from "./tenant-empresa-tab";
 import { TenantFinanceiroTab } from "./tenant-financeiro-tab";
+import { TenantNotificacoesTab } from "./tenant-notificacoes-tab";
 
 type SearchParams = { aba?: string | string[] };
 
@@ -12,6 +13,7 @@ const TABS = [
   { key: "marca", label: "Marca e White-label", icon: Palette },
   { key: "sla", label: "SLA e Horários", icon: Clock },
   { key: "financeiro", label: "Painel financeiro", icon: CircleDollarSign },
+  { key: "notificacoes", label: "Notificações", icon: Bell },
   { key: "empresa", label: "Empresa", icon: Building2 },
 ] as const;
 
@@ -59,6 +61,13 @@ export async function TenantAdminView({
       .eq("status", "active"),
     supabase.from("workflows").select("id, name, financial_panel").eq("tenant_id", tenantId).eq("status", "active").order("name"),
   ]);
+  const [{ data: notifRules }, { data: notifGroups }] =
+    currentTab === "notificacoes"
+      ? await Promise.all([
+          supabase.from("notification_rules").select("*").eq("tenant_id", tenantId),
+          supabase.from("groups").select("id, name").eq("tenant_id", tenantId).eq("status", "active").order("name"),
+        ])
+      : [{ data: null }, { data: null }];
 
   const settings = ((tenant?.settings ?? {}) as Record<string, unknown>) ?? {};
   const branding = (settings.branding ?? {}) as {
@@ -159,6 +168,8 @@ export async function TenantAdminView({
           )}
 
           {currentTab === "financeiro" && <TenantFinanceiroTab workflows={workflowsList ?? []} />}
+
+          {currentTab === "notificacoes" && <TenantNotificacoesTab tenantId={tenantId} rules={notifRules ?? []} groups={notifGroups ?? []} />}
 
           {currentTab === "empresa" && tenant && (
             <TenantEmpresaTab

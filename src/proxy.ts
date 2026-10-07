@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/redefinir-senha", "/confirmar-convite", "/esqueci-senha", "/api/saude"];
+const PUBLIC_PATHS = ["/login", "/redefinir-senha", "/confirmar-convite", "/esqueci-senha", "/api/saude", "/api/notificacoes/processar"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
