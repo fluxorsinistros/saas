@@ -47,6 +47,13 @@ body[data-theme="dark"] {
   color: #f1f5f9;
 }
 
+/* Botões de zoom e minimapa dos grafos: no escuro ficavam brancos */
+.dark .react-flow__controls, [data-theme="dark"] .react-flow__controls { box-shadow: 0 0 0 1px #334155; border-radius: 8px; overflow: hidden; }
+.dark .react-flow__controls-button, [data-theme="dark"] .react-flow__controls-button { background: #141d2e; border-bottom: 1px solid #334155; color: #e2e8f0; }
+.dark .react-flow__controls-button:hover, [data-theme="dark"] .react-flow__controls-button:hover { background: #1e293b; }
+.dark .react-flow__controls-button svg, [data-theme="dark"] .react-flow__controls-button svg { fill: #e2e8f0; }
+.dark .react-flow__minimap, [data-theme="dark"] .react-flow__minimap { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; }
+
 /* Grafo de execução do sinistro (e da Torre de Controle): cores dos elementos e dos nomes sobre as linhas, nos dois temas */
 :root { --exec-label-bg: #ffffff; --exec-label-fg: #334155; --exec-label-border: #cbd5e1; --exec-edge: #94a3b8; }
 .dark, [data-theme="dark"] { --exec-label-bg: #0f172a; --exec-label-fg: #e2e8f0; --exec-label-border: #334155; --exec-edge: #64748b; }
