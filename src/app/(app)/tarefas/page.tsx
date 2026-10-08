@@ -36,7 +36,23 @@ export default async function TarefasPage() {
   }
   const { data: activities } = await query;
 
-  const stageIds = [...new Set((activities ?? []).map((a) => a.stage_instance_id))];
+  // Decisões ainda sem resposta também são tarefas do grupo responsável pela decisão (e do subgrupo, quando há)
+  let decisionQuery = supabase
+    .from("decisions")
+    .select("id, node_id, stage_instance_id, subgroup_id, created_at")
+    .eq("tenant_id", ctx.tenantId)
+    .is("selected_option", null)
+    .not("stage_instance_id", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(100);
+  if (scope === "mine") {
+    decisionQuery = activeGroup?.subgroup_id ? decisionQuery.or(`subgroup_id.is.null,subgroup_id.eq.${activeGroup.subgroup_id}`) : decisionQuery.is("subgroup_id", null);
+  }
+  const { data: decisionsRaw } = await decisionQuery;
+
+  const stageIds = [
+    ...new Set([...(activities ?? []).map((a) => a.stage_instance_id), ...(decisionsRaw ?? []).map((d) => d.stage_instance_id as string)]),
+  ];
   const { data: stages } = stageIds.length
     ? await supabase.from("stage_instances").select("id, node_id, claim_cycle_id, entered_at").in("id", stageIds)
     : { data: [] as { id: string; node_id: string; claim_cycle_id: string; entered_at: string }[] };
@@ -56,8 +72,8 @@ export default async function TarefasPage() {
 
   const nodeIds = [...new Set((stages ?? []).map((s) => s.node_id))];
   const { data: nodes } = nodeIds.length
-    ? await supabase.from("workflow_nodes").select("id, name, node_type, config").in("id", nodeIds)
-    : { data: [] as { id: string; name: string; node_type: string; config: unknown }[] };
+    ? await supabase.from("workflow_nodes").select("id, name, node_type, config, group_id").in("id", nodeIds)
+    : { data: [] as { id: string; name: string; node_type: string; config: unknown; group_id: string | null }[] };
   const nodeById = new Map((nodes ?? []).map((n) => [n.id, n]));
 
   // Prazo real de cada etapa (calendário, dias úteis e feriados já considerados), gravado quando a etapa começa.
@@ -101,13 +117,22 @@ export default async function TarefasPage() {
     .sort((a, b) => (a.dueAt ?? "9").localeCompare(b.dueAt ?? "9"));
   const docsToReview = extraDocs.filter((d) => d.status === "received" && (isAdmin || d.requestedBy === ctx.userId));
 
-  const rows = (activities ?? [])
+  // Cada decisão pendente vira uma linha igual às das etapas
+  const decisionActivities = (decisionsRaw ?? [])
+    .map((d) => {
+      const node = nodeById.get(d.node_id ?? "");
+      if (!node || (scope === "mine" && !(node.group_id && myGroupIds.includes(node.group_id)))) return null;
+      return { id: d.id, status: "in_progress", group_id: node.group_id, subgroup_id: d.subgroup_id, started_at: d.created_at, stage_instance_id: d.stage_instance_id as string };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const rows = [...(activities ?? []), ...decisionActivities]
     .map((a) => {
       const stage = stageById.get(a.stage_instance_id);
       const cycle = stage ? cycleById.get(stage.claim_cycle_id) : undefined;
       const claim = cycle ? claimById.get(cycle.claim_id) : undefined;
       const node = stage ? nodeById.get(stage.node_id) : undefined;
-      if (!stage || !cycle || !claim || !node || cycle.status === "blocked" || cycle.status === "completed") return null;
+      if (!stage || !cycle || !claim || !node || ["blocked", "completed", "discarded", "cancelled", "archived"].includes(cycle.status)) return null;
       const cfg = (node.config ?? {}) as { sla_minutes?: number; sla_calendar_id?: string };
       return {
         activity: a,
@@ -119,7 +144,8 @@ export default async function TarefasPage() {
         slaMinutes: typeof cfg.sla_minutes === "number" && cfg.sla_minutes > 0 ? cfg.sla_minutes : undefined,
       };
     })
-    .filter((r): r is NonNullable<typeof r> => r !== null);
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .sort((x, y) => new Date(x.enteredAt).getTime() - new Date(y.enteredAt).getTime());
 
   return (
     <div className="h-full overflow-y-auto">
@@ -179,7 +205,7 @@ export default async function TarefasPage() {
           </div>
         ) : rows.length === 0 ? null : (
           <section className="mt-6" aria-label="Etapas para executar">
-          <h2 className="mb-2 text-[13px] font-semibold text-slate-900">Etapas para executar ({rows.length})</h2>
+          <h2 className="mb-2 text-[13px] font-semibold text-slate-900">Etapas e decisões para executar ({rows.length})</h2>
           <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {rows.map(({ activity, claim, node, enteredAt, slaMinutes, targetAt, bundle }) => (
               <li key={activity.id} className="flex flex-wrap items-center gap-3 px-5 py-4">

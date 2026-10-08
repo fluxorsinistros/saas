@@ -11,7 +11,7 @@ export async function getTaskCount(): Promise<number> {
     const ctx = await getTenantContext();
     const supabase = await createClient();
     const { isAdmin, active } = await getMemberGroups(ctx.userId, ctx.tenantId);
-    return await loadTaskCount(supabase, ctx.tenantId, ctx.userId, isAdmin, active?.id ?? null);
+    return await loadTaskCount(supabase, ctx.tenantId, ctx.userId, isAdmin, active?.id ?? null, active?.subgroup_id ?? null);
   } catch {
     return 0;
   }
