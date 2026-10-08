@@ -485,7 +485,8 @@ export default async function ClaimPage({
   const { data: viaRows } = branchIdList.length
     ? await supabase.from("branch_instances").select("id, status, edge_id, target_node_id, waived_reason, waived_at").in("branch_id", branchIdList).order("created_at")
     : { data: [] as { id: string; status: string; edge_id: string | null; target_node_id: string | null; waived_reason: string | null; waived_at: string | null }[] };
-  const vias = (viaRows ?? []).map((v) => {
+  // Vias canceladas porque a etapa que as abriu foi desfeita não existem mais para o usuário: só valem as ativas, concluídas ou abortadas por alguém
+  const vias = (viaRows ?? []).filter((v) => v.status !== "cancelled").map((v) => {
     const name = graph.edges.find((e) => e.id === v.edge_id)?.label || (v.target_node_id ? nodeById.get(v.target_node_id)?.name : undefined) || "Via";
     const viaStages = (stages ?? []).filter((st) => st.branch_instance_id === v.id);
     const open = viaStages.filter((st) => st.status === "in_progress" || st.status === "paused");
@@ -916,12 +917,12 @@ export default async function ClaimPage({
               <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Vias do sinistro</h2>
               <span className="text-[12px] text-slate-500">
                 {vias.filter((v) => v.status === "active").length} em andamento · {vias.filter((v) => v.status === "completed").length} concluída(s) ·{" "}
-                {vias.filter((v) => v.status === "waived" || v.status === "cancelled").length} abortada(s)
+                {vias.filter((v) => v.status === "waived").length} abortada(s)
               </span>
             </div>
             <ul className="grid gap-3 md:grid-cols-2">
               {vias.map((v) => {
-                const aborted = v.status === "waived" || v.status === "cancelled";
+                const aborted = v.status === "waived";
                 return (
                   <li key={v.id} className="rounded-lg border border-slate-200 p-3">
                     <div className="flex items-center justify-between gap-2">

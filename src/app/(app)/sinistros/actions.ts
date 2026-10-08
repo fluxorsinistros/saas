@@ -1228,6 +1228,22 @@ export async function discardCycle(cycleId: string, formData: FormData): Promise
     .eq("id", cycleId);
   await writeAudit(supabase, ctx.tenantId, "cycle.discarded", "claim_cycle", cycleId, { reason });
 
+  // O ciclo descartado não pode deixar trabalho aberto: etapas, decisões sem resposta, prazos e vias em andamento são encerrados
+  const nowIso = new Date().toISOString();
+  const { data: openStages } = await supabase.from("stage_instances").select("id").eq("claim_cycle_id", cycleId).in("status", ["in_progress", "paused"]);
+  const openStageIds = (openStages ?? []).map((x) => x.id);
+  if (openStageIds.length) {
+    await supabase.from("activity_instances").update({ status: "cancelled" }).in("stage_instance_id", openStageIds).in("status", ["in_progress", "paused", "not_started"]);
+    await supabase.from("decisions").delete().in("stage_instance_id", openStageIds).is("selected_option", null);
+    await supabase.from("sla_tracking").delete().in("stage_instance_id", openStageIds);
+    await supabase.from("stage_instances").update({ status: "cancelled", exited_at: nowIso }).in("id", openStageIds);
+  }
+  const { data: discardedBranches } = await supabase.from("branches").select("id").eq("claim_cycle_id", cycleId);
+  const discardedBranchIds = (discardedBranches ?? []).map((x) => x.id);
+  if (discardedBranchIds.length) {
+    await supabase.from("branch_instances").update({ status: "cancelled" }).in("branch_id", discardedBranchIds).eq("status", "active");
+  }
+
   const graph = await loadGraph(supabase, newVersionId);
   const start = startNode(graph);
   const { data: newCycle, error: ncErr } = await supabase
