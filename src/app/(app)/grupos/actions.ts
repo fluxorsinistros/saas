@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
-import { requirePermission } from "@/lib/permissions";
+import { GROUP_GRANTABLE_PERMISSIONS, requirePermission } from "@/lib/permissions";
 import { assertCountLimit } from "@/lib/limits";
 import { SCREENS } from "@/lib/screens";
 import { GROUP_ACTIONS } from "@/lib/group-actions";
@@ -86,7 +86,7 @@ export async function updateGroupActions(formData: FormData) {
   const allowed = new Set(formData.getAll("allowed").map(String));
   const disabled = GROUP_ACTIONS.map((a) => a.key).filter((key) => !allowed.has(key));
   // permissões extras que o grupo concede (catálogo fechado; o banco também confere)
-  const granted = formData.getAll("granted").map(String).filter((k) => k === "financial.manage" || k === "financial.configure");
+  const granted = formData.getAll("granted").map(String).filter((k) => (GROUP_GRANTABLE_PERMISSIONS as string[]).includes(k));
   const supabase = await createClient();
   const { error } = await supabase.from("groups").update({ disabled_actions: disabled, granted_actions: granted }).eq("id", id).eq("tenant_id", ctx.tenantId);
   if (error) throw new Error(publicDbMessage(error));

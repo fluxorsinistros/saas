@@ -17,7 +17,13 @@ export type PermissionCode =
   | "import.confirm"
   | "user.manage"
   | "financial.manage"
-  | "financial.configure";
+  | "financial.configure"
+  | "sla.pause";
+
+// Permissões que o grupo concede ao Operador enquanto ele atua nele (aba Ações do grupo). Desligadas por padrão: grupo novo
+// nasce sem nenhuma. Reabrir e descartar ciclo são de papel, mas para o Operador só valem com a concessão do grupo.
+export const GROUP_GRANTABLE_PERMISSIONS: PermissionCode[] = ["financial.manage", "financial.configure", "claim.reopen", "claim.discard", "sla.pause"];
+const GROUP_GATED_FOR_OPERATOR: PermissionCode[] = ["claim.reopen", "claim.discard", "sla.pause"];
 
 // Uma consulta por request (cache do React), não uma por botão da tela.
 export const getPermissionCodes = cache(async (userId: string, tenantId: string): Promise<Set<PermissionCode>> => {
@@ -47,9 +53,14 @@ export const getPermissionCodes = cache(async (userId: string, tenantId: string)
   if (isAdmin) {
     codes.add("financial.manage");
     codes.add("financial.configure");
-  } else if (active) {
-    for (const g of active.granted_actions) {
-      if (g === "financial.manage" || g === "financial.configure") codes.add(g);
+    codes.add("sla.pause");
+  } else {
+    // Operador: as permissões que dependem do grupo saem do papel e só voltam pela concessão do grupo ativo
+    for (const p of GROUP_GATED_FOR_OPERATOR) codes.delete(p);
+    if (active) {
+      for (const g of active.granted_actions) {
+        if ((GROUP_GRANTABLE_PERMISSIONS as string[]).includes(g)) codes.add(g as PermissionCode);
+      }
     }
   }
   return codes;

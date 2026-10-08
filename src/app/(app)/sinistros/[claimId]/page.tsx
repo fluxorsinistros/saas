@@ -1315,7 +1315,7 @@ export default async function ClaimPage({
                         )}
                         <span>nesta etapa há {formatDuration(minutesSince(stage.entered_at))}</span>
                       </span>
-                      {cycle.status === "discarded" ? null : isPaused ? (
+                      {cycle.status === "discarded" || !perms.has("sla.pause") || !canActOnGroup(activity?.group_id ?? null, activity?.subgroup_id ?? null) ? null : isPaused ? (
                         <form action={resumeSla.bind(null, tracking.id, claim.id)}>
                           <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
                             <PlayCircle className="size-3.5" /> Retomar prazo

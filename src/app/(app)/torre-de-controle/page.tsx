@@ -261,6 +261,8 @@ export default async function TorreDeControlePage({
     : 0;
   const blocked = snap?.statusCounts.blocked ?? 0;
   const completed = snap?.statusCounts.completed ?? 0;
+  const cancelled = snap?.statusCounts.cancelled ?? 0;
+  const completionRate = snap && snap.totalCycles > 0 ? Math.round((completed / snap.totalCycles) * 100) : 0;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -296,17 +298,23 @@ export default async function TorreDeControlePage({
         {/* Aba 1: Indicadores e Prazos (Números) */}
         {currentTab === "numeros" && snap && (
           <div className="mt-6 space-y-8">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* Mesmos cards do Dashboard: a soma de Em andamento + Concluídos + Cancelados + Bloqueados bate com o Total */}
+            <div className="grid grid-cols-2 gap-3 min-[1000px]:grid-cols-4">
               <Stat label="Total" value={snap.totalCycles} tone="neutral" series={trend?.total} />
               <Stat label="Em andamento" value={open} tone="brand" series={trend?.open} />
-              <Stat label="Bloqueados" value={blocked} tone="danger" series={trend?.blocked} />
               <Stat label="Concluídos" value={completed} tone="ok" series={trend?.completed} />
+              <Stat label="Cancelados" value={cancelled} tone="neutral" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 min-[1000px]:grid-cols-4">
+              <Stat label="Bloqueados" value={blocked} tone="danger" series={trend?.blocked} />
+              <Stat label="Taxa de conclusão" value={`${completionRate}%`} tone="ok" />
               <Stat label="Atrasados (SLA)" value={snap.slaOverdueCount} tone="danger" series={trend?.overdue} />
               <Stat label="Próximos do prazo" value={snap.slaAtRiskCount} tone="warning" series={trend?.atRisk} />
             </div>
+            <p className="-mt-5 text-[12px] text-slate-600">
+              Taxa de conclusão = concluídos ÷ total. Cancelados entram no total; ciclos descartados e reiniciados não entram em nenhum número.
+            </p>
 
             {(snap.slaOverdueCount > 0 || snap.slaAtRiskCount > 0) && (
               <section>
@@ -421,7 +429,7 @@ export default async function TorreDeControlePage({
   );
 }
 
-function Stat({ label, value, tone, series }: { label: string; value: number; tone: "neutral" | "brand" | "danger" | "ok" | "warning"; series?: number[] }) {
+function Stat({ label, value, tone, series }: { label: string; value: number | string; tone: "neutral" | "brand" | "danger" | "ok" | "warning"; series?: number[] }) {
   const toneClass =
     tone === "danger"
       ? "text-rose-600"

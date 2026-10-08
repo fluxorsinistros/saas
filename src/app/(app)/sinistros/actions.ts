@@ -1097,6 +1097,7 @@ export async function chooseDecision(decisionId: string, selectedOption: string,
 // decisão de implementação em aberto), hoje toda pausa é aceita sem exigir aprovação.
 export async function pauseSla(trackingId: string, formData: FormData): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "sla.pause");
   const supabase = await createClient();
   const pauseType = String(formData.get("pause_type") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
@@ -1117,6 +1118,7 @@ export async function pauseSla(trackingId: string, formData: FormData): Promise<
 
 export async function resumeSla(trackingId: string, claimId: string): Promise<void> {
   const ctx = await getTenantContext();
+  await requirePermission(ctx, "sla.pause");
   const supabase = await createClient();
 
   const { data: pause, error: pErr } = await supabase

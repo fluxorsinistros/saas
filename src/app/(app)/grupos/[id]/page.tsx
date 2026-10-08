@@ -30,6 +30,7 @@ const PERMISSION_LABELS: Record<PermissionCode, string> = {
   "user.manage": "Gerenciar usuários e grupos",
   "financial.manage": "Gerenciar financeiro do ciclo",
   "financial.configure": "Configurar o painel financeiro",
+  "sla.pause": "Pausar e retomar prazo",
 };
 
 const TABS = [
@@ -353,17 +354,20 @@ export default async function EditGroupPage({
               ))}
             </ul>
             <div className="border-t border-slate-100 pt-4">
-              <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Permissões extras do financeiro</h2>
+              <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Permissões extras do grupo</h2>
               <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
                 <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
                 <span>
-                  O Operador deste grupo ganha estas permissões além do papel dele, enquanto estiver atuando neste grupo. Administrador já pode tudo.
+                  O Operador deste grupo ganha estas permissões além do papel dele, enquanto estiver atuando neste grupo. Todas vêm desligadas: ligue só o necessário. Administrador já pode tudo.
                 </span>
               </p>
               <ul className="space-y-2">
                 {[
                   { key: "financial.manage", label: "Salvar os valores do painel financeiro", hint: "Preencher e salvar os campos editáveis da aba Financeiro do sinistro." },
                   { key: "financial.configure", label: "Configurar o painel financeiro", hint: "Escolher quais campos aparecem, a ordem, o rótulo, o destaque e se são editáveis. Criar ou excluir campos continua com o Administrador." },
+                  { key: "claim.reopen", label: "Reabrir ciclo", hint: "Reabrir um sinistro concluído para continuar o trabalho. Desligado por padrão." },
+                  { key: "claim.discard", label: "Descartar e reiniciar ciclo", hint: "Descartar o ciclo atual e abrir outro do zero, com motivo. Ação de alto impacto: desligado por padrão." },
+                  { key: "sla.pause", label: "Pausar e retomar o prazo da etapa", hint: "Suspender a contagem do prazo de uma etapa (com motivo) e retomar depois. O prazo final é empurrado pelo tempo pausado." },
                 ].map((a) => (
                   <li key={a.key} className="flex items-start gap-2">
                     <input
