@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Clock3, FolderOpen, Hourglass, Loader2, OctagonAlert, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, FolderOpen, Hourglass, Loader2, OctagonAlert, Percent, XCircle, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTenantContext } from "@/lib/tenant";
 import { loadOperationalSnapshot, loadOperationalTrend } from "@/lib/reports";
@@ -24,6 +24,7 @@ export default async function DashboardPage() {
   const open = (snap.statusCounts.open ?? 0) + (snap.statusCounts.in_progress ?? 0) + (snap.statusCounts.waiting ?? 0);
   const blocked = snap.statusCounts.blocked ?? 0;
   const completed = snap.statusCounts.completed ?? 0;
+  const cancelled = snap.statusCounts.cancelled ?? 0;
   const completionRate = snap.totalCycles > 0 ? Math.round((completed / snap.totalCycles) * 100) : 0;
 
   return (
@@ -38,17 +39,23 @@ export default async function DashboardPage() {
           .
         </p>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Todos os estados aparecem: a soma de Em andamento + Concluídos + Cancelados + Bloqueados bate com o total */}
+        <div className="mt-6 grid grid-cols-2 gap-3 min-[1000px]:grid-cols-4">
           <Card label="Total de sinistros" value={snap.totalCycles} icon={FolderOpen} tone="blue" series={trend?.total} />
           <Card label="Em andamento" value={open} icon={Loader2} tone="sky" series={trend?.open} />
-          <Card label="Bloqueados" value={blocked} accent={blocked > 0 ? "text-rose-600" : undefined} icon={OctagonAlert} tone="rose" series={trend?.blocked} />
-          <Card label="Taxa de conclusão" value={`${completionRate}%`} icon={CheckCircle2} tone="emerald" series={trend?.completed} />
+          <Card label="Concluídos" value={completed} icon={CheckCircle2} tone="emerald" series={trend?.completed} />
+          <Card label="Cancelados" value={cancelled} icon={XCircle} tone="slate" />
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-2 gap-3 min-[1000px]:grid-cols-4">
+          <Card label="Bloqueados" value={blocked} accent={blocked > 0 ? "text-rose-600" : undefined} icon={OctagonAlert} tone="rose" series={trend?.blocked} />
+          <Card label="Taxa de conclusão" value={`${completionRate}%`} icon={Percent} tone="emerald" />
           <Card label="Atrasados (SLA)" value={snap.slaOverdueCount} accent={snap.slaOverdueCount > 0 ? "text-rose-600" : undefined} icon={Clock3} tone="rose" series={trend?.overdue} />
           <Card label="Próximos do prazo" value={snap.slaAtRiskCount} accent={snap.slaAtRiskCount > 0 ? "text-amber-600" : undefined} icon={Hourglass} tone="amber" series={trend?.atRisk} />
         </div>
+        <p className="mt-3 text-[12px] text-slate-600">
+          Taxa de conclusão = concluídos ÷ total. Sinistros cancelados (todas as vias abortadas) entram no total, e ciclos descartados e reiniciados não entram em nenhum número.
+        </p>
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <section className="glass-card p-5">
@@ -95,6 +102,7 @@ const TONES: Record<string, string> = {
   rose: "bg-rose-100/80 text-rose-700",
   emerald: "bg-emerald-100/80 text-emerald-700",
   amber: "bg-amber-100/80 text-amber-700",
+  slate: "bg-slate-200/80 text-slate-700",
 };
 
 const LINE: Record<string, string> = {
@@ -103,6 +111,7 @@ const LINE: Record<string, string> = {
   rose: "text-rose-500",
   emerald: "text-emerald-500",
   amber: "text-amber-500",
+  slate: "text-slate-400",
 };
 
 // `series`: um valor por dia, pela data de abertura do sinistro (últimos 30 dias), sempre quantos dos abertos naquele dia
