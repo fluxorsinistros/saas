@@ -568,6 +568,30 @@ div[data-theme="dark"] {
 :is(.dark, [data-theme="dark"]) .app-backdrop { display: none; }
 
 /* ==========================================================================
+   TEMA CLARO, FUNDO MAIS CLARO (ajuste pedido): quase branco, com degradê bem sutil e menos azul. Só vale no tema claro:
+   o escuro e o menu mantêm as cores de antes. Os textos sobre o fundo ficam escuros para leitura.
+   ========================================================================== */
+:root:not(.dark):not([data-theme="dark"]) body:has(.app-backdrop) { background: #f8f9fc; }
+:root:not(.dark):not([data-theme="dark"]) .app-backdrop {
+  background: linear-gradient(160deg, #fdfdfe 0%, #f6f7fb 50%, #eef1f7 100%);
+}
+:root:not(.dark):not([data-theme="dark"]) .app-backdrop::after {
+  background: radial-gradient(120vw 160px at 0% 0%, rgba(226, 232, 243, 0.55), rgba(226, 232, 243, 0) 100%);
+}
+:root:not(.dark):not([data-theme="dark"]) .app-blob { opacity: 0.22; }
+:root:not(.dark):not([data-theme="dark"]) .app-content-bg h1 { color: #0f172a; text-shadow: none; }
+:root:not(.dark):not([data-theme="dark"]) .app-content-bg h1 + p { color: #475569; text-shadow: none; }
+:root:not(.dark):not([data-theme="dark"]) .app-content-bg h1 + p a { color: #1d4ed8; }
+:root:not(.dark):not([data-theme="dark"]) .app-content-bg a:has(.lucide-arrow-left) { color: #334155; text-shadow: none; }
+:root:not(.dark):not([data-theme="dark"]) .app-content-bg h2.uppercase { color: #334155; }
+:root:not(.dark):not([data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-xl"],
+:root:not(.dark):not([data-theme="dark"]) .app-content-bg :is(div, section, article, li, ul, details, form, p):is(.bg-white, [class*="bg-white/"])[class*="rounded-2xl"] {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+/* ==========================================================================
    SEM BORDAS (como na referência): a separação vem da transparência, da cor e de sombras suaves, nunca de linhas.
    Vale para o tema claro; campos de preenchimento (input/select) mantêm borda porque precisam parecer clicáveis.
    ========================================================================== */
