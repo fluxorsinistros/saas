@@ -33,6 +33,39 @@ const PERMISSION_LABELS: Record<PermissionCode, string> = {
   "sla.pause": "Pausar e retomar prazo",
 };
 
+// Recursos do grupo organizados por tela, para o Administrador saber onde cada um aparece. "allowed" = restrição (vem ligado,
+// desmarcar bloqueia); "granted" = permissão extra (vem desligada, marcar concede).
+const ACTION_SCREENS: { title: string; where: string; items: { field: "allowed" | "granted"; key: string; label: string; hint: string }[] }[] = [
+  {
+    title: "Tela Início · lançar sinistro",
+    where: "Botão Formalizar sinistro e a tela de novo sinistro.",
+    items: GROUP_ACTIONS.map((a) => ({ field: "allowed" as const, key: a.key, label: a.label, hint: a.hint })),
+  },
+  {
+    title: "Tela do sinistro · prazo da etapa",
+    where: "Botão Pausar prazo / Retomar prazo, dentro de cada etapa.",
+    items: [
+      { field: "granted", key: "sla.pause", label: "Pausar e retomar o prazo da etapa", hint: "Suspender a contagem do prazo de uma etapa (com motivo) e retomar depois. O prazo final é empurrado pelo tempo pausado." },
+    ],
+  },
+  {
+    title: "Tela do sinistro · ciclo",
+    where: "Botões Reabrir este ciclo e Descartar e reiniciar este ciclo, no topo do sinistro.",
+    items: [
+      { field: "granted", key: "claim.reopen", label: "Reabrir ciclo", hint: "Reabrir um sinistro concluído para continuar o trabalho." },
+      { field: "granted", key: "claim.discard", label: "Descartar e reiniciar ciclo", hint: "Descartar o ciclo atual e abrir outro do zero, com motivo. Ação de alto impacto." },
+    ],
+  },
+  {
+    title: "Tela do sinistro · aba Financeiro",
+    where: "Aba Financeiro do sinistro e o painel financeiro do fluxo.",
+    items: [
+      { field: "granted", key: "financial.manage", label: "Salvar os valores do painel financeiro", hint: "Preencher e salvar os campos editáveis da aba Financeiro do sinistro." },
+      { field: "granted", key: "financial.configure", label: "Configurar o painel financeiro", hint: "Escolher quais campos aparecem, a ordem, o rótulo, o destaque e se são editáveis. Criar ou excluir campos continua com o Administrador." },
+    ],
+  },
+];
+
 const TABS = [
   { key: "geral", label: "Geral" },
   { key: "telas", label: "Telas" },
@@ -325,67 +358,40 @@ export default async function EditGroupPage({
         )}
 
         {aba === "acoes" && (
-          <form action={updateGroupActions} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+          <form action={updateGroupActions} className="space-y-6 rounded-xl border border-slate-200 bg-white p-5">
             <input type="hidden" name="id" value={group.id} />
-            <div>
-              <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Ações permitidas</h2>
-              <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
-<span>                Vale só para quem é <strong>Operador</strong> e está neste grupo, Administrador sempre pode fazer tudo,
-                independentemente do grupo. É uma restrição a mais sobre o que o Papel já libera, não substitui permissão.</span>
-              </p>
-            </div>
-            <ul className="space-y-2">
-              {GROUP_ACTIONS.map((a) => (
-                <li key={a.key} className="flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    id={`action-${a.key}`}
-                    name="allowed"
-                    value={a.key}
-                    defaultChecked={!disabledActions.has(a.key)}
-                    className="mt-0.5 size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
-                  />
-                  <label htmlFor={`action-${a.key}`}>
-                    <span className="block text-[14px] text-slate-800">{a.label}</span>
-                    <span className="block text-[12px] text-slate-500">{a.hint}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-slate-100 pt-4">
-              <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">Permissões extras do grupo</h2>
-              <p className="mb-3 flex items-start gap-1.5 text-[12px] text-slate-500">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
-                <span>
-                  O Operador deste grupo ganha estas permissões além do papel dele, enquanto estiver atuando neste grupo. Todas vêm desligadas: ligue só o necessário. Administrador já pode tudo.
-                </span>
-              </p>
-              <ul className="space-y-2">
-                {[
-                  { key: "financial.manage", label: "Salvar os valores do painel financeiro", hint: "Preencher e salvar os campos editáveis da aba Financeiro do sinistro." },
-                  { key: "financial.configure", label: "Configurar o painel financeiro", hint: "Escolher quais campos aparecem, a ordem, o rótulo, o destaque e se são editáveis. Criar ou excluir campos continua com o Administrador." },
-                  { key: "claim.reopen", label: "Reabrir ciclo", hint: "Reabrir um sinistro concluído para continuar o trabalho. Desligado por padrão." },
-                  { key: "claim.discard", label: "Descartar e reiniciar ciclo", hint: "Descartar o ciclo atual e abrir outro do zero, com motivo. Ação de alto impacto: desligado por padrão." },
-                  { key: "sla.pause", label: "Pausar e retomar o prazo da etapa", hint: "Suspender a contagem do prazo de uma etapa (com motivo) e retomar depois. O prazo final é empurrado pelo tempo pausado." },
-                ].map((a) => (
-                  <li key={a.key} className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      id={`granted-${a.key}`}
-                      name="granted"
-                      value={a.key}
-                      defaultChecked={grantedActions.has(a.key)}
-                      className="mt-0.5 size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
-                    />
-                    <label htmlFor={`granted-${a.key}`}>
-                      <span className="block text-[14px] text-slate-800">{a.label}</span>
-                      <span className="block text-[12px] text-slate-500">{a.hint}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <p className="flex items-start gap-1.5 text-[12px] text-slate-500">
+              <Info className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
+              <span>
+                Vale só para quem é <strong>Operador</strong> e está neste grupo. Administrador sempre pode tudo. Tudo vem desligado: ligue só o necessário.
+              </span>
+            </p>
+
+            {ACTION_SCREENS.map((screen) => (
+              <section key={screen.title} aria-label={screen.title} className="border-t border-slate-100 pt-4">
+                <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">{screen.title}</h2>
+                <p className="mb-3 text-[12px] text-slate-500">{screen.where}</p>
+                <ul className="space-y-2">
+                  {screen.items.map((item) => (
+                    <li key={item.key} className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        id={`${item.field}-${item.key}`}
+                        name={item.field}
+                        value={item.key}
+                        defaultChecked={item.field === "allowed" ? !disabledActions.has(item.key) : grantedActions.has(item.key)}
+                        className="mt-0.5 size-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+                      />
+                      <label htmlFor={`${item.field}-${item.key}`}>
+                        <span className="block text-[14px] text-slate-800">{item.label}</span>
+                        <span className="block text-[12px] text-slate-500">{item.hint}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+
             <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white shadow-sm transition hover:bg-brand-600">
               Salvar ações
             </button>
