@@ -8,7 +8,7 @@ export function StageSlaBadge({ enteredAt, slaMinutes, targetAt, bundle }: { ent
   if (!sla) return null;
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
+      className={`inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold leading-snug ${
         sla.isBreached
           ? "border-rose-200 bg-rose-50 text-rose-700"
           : sla.isAtRisk
